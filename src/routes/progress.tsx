@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Card, Icon, Skeleton } from '@/components/primitives'
@@ -12,6 +12,7 @@ import { useWorkouts } from '@/hooks/useWorkouts'
 import { toast } from '@/stores/toastStore'
 
 type ProgressTab = 'weight' | 'kcal' | 'activity'
+type CalorieView = 'week' | 'month' | 'year'
 
 const tabs: Array<{ id: ProgressTab; label: string }> = [
   { id: 'weight', label: 'Weight' },
@@ -20,6 +21,7 @@ const tabs: Array<{ id: ProgressTab; label: string }> = [
 ]
 
 const DAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function ProgressRoute() {
   const [params] = useSearchParams()
@@ -130,28 +132,23 @@ function WeightTab() {
 }
 
 function CaloriesTab() {
+  const [view, setView] = useState<CalorieView>('week')
   const { data: meals, error: mealsError } = useMeals()
-  const { data: weekTotals, error: weekTotalsError } = useDayTotals(7)
+  const { data: yearTotals, error: totalsError } = useDayTotals(365)
 
   // Live sum from meals[] (source of truth) — denormalized day totals
   // can drift if a meal was deleted without decrementing.
   const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
   const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
 
-  // Build 7-day data: oldest to newest. Replace today's cached entry
-  // with live sum so deletes show up immediately.
   const todayDate = todayKey()
-  const days = weekTotals.map((t) => t.date === todayDate ? liveKcal : t.totals.kcal)
-  const dayLabels = weekTotals.map((t) => {
-    const d = new Date(t.date + 'T00:00:00')
-    return DAY_SHORT[d.getDay()]
-  })
-
-  const maxKcal = Math.max(...days, 1)
+  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, kcal: liveKcal, protein_g: liveProtein } } : t)
+  const bars = buildCalorieBars(totals, view)
+  const maxKcal = Math.max(...bars.map((bar) => bar.kcal), 1)
 
   useEffect(() => {
-    if (mealsError || weekTotalsError) toast.error("Couldn't load calorie progress. Try again.")
-  }, [mealsError, weekTotalsError])
+    if (mealsError || totalsError) toast.error("Couldn't load calorie progress. Try again.")
+  }, [mealsError, totalsError])
 
   return (
     <>
@@ -161,13 +158,31 @@ function CaloriesTab() {
           {liveKcal}
         </strong>
         <p className={styles.subtitle}>{liveProtein}g protein logged</p>
+        <div className="dq-seg" style={{ width: '100%', margin: '14px 0 6px' }}>
+          {(['week', 'month', 'year'] as CalorieView[]).map((item) => (
+            <button
+              className="dq-seg-item"
+              data-active={view === item}
+              key={item}
+              onClick={() => setView(item)}
+              type="button"
+              style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
         <div className={styles.bars}>
-          {days.map((kcal, index) => {
-            const isToday = weekTotals[index]?.date === todayDate
+          {bars.map((bar, index) => {
+            const isToday = bar.date === todayDate
+            const height = Math.max((bar.kcal / maxKcal) * 100, bar.kcal > 0 ? 8 : 3)
             return (
-              <div className={styles.barColumn} key={`${weekTotals[index]?.date}-${index}`}>
-                <div className={styles.bar} style={{ background: isToday ? 'var(--a-grad)' : 'var(--bg-soft)', height: `${Math.max((kcal / maxKcal) * 100, 6)}%` }} />
-                <span className="dq-eyebrow">{dayLabels[index] ?? '?'}</span>
+              <div className={styles.barColumn} key={`${bar.label}-${index}`} style={{ height: '100%', minWidth: view === 'year' ? 18 : undefined }}>
+                <span style={{ color: 'var(--t-2)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+                  {formatKcalLabel(bar.kcal)}
+                </span>
+                <div className={styles.bar} style={{ background: isToday ? 'var(--a-grad)' : 'var(--bg-soft)', height: `${height}%` }} />
+                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
               </div>
             )
           })}
@@ -188,6 +203,44 @@ function CaloriesTab() {
       </Card>
     </>
   )
+}
+
+function buildCalorieBars(totals: ReturnType<typeof useDayTotals>['data'], view: CalorieView) {
+  if (view === 'week') {
+    return totals.slice(-7).map((t) => {
+      const date = new Date(`${t.date}T00:00:00`)
+      return { date: t.date, label: DAY_SHORT[date.getDay()], kcal: t.totals.kcal }
+    })
+  }
+
+  if (view === 'month') {
+    const last28 = totals.slice(-28)
+    return Array.from({ length: 4 }, (_, index) => {
+      const chunk = last28.slice(index * 7, index * 7 + 7)
+      return {
+        date: chunk[chunk.length - 1]?.date ?? '',
+        label: `W${index + 1}`,
+        kcal: chunk.reduce((sum, t) => sum + t.totals.kcal, 0),
+      }
+    })
+  }
+
+  const monthMap = new Map<string, { label: string; kcal: number }>()
+  totals.forEach((t) => {
+    const date = new Date(`${t.date}T00:00:00`)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    const current = monthMap.get(key) ?? { label: MONTH_SHORT[date.getMonth()], kcal: 0 }
+    current.kcal += t.totals.kcal
+    monthMap.set(key, current)
+  })
+
+  return Array.from(monthMap.entries()).slice(-12).map(([key, value]) => ({ date: key, ...value }))
+}
+
+function formatKcalLabel(kcal: number): string {
+  if (kcal <= 0) return '0'
+  if (kcal >= 1000) return `${Math.round(kcal / 100) / 10}k`
+  return String(kcal)
 }
 
 function ActivityTab() {
