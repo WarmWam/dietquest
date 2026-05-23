@@ -130,3 +130,9 @@ Format per entry:
 - Verdict: 
 - Commit: pending
 - Notes: Started app-wide DietQuest interpretation of Neural Expressive design language: aurora gradient/glow tokens, glassy translucent cards/sheets/settings, floating capsule bottom nav, glow FAB, softer chart/progress surfaces, and subtle page/micro-interaction motion. No AI chat added.
+
+## Phase 6.3 Follow-up - PWA app icon and name
+- Date: 2026-05-23
+- Verdict: 
+- Commit: pending
+- Notes: Replaced DQ-letter PWA icons with custom health-themed PNG artwork (food/leaf/activity/heart) and updated installed app name/title to Health Tracking.

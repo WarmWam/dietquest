@@ -10,9 +10,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'DietQuest',
-        short_name: 'DietQuest',
-        description: 'Mobile-first diet and fitness quest tracker.',
+        name: 'Health Tracking',
+        short_name: 'Health Tracking',
+        description: 'Mobile-first nutrition, workout, and health tracker.',
         theme_color: '#5B6CFF',
         background_color: '#F2F4F8',
         display: 'standalone',

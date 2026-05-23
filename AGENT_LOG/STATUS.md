@@ -60,6 +60,10 @@
   - Made bottom nav a floating capsule with glow FAB.
   - Added softer micro-interaction transitions and page fade-in motion.
   - Kept DietQuest information architecture unchanged; no AI chat added.
+- [x] Home screen app icon/name updated
+  - Replaced DQ-letter PWA icons with custom health icon artwork for 192, 512, and maskable PNGs.
+  - Icon uses simple food/leaf/activity/heart cues for nutrition, movement, and health.
+  - Updated installed app name/title to `Health Tracking`.
 
 ---
 
@@ -74,6 +78,7 @@
 - pending - `feat(notifications): register push tokens for reminders`
 - pending - `fix(profile): simplify notification preferences`
 - pending - `style(ui): apply neural expressive visual refresh`
+- pending - `chore(pwa): update health tracking app icon`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 
