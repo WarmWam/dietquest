@@ -31,7 +31,6 @@ export function ProgressRoute() {
   return (
     <AppScreen activeNav="progress">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
-        <h1 className={styles.headerTitle}>Progress</h1>
         <div style={{ margin: '14px 0 18px' }}>
           <div className={styles.tabRow}>
             {tabs.map((item) => (

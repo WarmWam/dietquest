@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Stepper } from '@/components/primitives'
+import { BulkMealPlanner, BulkWorkoutPlanner } from '@/components/plan/BulkPlanners'
 import { useFoods } from '@/hooks/useFoods'
 import { useMealPlan, useMonthMealPlans } from '@/hooks/useMealPlan'
 import { useMonthWorkoutPlans, useWorkoutPlan } from '@/hooks/useWorkoutPlan'
@@ -104,10 +105,42 @@ export function CalendarTab() {
 
   const todayMeal = mealMap.get(todayKey) ?? null
   const todayWorkout = workoutMap.get(todayKey) ?? null
+  const [bulk, setBulk] = useState<null | 'meal' | 'workout'>(null)
 
   return (
     <>
       <TodayPlanCard meal={todayMeal} workout={todayWorkout} onOpen={() => setSelectedDate(todayKey)} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <button
+          onClick={() => setBulk('workout')}
+          type="button"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
+            border: '1px solid var(--line)', borderRadius: 'var(--r-md)',
+            background: 'var(--surface)', cursor: 'pointer', outline: 'none',
+            fontWeight: 700, color: 'var(--t-1)', fontSize: 13, justifyContent: 'center',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <Icon color="var(--success)" name="walk" size={16} />
+          Workout
+        </button>
+        <button
+          onClick={() => setBulk('meal')}
+          type="button"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px',
+            border: '1px solid var(--line)', borderRadius: 'var(--r-md)',
+            background: 'var(--surface)', cursor: 'pointer', outline: 'none',
+            fontWeight: 700, color: 'var(--t-1)', fontSize: 13, justifyContent: 'center',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <Icon color="var(--a1)" name="fork" size={16} />
+          Meals
+        </button>
+      </div>
 
       <Card padding={12} style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -181,6 +214,8 @@ export function CalendarTab() {
       </Card>
 
       {selectedDate && <DaySheet date={selectedDate} onClose={() => setSelectedDate(null)} />}
+      {bulk === 'meal' && <BulkMealPlanner onClose={() => setBulk(null)} />}
+      {bulk === 'workout' && <BulkWorkoutPlanner onClose={() => setBulk(null)} />}
     </>
   )
 }

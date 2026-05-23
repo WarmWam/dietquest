@@ -117,14 +117,6 @@ export function HomeRoute() {
             </div>
           </div>
         )}
-        <header className={styles.screenHeader}>
-          <div>
-            <p className={styles.subtitle}>Good morning</p>
-            <h1 className={styles.headerTitle}>{empty ? 'Day 1 - let us go' : 'Today'}</h1>
-          </div>
-          <div className={styles.avatar}>{profile?.display_name?.[0] ?? 'D'}</div>
-        </header>
-
         {userLoading || mealsLoading || todayLoading ? (
           <HomeSkeleton />
         ) : hasError ? (

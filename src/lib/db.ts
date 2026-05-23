@@ -15,6 +15,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
   type Unsubscribe,
@@ -457,6 +458,49 @@ export function watchMonthMealPlans(uid: string, monthKey: string, cb: WatchCall
     (snapshot) => cb({ data: snapshot.docs.map((d) => deserializeMealPlan(d.id, d.data())), error: null }),
     listenerError(`users/${uid}/meal_plans month=${monthKey}`, [], cb),
   )
+}
+
+export async function bulkUpsertMealPlans(uid: string, plans: MealPlan[]): Promise<void> {
+  // Firestore batches max 500 ops. We never bulk-plan more than ~31 days, so 1 batch is enough.
+  const batch = writeBatch(db)
+  plans.forEach((plan) => {
+    const allItems = [...plan.breakfast, ...plan.lunch, ...plan.dinner, ...plan.snack]
+    const totals = {
+      kcal: allItems.reduce((s, it) => s + (it.kcal ?? 0), 0),
+      protein_g: allItems.reduce((s, it) => s + (it.protein_g ?? 0), 0),
+    }
+    batch.set(
+      doc(db, 'users', uid, 'meal_plans', plan.date),
+      {
+        breakfast: plan.breakfast,
+        lunch: plan.lunch,
+        dinner: plan.dinner,
+        snack: plan.snack,
+        totals,
+        notes: plan.notes ?? null,
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  })
+  await batch.commit()
+}
+
+export async function bulkUpsertWorkoutPlans(uid: string, plans: WorkoutPlan[]): Promise<void> {
+  const batch = writeBatch(db)
+  plans.forEach((plan) => {
+    batch.set(
+      doc(db, 'users', uid, 'workout_plans', plan.date),
+      {
+        type: plan.type,
+        duration_min: plan.duration_min,
+        notes: plan.notes ?? null,
+        updated_at: serverTimestamp(),
+      },
+      { merge: true },
+    )
+  })
+  await batch.commit()
 }
 
 export async function upsertMealPlan(uid: string, plan: MealPlan): Promise<void> {

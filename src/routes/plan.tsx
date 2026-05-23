@@ -22,8 +22,6 @@ export function PlanRoute() {
   return (
     <AppScreen activeNav="plan">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
-        <h1 className={styles.headerTitle}>Plan</h1>
-
         <div className="dq-seg" style={{ width: '100%', margin: '14px 0 16px' }}>
           {(['calendar', 'library'] as PlanTab[]).map((id) => (
             <button
