@@ -104,11 +104,50 @@ export function LogWeightRoute() {
   )
 }
 
+function calculateSleepDuration(bed: string, wake: string): number {
+  const [bh, bm] = bed.split(':').map(Number)
+  const [wh, wm] = wake.split(':').map(Number)
+  if (isNaN(bh) || isNaN(bm) || isNaN(wh) || isNaN(wm)) return 450
+  
+  let bedMinutes = bh * 60 + bm
+  let wakeMinutes = wh * 60 + wm
+  
+  if (wakeMinutes < bedMinutes) {
+    wakeMinutes += 24 * 60
+  }
+  
+  return wakeMinutes - bedMinutes
+}
+
 export function LogSleepRoute() {
   const { data, upsert } = useSleep()
-  const sleep = data ?? { id: todayKey(), date: todayKey(), bedtime: '22:30', wake_time: '06:00', duration_min: 450, quality_1_5: 4 }
-  const hours = Math.floor(sleep.duration_min / 60)
-  const minutes = sleep.duration_min % 60
+  const [bedtime, setBedtime] = useState('22:30')
+  const [wakeTime, setWakeTime] = useState('06:00')
+  const [quality, setQuality] = useState(4)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (data) {
+      setBedtime(data.bedtime)
+      setWakeTime(data.wake_time)
+      setQuality(data.quality_1_5)
+    }
+  }, [data])
+
+  const durationMin = calculateSleepDuration(bedtime, wakeTime)
+  const hours = Math.floor(durationMin / 60)
+  const minutes = durationMin % 60
+
+  async function saveSleep() {
+    await upsert({
+      date: todayKey(),
+      bedtime,
+      wake_time: wakeTime,
+      duration_min: durationMin,
+      quality_1_5: quality,
+    })
+    navigate('/')
+  }
 
   return (
     <AppScreen hideNav>
@@ -124,19 +163,69 @@ export function LogSleepRoute() {
           </div>
         </Card>
         <div className={styles.topStats}>
-          <Metric label="Bedtime" sub="last night" value={sleep.bedtime} />
-          <Metric label="Wake" sub="this morning" value={sleep.wake_time} />
+          <Card padding={14}>
+            <p className="dq-eyebrow">Bedtime</p>
+            <input
+              type="time"
+              value={bedtime}
+              onChange={(e) => setBedtime(e.target.value)}
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                border: 0,
+                background: 'transparent',
+                color: 'var(--t-1)',
+                fontFamily: 'inherit',
+                width: '100%',
+                marginTop: 6,
+                outline: 'none',
+              }}
+            />
+            <p className={styles.subtitle}>last night</p>
+          </Card>
+          <Card padding={14}>
+            <p className="dq-eyebrow">Wake</p>
+            <input
+              type="time"
+              value={wakeTime}
+              onChange={(e) => setWakeTime(e.target.value)}
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                border: 0,
+                background: 'transparent',
+                color: 'var(--t-1)',
+                fontFamily: 'inherit',
+                width: '100%',
+                marginTop: 6,
+                outline: 'none',
+              }}
+            />
+            <p className={styles.subtitle}>this morning</p>
+          </Card>
         </div>
         <Card padding={16}>
           <p className={styles.fieldLabel}>Sleep quality</p>
-          <div className={styles.screenHeader}>
+          <div className={styles.screenHeader} style={{ justifyContent: 'space-around', padding: '4px 0' }}>
             {[1, 2, 3, 4, 5].map((rating) => (
-              <Icon color={rating <= sleep.quality_1_5 ? '#F59E0B' : 'var(--line-strong)'} fill={rating <= sleep.quality_1_5 ? '#F59E0B' : 'none'} key={rating} name="star" size={30} />
+              <button
+                key={rating}
+                type="button"
+                onClick={() => setQuality(rating)}
+                style={{ border: 0, background: 'transparent', cursor: 'pointer', outline: 'none' }}
+              >
+                <Icon
+                  color={rating <= quality ? '#F59E0B' : 'var(--line-strong)'}
+                  fill={rating <= quality ? '#F59E0B' : 'none'}
+                  name="star"
+                  size={30}
+                />
+              </button>
             ))}
           </div>
         </Card>
-        <div className={styles.pageFooter}>
-          <Button onClick={() => void upsert({ date: todayKey(), bedtime: sleep.bedtime, wake_time: sleep.wake_time, duration_min: sleep.duration_min, quality_1_5: sleep.quality_1_5 })}>Save sleep</Button>
+        <div className={styles.pageFooter} style={{ marginTop: 24 }}>
+          <Button onClick={() => void saveSleep()}>Save sleep</Button>
         </div>
       </div>
     </AppScreen>
