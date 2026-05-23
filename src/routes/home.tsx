@@ -5,13 +5,16 @@ import { Button, Card, Icon, Ring, Skeleton, type IconName } from '@/components/
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
 import { DEFAULT_SETTINGS } from '@/data/defaults'
+import { useMealPlan } from '@/hooks/useMealPlan'
 import { useMeals } from '@/hooks/useMeals'
 import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
+import { useWater } from '@/hooks/useWater'
+import { useWorkoutPlan } from '@/hooks/useWorkoutPlan'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
-import type { MealLog, MealType, UserSettings } from '@/types/domain'
+import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WorkoutPlan } from '@/types/domain'
 
 type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
 
@@ -25,10 +28,9 @@ const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
 export function HomeRoute() {
   const [params] = useSearchParams()
   const { profile, loading: userLoading, error: userError } = useUser()
-  const { data: meals, loading: mealsLoading, error: mealsError } = useMeals()
+  const { data: meals, add: addMeal, loading: mealsLoading, error: mealsError } = useMeals()
   const { data: today, loading: todayLoading, error: todayError } = useToday()
   const hasError = mealsError || todayError
-  const empty = !hasError && (params.get('empty') === '1' || (!mealsLoading && meals.length === 0))
   const sheet = params.get('sheet') === '1'
   const settings = profile?.settings ?? DEFAULT_SETTINGS
 
@@ -123,10 +125,8 @@ export function HomeRoute() {
           <HomeSkeleton />
         ) : hasError ? (
           <HomeErrorCard error={hasError} />
-        ) : empty ? (
-          <HomeEmptyContent target={settings.daily_kcal_target} />
         ) : (
-          <HomeFullContent meals={meals} settings={settings} today={today} />
+          <HomeFullContent addMeal={addMeal} meals={meals} settings={settings} today={today} />
         )}
       </div>
       {sheet ? <LogSheet /> : null}
@@ -134,14 +134,29 @@ export function HomeRoute() {
   )
 }
 
-function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; settings: UserSettings; today: ReturnType<typeof useToday>['data'] }) {
+function HomeFullContent({
+  addMeal,
+  meals,
+  settings,
+  today,
+}: {
+  addMeal: ReturnType<typeof useMeals>['add']
+  meals: MealLog[]
+  settings: UserSettings
+  today: ReturnType<typeof useToday>['data']
+}) {
   const navigate = useNavigate()
+  const todayKey = getTodayKey()
+  const { data: plan, error: planError } = useMealPlan(todayKey)
+  const { data: workoutPlan, error: workoutPlanError } = useWorkoutPlan(todayKey)
+  const { add: addWater, totalMl, error: waterError } = useWater(todayKey)
   const { data: weights, error: weightsError } = useWeights(30)
-  const { data: workouts, error: workoutsError } = useWorkouts(1)
+  const { data: workouts, add: addWorkout, error: workoutsError } = useWorkouts(1)
+  const [savingTask, setSavingTask] = useState<string | null>(null)
   const latestWeight = weights[weights.length - 1]
-  const todayWorkouts = workouts.filter((w) => w.date === getTodayKey())
+  const todayWorkouts = workouts.filter((w) => w.date === todayKey)
   const totalWorkoutMin = todayWorkouts.reduce((sum, w) => sum + w.duration_min, 0)
-  const workoutTarget = 60
+  const workoutTarget = workoutPlan?.duration_min || 45
   const workoutPct = Math.min(totalWorkoutMin / workoutTarget, 1)
 
   // Compute totals live from meals[] (source of truth) — denormalized
@@ -150,8 +165,82 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
   const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
 
   useEffect(() => {
-    if (weightsError || workoutsError) toast.error("Couldn't load home stats. Try again.")
-  }, [weightsError, workoutsError])
+    if (weightsError || workoutsError || planError || workoutPlanError || waterError) toast.error("Couldn't load home plan. Try again.")
+  }, [weightsError, workoutsError, planError, workoutPlanError, waterError])
+
+  async function confirmMeal(mealType: MealType, items: MealPlanItem[]) {
+    if (items.length === 0 || savingTask) return
+    setSavingTask(mealType)
+    try {
+      await addMeal({
+        date: todayKey,
+        meal_type: mealType,
+        items: items.map((item) => ({
+          name: item.food_name,
+          portion: item.portion,
+          unit: 'serving',
+          kcal: item.kcal,
+          protein_g: item.protein_g,
+          carb_g: 0,
+          fat_g: 0,
+        })),
+        total_kcal: items.reduce((sum, item) => sum + item.kcal, 0),
+        total_protein_g: Math.round(items.reduce((sum, item) => sum + item.protein_g, 0) * 10) / 10,
+        total_carb_g: 0,
+        total_fat_g: 0,
+      })
+      toast.success(`${mealType} confirmed`)
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't confirm meal.")
+      haptic([20, 40, 20])
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
+  async function confirmWater() {
+    if (savingTask) return
+    setSavingTask('water')
+    try {
+      await addWater(500)
+      toast.success('Water confirmed +500 ml')
+      haptic(5)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't confirm water.")
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
+  async function confirmWorkout(planToLog: WorkoutPlan) {
+    if (savingTask) return
+    const input = prompt('How many kcal did you burn?', '0')
+    if (input === null) return
+    const kcal = Number(input)
+    if (!Number.isFinite(kcal) || kcal < 0 || kcal > 3000) {
+      toast.error('Enter kcal between 0 and 3000.')
+      return
+    }
+    setSavingTask('workout')
+    try {
+      await addWorkout({
+        date: todayKey,
+        type: planToLog.type === 'rest' ? 'other' : planToLog.type,
+        duration_min: planToLog.duration_min,
+        kcal_burned: Math.round(kcal),
+      })
+      toast.success('Workout confirmed')
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't confirm workout.")
+    } finally {
+      setSavingTask(null)
+    }
+  }
 
   return (
     <>
@@ -166,32 +255,39 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
       </Card>
 
       <div className={styles.topStats}>
-        <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(today.totals.water_ml / 3000, 1)} target="3.0 L" value={(today.totals.water_ml / 1000).toFixed(1)} />
+        <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(totalMl / 3000, 1)} target="3.0 L" value={(totalMl / 1000).toFixed(1)} />
         <MiniStat color="#10B981" icon="walk" label="Incline" pct={workoutPct} target={`${workoutTarget} min`} value={String(totalWorkoutMin)} />
       </div>
 
-      <SectionLabel>Today's meals</SectionLabel>
-      <div className={styles.mealList}>
-        {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
-          const meal = meals.find((item) => item.meal_type === type)
-          return (
-            <MealRow
-              key={type}
-              icon={mealMeta[type].icon}
-              color={mealMeta[type].color}
-              items={meal?.items.map((item) => item.name).join(', ') ?? 'Tap to log'}
-              kcal={meal?.total_kcal}
-              onClick={() => navigate('/log/meal')}
-            />
-          )
-        })}
-      </div>
+      <SectionLabel>Today's plan</SectionLabel>
+      {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => (
+        <PlanMealCard
+          done={meals.some((meal) => meal.meal_type === type)}
+          items={plan[type]}
+          key={type}
+          mealType={type}
+          onConfirm={() => void confirmMeal(type, plan[type])}
+          onSwap={() => navigate('/log/meal')}
+          saving={savingTask === type}
+        />
+      ))}
 
       <SectionLabel>Daily habits</SectionLabel>
       <div className={styles.habitBox}>
-        <Habit done={today.habits.water_done || today.totals.water_ml >= 3000} label="Drink 3 L of water" sub={`${(today.totals.water_ml / 1000).toFixed(1)} / 3.0 L`} />
+        <Habit done={today.habits.water_done || totalMl >= 3000} label="Drink 3 L of water" sub={`${(totalMl / 1000).toFixed(1)} / 3.0 L`} />
+        <div style={{ padding: '0 0 10px 38px' }}>
+          <Button disabled={savingTask === 'water'} onClick={() => void confirmWater()} variant="secondary">
+            Confirm +500 ml
+          </Button>
+        </div>
         <div className="dq-divider" />
-        <Habit done={today.habits.walk_done} label="Incline walk 45 min" sub={today.habits.walk_done ? 'logged' : 'not logged yet'} />
+        <WorkoutPlanTask
+          done={todayWorkouts.length > 0}
+          onConfirm={() => workoutPlan ? void confirmWorkout(workoutPlan) : navigate('/plan')}
+          plan={workoutPlan}
+          saving={savingTask === 'workout'}
+          totalWorkoutMin={totalWorkoutMin}
+        />
         <div className="dq-divider" />
         <Habit done={today.habits.sleep_on_time} label="Sleep by 22:30" sub="goal - 7.5 hrs" />
       </div>
@@ -221,6 +317,93 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
   )
 }
 
+function PlanMealCard({
+  done,
+  items,
+  mealType,
+  onConfirm,
+  onSwap,
+  saving,
+}: {
+  done: boolean
+  items: MealPlanItem[]
+  mealType: MealType
+  onConfirm: () => void
+  onSwap: () => void
+  saving: boolean
+}) {
+  const kcal = items.reduce((sum, item) => sum + item.kcal, 0)
+  const protein = Math.round(items.reduce((sum, item) => sum + item.protein_g, 0) * 10) / 10
+
+  return (
+    <Card padding={14} style={{ marginBottom: 10 }}>
+      <div className={styles.habitRow}>
+        <Icon color={mealMeta[mealType].color} name={mealMeta[mealType].icon} />
+        <span className={styles.rowText}>
+          <strong style={{ textTransform: 'capitalize' }}>{mealType}</strong>
+          <span className={styles.rowSub}>{items.length ? `${kcal} kcal - ${protein}g protein` : 'No planned menu'}</span>
+        </span>
+        <span className="dq-check" data-on={done}>
+          {done ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
+        </span>
+      </div>
+      {items.length ? (
+        <div style={{ display: 'grid', gap: 6, margin: '10px 0 12px 34px' }}>
+          {items.map((item) => (
+            <div key={`${item.food_id}-${item.food_name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 800 }}>{item.food_name}</span>
+              <span className={styles.rowSub}>{item.portion}x · {item.kcal} kcal</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <Button disabled={done || items.length === 0 || saving} onClick={onConfirm} variant="secondary">
+          {done ? 'Confirmed' : 'Ate as planned'}
+        </Button>
+        <Button onClick={onSwap} variant="ghost">
+          Ate different
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+function WorkoutPlanTask({
+  done,
+  onConfirm,
+  plan,
+  saving,
+  totalWorkoutMin,
+}: {
+  done: boolean
+  onConfirm: () => void
+  plan: WorkoutPlan | null
+  saving: boolean
+  totalWorkoutMin: number
+}) {
+  const meta = plan ? WORKOUT_PLAN_TYPES.find((type) => type.id === plan.type) : null
+  const label = meta?.label ?? 'No workout planned'
+  const sub = done
+    ? `${totalWorkoutMin} min logged`
+    : plan
+      ? plan.type === 'rest'
+        ? 'Rest day'
+        : `${plan.duration_min} min planned`
+      : 'Plan from Calendar'
+
+  return (
+    <>
+      <Habit done={done || plan?.type === 'rest'} label={label} sub={sub} />
+      <div style={{ padding: '0 0 10px 38px' }}>
+        <Button disabled={saving || done || plan?.type === 'rest'} onClick={onConfirm} variant="secondary">
+          {plan ? 'Confirm workout' : 'Plan workout'}
+        </Button>
+      </div>
+    </>
+  )
+}
+
 function HomeErrorCard({ error }: { error: Error }) {
   return (
     <Card padding={18}>
@@ -230,32 +413,6 @@ function HomeErrorCard({ error }: { error: Error }) {
         Retry
       </Button>
     </Card>
-  )
-}
-
-function HomeEmptyContent({ target }: { target: number }) {
-  const navigate = useNavigate()
-
-  return (
-    <>
-      <Card raised padding={18}>
-        <Ring eaten={0} label="not logged yet" protein={0} size={210} target={target} />
-        <p className={styles.subtitle} style={{ textAlign: 'center', margin: '14px 0 4px' }}>
-          Log your first meal to start tracking.
-        </p>
-      </Card>
-      <SectionLabel>Today's meals</SectionLabel>
-      <div className={styles.mealList}>
-        <MealRow icon="sunrise" color="#FB923C" items="Tap to log" onClick={() => navigate('/log/meal')} />
-        <MealRow icon="sun" color="#F59E0B" items="Tap to log" onClick={() => navigate('/log/meal')} />
-        <MealRow icon="moon" color="#6366F1" items="Tap to log" onClick={() => navigate('/log/meal')} />
-      </div>
-      <div className={styles.emptyBox}>
-        <Icon color="var(--a1)" name="sparkle" />
-        <strong>First log unlocks your streak</strong>
-        <p className={styles.subtitle}>Log 6 days a week to keep it alive.</p>
-      </div>
-    </>
   )
 }
 
@@ -330,23 +487,6 @@ function MiniStat({ icon, label, value, target, pct, color }: { icon: IconName; 
         <div className={styles.progressFill} style={{ background: color, width: `${pct * 100}%` }} />
       </div>
     </div>
-  )
-}
-
-function MealRow({ icon, color, items, kcal, onClick }: { icon: SlotIcon; color: string; items: string; kcal?: number; onClick: () => void }) {
-  return (
-    <button className={styles.mealRow} onClick={onClick} type="button" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>
-      <Icon color={color} name={icon} size={22} />
-      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, textAlign: 'left' }}>
-        <strong style={{ fontSize: 14, color: 'var(--t-1)' }}>{items}</strong>
-        {kcal ? (
-          <span style={{ fontSize: 12, color: 'var(--a1)', fontWeight: 700 }}>{kcal} kcal</span>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>tap to log</span>
-        )}
-      </span>
-      <Icon color="var(--t-3)" name="chevron" size={16} />
-    </button>
   )
 }
 

@@ -227,7 +227,7 @@ function ActivityTab() {
       <div className={styles.chartCard}>
         <div className={styles.screenHeader}>
           <div>
-            <p className="dq-eyebrow">Logged workouts</p>
+            <p className="dq-eyebrow">Last 90 days</p>
             <strong className="dq-num" style={{ fontSize: 42 }}>
               {workouts.length} sessions
             </strong>
@@ -252,7 +252,7 @@ function ActivityTab() {
       <div className={styles.metricGrid}>
         <Metric label="Walks" value={`${workouts.length}`} />
         <Metric label="Minutes" value={`${totalMinutes}`} />
-        <Metric label="Burned" value={`${burned}`} />
+        <Metric label="Burned (90d)" value={`${burned}`} />
         <Metric label="Best week" value={bestWeekMin ? `${bestWeekMin} min` : '—'} />
       </div>
     </>
