@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { useTheme } from '@/hooks/useTheme'
 import { BottomNav, type NavId } from './BottomNav'
+import { ToastContainer } from './Toast'
+
 
 type PhoneProps = {
   children: ReactNode
@@ -50,7 +52,9 @@ export function Phone({ children, hideNav = false, activeNav = 'home', onNav, bg
         </div>
       </div>
       {children}
+      <ToastContainer />
       {!hideNav && <BottomNav active={activeNav} onNav={onNav} />}
     </div>
   )
 }
+
