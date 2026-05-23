@@ -30,6 +30,15 @@ type WatchState<T> = {
 
 type WatchCallback<T> = (state: WatchState<T>) => void
 
+function logFirestoreError(label: string, error: Error): Error {
+  console.error(`[Firestore] ${label} listener failed:`, error)
+  return error
+}
+
+function listenerError<T>(label: string, data: T, cb: WatchCallback<T>) {
+  return (error: Error) => cb({ data, error: logFirestoreError(label, error) })
+}
+
 function userRef(uid: string) {
   return doc(db, 'users', uid)
 }
@@ -187,7 +196,7 @@ export function watchUser(uid: string, cb: WatchCallback<User | null>): Unsubscr
   return onSnapshot(
     userRef(uid),
     (snapshot) => cb({ data: snapshot.exists() ? deserializeUser(snapshot.id, snapshot.data()) : null, error: null }),
-    (error) => cb({ data: null, error }),
+    listenerError(`users/${uid}`, null, cb),
   )
 }
 
@@ -199,7 +208,7 @@ export function watchDayTotals(uid: string, date: string, cb: WatchCallback<DayT
   return onSnapshot(
     doc(db, 'users', uid, 'days', date),
     (snapshot) => cb({ data: snapshot.exists() ? deserializeDayTotals(snapshot.id, snapshot.data()) : null, error: null }),
-    (error) => cb({ data: null, error }),
+    listenerError(`users/${uid}/days/${date}`, null, cb),
   )
 }
 
@@ -249,7 +258,7 @@ export function watchMeals(uid: string, date: string, cb: WatchCallback<MealLog[
   return onSnapshot(
     query(userCollection(uid, 'meals'), where('date', '==', date), orderBy('logged_at', 'asc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeMeal), error: null }),
-    (error) => cb({ data: [], error }),
+    listenerError(`users/${uid}/meals date=${date}`, [], cb),
   )
 }
 
@@ -265,7 +274,7 @@ export function watchWeights(uid: string, days: number, cb: WatchCallback<Weight
   return onSnapshot(
     query(userCollection(uid, 'weights'), where('date', '>=', daysAgoKey(days)), orderBy('date', 'asc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeWeight), error: null }),
-    (error) => cb({ data: [], error }),
+    listenerError(`users/${uid}/weights days=${days}`, [], cb),
   )
 }
 
@@ -287,7 +296,7 @@ export function watchWaterToday(uid: string, date: string, cb: WatchCallback<Wat
   return onSnapshot(
     query(userCollection(uid, 'water'), where('date', '==', date), orderBy('logged_at', 'asc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeWater), error: null }),
-    (error) => cb({ data: [], error }),
+    listenerError(`users/${uid}/water date=${date}`, [], cb),
   )
 }
 
@@ -308,7 +317,7 @@ export function watchWorkouts(uid: string, daysBack: number, cb: WatchCallback<W
   return onSnapshot(
     query(userCollection(uid, 'workouts'), where('date', '>=', daysAgoKey(daysBack)), orderBy('date', 'desc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeWorkout), error: null }),
-    (error) => cb({ data: [], error }),
+    listenerError(`users/${uid}/workouts daysBack=${daysBack}`, [], cb),
   )
 }
 
@@ -323,7 +332,7 @@ export function watchSleep(uid: string, date: string, cb: WatchCallback<SleepLog
   return onSnapshot(
     doc(db, 'users', uid, 'sleep', date),
     (snapshot) => cb({ data: snapshot.exists() ? deserializeSleep(snapshot.id, snapshot.data()) : null, error: null }),
-    (error) => cb({ data: null, error }),
+    listenerError(`users/${uid}/sleep/${date}`, null, cb),
   )
 }
 
@@ -336,7 +345,7 @@ export function watchPresets(uid: string, cb: WatchCallback<MealPreset[]>): Unsu
   return onSnapshot(
     query(userCollection(uid, 'presets'), orderBy('name', 'asc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializePreset), error: null }),
-    (error) => cb({ data: [], error }),
+    listenerError(`users/${uid}/presets`, [], cb),
   )
 }
 
