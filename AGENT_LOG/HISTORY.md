@@ -67,6 +67,12 @@ Format per entry:
 
 ## Phase 6.1 — Full audit fixes (all 4 severity levels)
 - Date: 2026-05-23
-- Verdict: PASS (Awaiting Claude review to tag v1.0.1)
+- Verdict: PASS (Claude approved — v1.0.1 tagged)
 - Commit: 2a5f3bf...64d45df (12 commits)
 - Notes: SCOPE EXPANDED per user request to cover all 18 audit findings. Successfully delivered: 1 CRITICAL (real workout flow with live timer + MET kcal + editable settings + real save). 8 HIGH (remove or wire fake buttons across log-meal/plan/home/profile). 6 MEDIUM (real 7-day calorie chart, real activity heatmap with dates, computed best week, profile goal progress %, notification prefs UI, home incline reflects real workouts). 3 LOW (meal portion adjust, water + Custom button, sleep target window conditional). Deep Firestore serialization bug fixed (preventing undefined profile property crash during settings updates). Automated Playwright QA extended suite fully PASSES (10/10 test suites, 25/25 checks). Production Vercel app is fully up-to-date and clean. Awaiting approval to tag v1.0.1.
+
+## v1.0.1 — Tagged Release (production)
+- Date: 2026-05-23
+- Verdict: SHIPPED
+- Tag: v1.0.1
+- Notes: First production-grade release. All 18 audit findings fixed. Every button functional, every display shows real Firestore data, all user inputs persist. Workout flow: real timer with MET kcal calc + pause/resume + save real values. Plan accordion functional. Profile: editable, theme, haptic, notifications UI, export, About sheet. Lighthouse maintained (98/93/100/100 baseline). v1.0.0 stays in history as initial release that needed audit fixes. Cost: $0/month (Vercel Hobby + Firebase Blaze with free tier usage).
