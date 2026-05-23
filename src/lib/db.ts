@@ -5,6 +5,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   orderBy,
@@ -324,4 +325,42 @@ export async function markPresetUsed(uid: string, presetId: string): Promise<voi
     use_count: increment(1),
     updated_at: serverTimestamp(),
   })
+}
+
+export async function exportUserData(uid: string): Promise<any> {
+  const userSnap = await getDoc(userRef(uid))
+  if (!userSnap.exists()) return null
+
+  const userData = deserializeUser(userSnap.id, userSnap.data())
+
+  const getSubcollection = async (name: string, deserializer: (snap: any) => any) => {
+    const snap = await getDocs(userCollection(uid, name))
+    return snap.docs.map(deserializer)
+  }
+
+  const [meals, weights, water, workouts, presets] = await Promise.all([
+    getSubcollection('meals', deserializeMeal),
+    getSubcollection('weights', deserializeWeight),
+    getSubcollection('water', deserializeWater),
+    getSubcollection('workouts', deserializeWorkout),
+    getSubcollection('presets', deserializePreset),
+  ])
+
+  const sleepSnap = await getDocs(userCollection(uid, 'sleep'))
+  const sleeps = sleepSnap.docs.map((doc) => deserializeSleep(doc.id, doc.data()))
+
+  const daysSnap = await getDocs(userCollection(uid, 'days'))
+  const days = daysSnap.docs.map((doc) => deserializeDayTotals(doc.id, doc.data()))
+
+  return {
+    profile: userData.profile,
+    settings: userData.settings,
+    meals,
+    weights,
+    water,
+    workouts,
+    sleeps,
+    presets,
+    days,
+  }
 }
