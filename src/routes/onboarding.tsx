@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
 import { MOCK_USER } from '@/lib/mock'
-import { useAuthStore } from '@/stores/authStore'
 
 function ProgressHeader({ step, onBack }: { step: number; onBack?: () => void }) {
   return (
@@ -132,7 +131,6 @@ function Stepper({ label, value, suffix }: { label: string; value: number; suffi
 
 export function OnboardingGoalRoute() {
   const navigate = useNavigate()
-  const completeOnboarding = useAuthStore((state) => state.completeOnboarding)
   const profile = MOCK_USER.profile
 
   return (
@@ -189,7 +187,6 @@ export function OnboardingGoalRoute() {
           <Button
             icon="sparkle"
             onClick={() => {
-              completeOnboarding()
               navigate('/')
             }}
           >
