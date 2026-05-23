@@ -230,7 +230,6 @@ function CategoryChip({ active, label, onClick }: { active: boolean; label: stri
 }
 
 function FoodRow({ food, onClick }: { food: Food; onClick: () => void }) {
-  const catMeta = FOOD_CATEGORIES.find((c) => c.id === food.category)
   return (
     <button
       onClick={onClick}
@@ -250,13 +249,10 @@ function FoodRow({ food, onClick }: { food: Food; onClick: () => void }) {
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      <span className={styles.mealIcon} style={{ fontSize: 11, fontWeight: 800 }}>
-        {catMeta?.icon ?? 'OT'}
-      </span>
-      <span className={styles.rowText} style={{ flex: 1 }}>
-        <strong>{food.name}</strong>
-        <span className={styles.rowSub}>
-          {food.kcal_per_portion} kcal · {food.protein_g_per_portion}g P · per {food.portion_unit}
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <strong style={{ fontSize: 15, color: 'var(--t-1)' }}>{food.name}</strong>
+        <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>
+          {food.kcal_per_portion} kcal · {food.protein_g_per_portion}g · per {food.portion_unit}
         </span>
       </span>
       <Icon color="var(--t-3)" name="chevron" size={16} />

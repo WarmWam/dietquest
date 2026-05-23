@@ -195,7 +195,10 @@ export function CalendarTab() {
                       <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--a1)' }} />
                     ) : null}
                     {workout ? (
-                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--success)' }} />
+                      <span style={{
+                        width: 4, height: 4, borderRadius: '50%',
+                        background: workout.type === 'rest' ? 'var(--t-3)' : 'var(--success)',
+                      }} />
                     ) : null}
                   </span>
                 ) : null}
@@ -209,6 +212,9 @@ export function CalendarTab() {
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} /> workout
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--t-3)' }} /> rest
           </span>
         </div>
       </Card>
@@ -288,11 +294,11 @@ function TodayPlanCard({
 
       {workout ? (
         <div style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
-          <span className={styles.statIcon} style={{ color: 'var(--success)' }}>
+          <span className={styles.statIcon} style={{ color: workout.type === 'rest' ? 'var(--t-3)' : 'var(--success)' }}>
             <Icon name={(workoutMeta?.icon as any) ?? 'walk'} size={18} />
           </span>
           <span className={styles.rowText} style={{ flex: 1 }}>
-            <strong style={{ fontSize: 14 }}>Workout</strong>
+            <strong style={{ fontSize: 14 }}>{workout.type === 'rest' ? 'Rest day' : 'Workout'}</strong>
             <span className={styles.rowSub}>{workoutMeta?.label ?? workout.type}{workout.duration_min ? ` · ${workout.duration_min} min` : ''}</span>
           </span>
         </div>
@@ -518,10 +524,11 @@ function WorkoutSlotCard({
   onRemove: () => void
 }) {
   const typeMeta = plan ? WORKOUT_PLAN_TYPES.find((t) => t.id === plan.type) : null
+  const isRest = plan?.type === 'rest'
   return (
     <Card padding={14}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span className={styles.statIcon} style={{ color: 'var(--success)' }}>
+        <span className={styles.statIcon} style={{ color: isRest ? 'var(--t-3)' : 'var(--success)' }}>
           <Icon name={(typeMeta?.icon as any) ?? 'walk'} />
         </span>
         <span className={styles.rowText} style={{ flex: 1 }}>
