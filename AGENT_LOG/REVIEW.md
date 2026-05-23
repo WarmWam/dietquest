@@ -1,143 +1,151 @@
 # REVIEW — Claude → Codex
 
-> **Last updated:** 2026-05-23 (after Phase 2 approval)
-> **Active phase:** **Phase 3 — All Screens with Mock Data**
-> **Verdict on previous phase (Phase 2):** ✅ PASS — design system primitives are solid
+> **Last updated:** 2026-05-23 (after Phase 3 approval)
+> **Verdict on Phase 3:** ✅ **PASS** — solid work, build clean, bundle 227 KB
+> **Active phase:** **Phase 4 — PWA + Vercel Deploy**
 
 ---
 
-## Phase 3 Brief
+## Notes from Phase 3 review (read once)
 
-Port all 15 screens from `die-control/` prototype to `dietquest/`, using mock data only. Firebase comes later in Phase 5.
+These are observations to keep in mind through remaining phases:
 
-### Order of Work (do in this exact order)
+1. **Missing data hooks** — components import `MOCK_*` directly. Phase 5 must create `useToday`, `useMeals`, `useWeights`, `useWater`, `useWorkouts`, `useSleep`, `useUser` hooks AND search/replace all `MOCK_*` imports across all route files. Plan ~1 day for this conversion alone.
+2. **`log-health.tsx` consolidation** — six routes (water/weight/sleep + 3 workout) live in one file. Leave as-is for Phase 4. If Phase 6 refactor budget allows, split into separate files for maintainability.
+3. **Component subfolders empty** — all UI in route files. OK for now. If a UI fragment is repeated 3+ times in different routes during Phase 5-6, extract to `src/components/<feature>/`.
+4. **Inline styles** — acceptable per BUILD_HANDOFF for ≤5 props. If a route file accumulates many large inline style blocks, extract to its own `*.module.css` during Phase 6.
+5. **Working tree** — STATUS.md and HISTORY.md from Phase 3 are now committed (chore: phase 3 closeout).
 
-1. **Create `src/lib/mock.ts` FIRST** — all mock data in one file per BUILD_HANDOFF section 5:
-   - `MOCK_USER` (single user: male, 31, 169cm, 80kg → 65kg)
-   - `MOCK_TODAY` (today's totals)
-   - `MOCK_MEALS` (3 meals with realistic items, see diet_plan_claude content)
-   - `MOCK_WEIGHTS` (30 data points, gradual 80 → 78.2)
-   - `MOCK_PRESETS` (6 meal presets — เช้าปกติ, อกไก่+ข้าว, ปลา+ผัก, สเต๊ก, ก๋วยเตี๋ยวเรือ, Custom)
-   - `MOCK_FRUITS` (6 fruits from diet plan with kcal)
-2. Login screen (placeholder — single button "Sign in" that sets mock user in store)
-3. Splash/loading screen
-4. Onboarding 3 screens (Welcome / Profile / Goal)
-5. **Home full** (most complex — validate primitives here first)
-6. Home empty (day-1 state)
-7. Bottom nav wired with React Router
-8. Log Meal flow: 3 sub-screens (Presets → Confirm → Saved)
-9. Log Sheet (FAB-triggered bottom sheet with 5 quick log options)
-10. Log Water, Weight, Sleep
-11. Log Workout: 3 sub-screens (Pre → Active → Summary)
-12. Progress (4 tabs: Weight / Calorie / Activity / Photos)
-13. Plan reference screen
-14. Profile / Settings (theme toggle wired to useTheme)
-15. Achievement modal
+---
 
-### Routes (use these exact paths)
+## Phase 4 Brief — PWA + Vercel Deploy
 
-```
-/login
-/splash                    (transient)
-/onboarding/welcome
-/onboarding/profile
-/onboarding/goal
-/                          (home full)
-/?empty=1                  (home empty for testing)
-/log/meal                  (presets)
-/log/meal/confirm
-/log/meal/saved
-/log/water
-/log/weight
-/log/workout               (pre)
-/log/workout/active
-/log/workout/summary
-/log/sleep
-/progress?tab=weight       (default tab)
-/progress?tab=kcal
-/progress?tab=activity
-/progress?tab=photos
-/plan
-/profile
-/achievement               (modal route)
-/design                    (keep existing dev-only)
-```
+Goal: App is installable as PWA on iPhone via Vercel-hosted URL.
+
+### Pre-flight (human responsibility — confirm before starting)
+
+Codex: before writing any code for Phase 4, check that these are TRUE. If not, ask human via `## BLOCKED` in STATUS.md.
+
+- [ ] GitHub repo created (name: `dietquest`, private)
+- [ ] Vercel account exists (signed in via GitHub)
+- [ ] Human will provide GitHub remote URL when ready to push
+
+### Tasks
+
+1. **Configure PWA in `vite.config.ts`** — use `vite-plugin-pwa` (already installed):
+   - `registerType: 'autoUpdate'`
+   - Manifest:
+     - `name: 'DietQuest'`
+     - `short_name: 'DietQuest'`
+     - `theme_color: '#5B6CFF'` (Aurora primary)
+     - `background_color: '#F2F4F8'` (light bg) — or `#0F1419` (dark) — choose `#F2F4F8`
+     - `display: 'standalone'`
+     - `orientation: 'portrait'`
+     - `start_url: '/'`
+     - Icons: 192, 512, maskable (see icon task below)
+   - Workbox: cache Google Fonts as `StaleWhileRevalidate`
+
+2. **Create app icons** — `public/icons/`:
+   - `icon-192.png` (192x192)
+   - `icon-512.png` (512x512)
+   - `icon-maskable.png` (512x512, with 80px safe area padding)
+   - Design: Simple "DQ" text in white, on Aurora gradient (`#5B6CFF → #B17AFF → #FF6B9D` 135°)
+   - If you can't generate PNG programmatically, create SVG and convert via `sharp` (already a vite-plugin-pwa transitive dep) OR document in DECISIONS.md and request human upload
+
+3. **Splash screen for iOS** — add `apple-touch-icon` link in `index.html` + Apple-specific meta tags:
+   ```html
+   <meta name="apple-mobile-web-app-capable" content="yes" />
+   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+   <meta name="apple-mobile-web-app-title" content="DietQuest" />
+   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+   ```
+
+4. **Offline strategy** — verify:
+   - Build → preview → DevTools offline mode → already-visited routes still render
+   - First-load offline = OK to show "no connection" page
+
+5. **README.md** — write project README with:
+   - Project name + one-line description
+   - Tech stack list
+   - Local dev: `npm install`, `npm run dev`
+   - Build: `npm run build`, `npm run preview`
+   - Env vars (link to .env.example)
+   - Deploy: link to Vercel
+   - Phase status (in progress, current = Phase 4)
+
+6. **Deploy to Vercel** (after human provides GitHub remote):
+   - Push to `main` branch
+   - Wait for human to import repo into Vercel dashboard
+   - Confirm build succeeds on Vercel
+   - Get production URL
+   - **Add Firebase env vars in Vercel dashboard as PLACEHOLDERS** (empty values) — agent cannot do this, ask human via STATUS.md
+   - **DO NOT attempt to use Firebase config** — Phase 4 has no real Firebase code. Just placeholder env vars in Vercel.
+
+7. **Test on real device**:
+   - Human opens production URL in iPhone Safari
+   - Confirm: Share → Add to Home Screen works
+   - Confirm: Icon shows up, app opens fullscreen
+   - Human will report visual check via your STATUS.md prompt
 
 ### Rules
 
-- **All data from `src/lib/mock.ts`** — no hardcoded data inside components
-- **All buttons/CTAs functional** — but client-side state only
-- **Visual match within 5%** of prototype (compare side-by-side at 390 × 844)
-- **Dark mode must work on every screen** (use `useTheme()`)
-- **No `any` types** in TS — define proper interfaces in `src/types/domain.ts`
-- **Use CSS Modules for new files** (`*.module.css`), not inline styles for anything > 5 props
-- **Lazy-load route components** with `React.lazy()` if total bundle > 300 KB
+- **DO NOT integrate Firebase in this phase** — Phase 4 is purely PWA + hosting infrastructure
+- **DO NOT write any Firebase imports** — `src/lib/firebase.ts` does not exist yet (Phase 5)
+- Keep all routes still using mock data
+- Commit convention same as Phase 3 (conventional commits, per logical unit)
 
-### Commit Convention (per major section, NOT one giant commit)
+### DoD checklist (fill in STATUS.md when done)
+
+- [ ] `vite-plugin-pwa` configured in `vite.config.ts`
+- [ ] Manifest renders correct values (verify via `npm run preview` → DevTools → Application → Manifest)
+- [ ] Icons present in `public/icons/` (192 + 512 + maskable)
+- [ ] Apple meta tags in `index.html`
+- [ ] Offline test: visited route works without network
+- [ ] README.md complete
+- [ ] Pushed to GitHub (commit hash range documented)
+- [ ] Vercel deployment URL documented in STATUS.md
+- [ ] Lighthouse PWA score ≥ 90 (run on production URL, paste score)
+- [ ] Lighthouse Performance score reported (target ≥ 80)
+- [ ] All previous routes still work on deployed version
+
+### Commit convention for Phase 4
 
 ```
-feat(mock): seed data
-feat(auth): placeholder login + splash
-feat(onboarding): 3-step setup
-feat(home): full + empty states
-feat(nav): bottom nav + routing
-feat(log): meal flow
-feat(log): water/weight/sleep
-feat(log): workout flow
-feat(progress): 4 tabs
-feat(plan): reference screen
-feat(profile): settings + theme toggle
-feat(achievement): milestone modal
+feat(pwa): configure vite-plugin-pwa manifest
+feat(pwa): add app icons (192/512/maskable)
+feat(pwa): apple-touch-icon and ios meta tags
+docs: add README
+chore(deploy): vercel config + first deploy
 ```
 
-### DoD per screen
+### Blockers expected (call out in STATUS.md)
 
-- [ ] Visual matches prototype (eyeball check at 390 × 844 viewport)
-- [ ] Dark mode works
-- [ ] No TypeScript errors (`npm run build` succeeds)
-- [ ] No browser console warnings or errors
-- [ ] Navigation in/out works
+These require human action — pause and ask via STATUS.md `## BLOCKED` section:
+- GitHub remote URL needed for `git remote add origin`
+- Vercel project import needs human at dashboard
+- Adding env var placeholders in Vercel dashboard
+- iPhone visual check needs human with device
 
-### Phase 3 overall DoD
+### When Phase 4 done
 
-- [ ] All 15 screens reachable via navigation
-- [ ] Can click through full user flow without errors
-- [ ] `npm run build` succeeds with no warnings
-- [ ] All commits follow convention above
-- [ ] STATUS.md updated with final report
-
----
-
-## Things to Watch (potential pitfalls)
-
-1. **Don't keep `dark` prop chain from prototype** — use `useTheme()` hook, no prop drilling
-2. **Image-slot was a web component** — make sure ImageSlot.tsx works in all contexts where prototype used `<image-slot>`
-3. **Bottom sheet for LogSheet** — needs proper backdrop + dismiss-on-tap-outside
-4. **Workout timer** must keep screen awake (`navigator.wakeLock.request('screen')`) — add graceful fallback for browsers without API
-5. **Number animations on home Ring** — implement count-up but respect `prefers-reduced-motion`
-6. **Photos tab in Progress** — for mock, use placeholder gradients or ImageSlot — no real photos yet (Phase 6)
-7. **Thai font loading** — confirm IBM Plex Sans Thai loads (not just Plus Jakarta Sans)
+1. `npm run build` succeeds
+2. Production URL works
+3. Lighthouse audited
+4. Update STATUS.md with full report
+5. Append HISTORY.md entry
+6. STOP and wait
 
 ---
 
-## When Phase 3 Done
+## Reminder: Phase 5 will require
 
-1. Run `npm run build` — must succeed
-2. Update `AGENT_LOG/STATUS.md` with:
-   - Phase 3 complete
-   - DoD checklist filled
-   - Final commit hash range (start...end)
-   - Any decisions made → also in `DECISIONS.md`
-   - Screenshot list (which screens you verified visually)
-   - Any deferred items to flag
-3. Append to `AGENT_LOG/HISTORY.md`
-4. STOP — do not start Phase 4 (PWA + Deploy) until human approves Phase 3
+Codex, when you reach Phase 5, the human will provide:
+- `VITE_FB_API_KEY`
+- `VITE_FB_AUTH_DOMAIN`
+- `VITE_FB_PROJECT_ID`
+- `VITE_FB_STORAGE_BUCKET`
+- `VITE_FB_MSG_SENDER_ID`
+- `VITE_FB_APP_ID`
+- `VITE_FB_VAPID_KEY`
 
----
-
-## Open Questions (ask if blocking)
-
-If unclear, prefer simpler choice + document in `DECISIONS.md`. Only ask if truly blocking:
-- App icon for splash screen — use simple "DQ" text in gradient circle for now
-- Real photo for Progress > Photos tab — use ImageSlot placeholder
-- Sound on achievement — defer to Phase 6, skip for now
+You will paste them into `.env.local` (gitignored). Then implement Firebase per BUILD_HANDOFF Phase 5 task list. Also create the data hooks mentioned in "Notes from Phase 3" above.

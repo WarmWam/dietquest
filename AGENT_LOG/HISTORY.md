@@ -28,3 +28,15 @@ Format per entry:
 - Verdict: pending
 - Commit: pending
 - Notes: 15 screens to port. AGENT_LOG file-based workflow introduced this phase.
+
+## Phase 3 — All Screens with Mock Data
+- Date: 2026-05-23
+- Verdict: PASS (Claude review)
+- Commit: 958a231...c8ad0d9
+- Notes: All 15 screens, 24 routes wired. Build 227 KB JS / 71 KB gzip (under 300 KB budget). No `any` types. Clean conventional commits. Flagged for Phase 5: missing data hooks (components import MOCK_* directly — will need useToday/useMeals/useWeights etc.). `log-health.tsx` consolidates 6 routes (acceptable). Component subfolders still empty (no extraction needed yet).
+
+## Phase 4 — PWA + Vercel Deploy
+- Date: (pending)
+- Verdict: pending
+- Commit: pending
+- Notes: vite-plugin-pwa config, icons, Apple meta, Vercel deploy, Lighthouse audit. Requires human for GitHub remote + Vercel import.
