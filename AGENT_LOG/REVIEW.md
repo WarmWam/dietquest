@@ -1,221 +1,270 @@
-# REVIEW — Claude → Codex/Antigravity
+# REVIEW — Claude → Antigravity
 
-> **Last updated:** 2026-05-23 (after Phase 5 QA found gaps)
-> **Verdict on Phase 5:** ⚠️ **REVISE** — Firebase wiring is solid, but onboarding and meal selectors are non-functional UI placeholders
-> **Active phase:** **Phase 5.1 — Fix form interactivity** (must complete before Phase 6)
-
----
-
-## What's working (do not touch)
-
-Phase 5 Firebase implementation is excellent — keep all of this:
-- `src/lib/firebase.ts` + `src/lib/auth.ts` + `src/lib/db.ts`
-- All 7 data hooks (useToday, useMeals, useWeights, useWater, useWorkouts, useSleep, usePresets) + useAuth + useUser + useOnboarding
-- Firestore rules + auth gate + first-time user detection
-- Transactional day-totals denormalization
-- Error boundary + bundle splitting
-- Routes migrated from MOCK_* (correct — keep)
-
-QA results from human:
-- ✅ Auth gate works
-- ✅ Google sign-in works (after adding `dietquest-sigma.vercel.app` to Firebase Authorized domains)
-- ✅ Onboarding does navigate to Home after "Build my plan"
-- ❌ **Onboarding form inputs are non-functional** (write default profile regardless of user input)
-- ❌ **Log Meal meal-type selector non-functional** (always saves as Breakfast)
-- ❌ **"Starter preset" card not clickable** when user has no presets
+> **Last updated:** 2026-05-23 (after Phase 5.1 PASS)
+> **Verdict on Phase 5.1:** ✅✅ **PASS** — 28/28 QA, best phase work yet
+> **Active phase:** **Phase 6 — Polish + v1.0 Release** (the finale)
 
 ---
 
-## Phase 5.1 Brief — Fix form interactivity
+## Notes from Phase 5.1 (read once)
 
-These are interactive UI controls that look like inputs but have no state/handlers. Add real React state + handlers + persist to Firestore.
-
-### Fix 1 — `src/routes/onboarding.tsx` OnboardingProfileRoute (line 55-109)
-
-**Make all inputs real:**
-
-1. **Sex selector** (line 67-73) — currently static `data-active={index === 0}`:
-   - Add `useState<'male'|'female'|'other'>('male')`
-   - Each `<span>` becomes `<button>` with `onClick={() => setSex(option)}`
-   - `data-active={sex === option.toLowerCase()}`
-
-2. **Age stepper** (Stepper component line 111-131) — `+` and `-` buttons have no onClick:
-   - Convert `Stepper` to controlled component: `<Stepper value={age} onChange={setAge} min={13} max={100} />`
-   - `+` button: `onClick={() => onChange(Math.min(value + 1, max))}`
-   - `-` button: `onClick={() => onChange(Math.max(value - 1, min))}`
-   - Disable buttons at min/max
-
-3. **Height stepper** — same as age, range [120, 230] cm, step 1
-
-4. **Current weight** (line 80-86) — currently just `<Card>` displaying text, NO INPUT:
-   - Replace with stepper too, but with **decimal support**: step 0.1, range [30, 300] kg
-   - Use a new `<DecimalStepper value={weight} onChange={setWeight} step={0.1} />` OR
-   - Use `<input type="number" step="0.1" inputMode="decimal" />` styled to match design
-   - Default value: 80.0 (current MOCK_USER weight)
-
-5. **BMI · TDEE preview** (line 89-99) — currently hardcoded "28.0 BMI · 2,450 kcal":
-   - Compute live from state: `bmi = weight / (height/100)^2`, `tdee = bmr * 1.5`
-   - Use `src/lib/nutrition.ts` if it has functions, otherwise add `computeBMI()` and `computeTDEE()` there
-
-6. **Continue button** — must pass state forward. Use a Zustand store `useOnboardingDraft` OR React Router state OR localStorage to carry the profile across the 3 onboarding screens.
-
-   Recommended pattern: `src/stores/onboardingDraft.ts` Zustand store:
-   ```typescript
-   { sex, age, height_cm, weight_start_kg, weight_target_kg, target_months,
-     setSex, setAge, setHeight, setStartWeight, setTargetWeight, setTargetMonths,
-     reset }
-   ```
-
-### Fix 2 — `OnboardingGoalRoute` (line 133-201)
-
-1. **Target weight** (line 145-160) — currently just `<Card>` displaying text:
-   - Replace with stepper (decimal, step 0.5), range [40, weight_start_kg - 1]
-   - Reads `weight_start_kg` from draft store
-
-2. **Timeline** (line 163-175) — currently CSS-only "slider":
-   - Replace with real `<input type="range" min={3} max={12} value={months} onChange={...} />`
-   - Style to match the visual (sliderTrack/sliderFill/sliderThumb classes — wrap input)
-   - Display computed end date: `by ${endDate.toLocaleDateString()}`
-
-3. **Daily plan preview** (line 178-186) — currently hardcoded "1,950 kcal · 140g protein":
-   - Compute from state using `nutrition.ts`:
-     - `dailyDeficit = (startWeight - targetWeight) * 7700 / (months * 30)` kcal/day
-     - `dailyKcal = tdee - dailyDeficit`
-     - `dailyProtein = targetWeight * 1.8` g
-   - Display computed values
-
-4. **"Build my plan" button** — must use draft state, not DEFAULT_PROFILE:
-   ```typescript
-   const draft = useOnboardingDraft()
-   await completeOnboarding({
-     sex: draft.sex,
-     age: draft.age,
-     height_cm: draft.height_cm,
-     weight_start_kg: draft.weight_start_kg,
-     weight_target_kg: draft.weight_target_kg,
-     target_date: addMonths(new Date(), draft.target_months),
-   })
-   draft.reset()
-   navigate('/')
-   ```
-
-### Fix 3 — `src/routes/log-meal.tsx` LogMealRoute (line 16-74)
-
-1. **Meal type segmented** (line 33-39) — currently `data-active={index === 0}` static:
-   - Add `useState<MealType>('breakfast')`
-   - Each `<span>` becomes `<button>` with onClick to update state
-   - Default to current time of day:
-     - 04:00-10:00 → breakfast
-     - 10:00-15:00 → lunch
-     - 15:00-22:00 → dinner
-     - else → snack
-   - Pass selected meal type to confirm screen via state
-
-2. **"Starter preset" card** (line 47-51) — when presets.length === 0:
-   - Convert from `<Card>` to `<button>` (or wrap Card in button)
-   - onClick: navigate to confirm with default preset
-
-3. **Pass meal type to confirm screen:**
-   - Either via React Router state: `navigate('/log/meal/confirm', { state: { mealType, presetId } })`
-   - Or via small Zustand store `useMealDraft`
-   - LogMealConfirmRoute reads it; falls back to breakfast if missing
-
-### Fix 4 — `LogMealConfirmRoute` (line 76-156)
-
-1. Replace `useSelectedPreset()` (which always returns `data[0]`) with the actual selected preset from navigation state / draft store
-2. Display the meal type from selection (not hardcoded "Breakfast" in header line 112)
-3. `saveMeal()` uses `meal_type: selectedMealType` (not `preset.meal_type`)
-4. Confirm message in LogMealSavedRoute should say "{Mealtype} logged" not always "Breakfast logged" (line 169)
-
-### Fix 5 — Verify Home refresh after meal log
-
-User reported "ไม่มีข้อมูลแสดง" after save. Check:
-
-1. `src/lib/dates.ts` `todayKey()` — must return local timezone date in YYYY-MM-DD format. If using UTC, late-night logs go to wrong date.
-   ```typescript
-   export function todayKey(): string {
-     const now = new Date()
-     const y = now.getFullYear()
-     const m = String(now.getMonth() + 1).padStart(2, '0')
-     const d = String(now.getDate()).padStart(2, '0')
-     return `${y}-${m}-${d}`
-   }
-   ```
-
-2. `useToday()` must subscribe to the SAME date key. If it computes today separately, mismatch is possible.
-
-3. `useMeals(date)` must use `onSnapshot` not `getDocs` — confirm in `src/lib/db.ts`
-
-4. Test manually: log meal → check Firestore Console → see doc appeared in `users/{uid}/meals/`. Then check `users/{uid}/days/{today}/totals` updated. If write succeeded but UI didn't refresh = listener issue.
-
-### Fix 6 — Other forms that might have the same issue (audit)
-
-Codex/Antigravity: grep for similar patterns and fix:
-- `src/routes/log-water.tsx` or wherever water input is — check "Add 250 / 500 / Custom" buttons are wired
-- `src/routes/log-weight.tsx` — confirm weight input is real
-- `src/routes/log-sleep.tsx` — confirm time pickers actually work
-- `src/routes/log-workout.tsx` — confirm incline/speed sliders are real inputs
-- `src/routes/profile.tsx` — settings (theme toggle should already work via useTheme; goals editing may not)
-
-For each screen with "input-looking UI", verify:
-- State exists
-- onChange handlers fire
-- Submit uses the state value (not a default const)
+- Phase 5 core + Phase 5.1 fixes = backend + interactivity fully solid
+- Outstanding QA discipline by Antigravity — keep this standard for Phase 6
+- `scratch/` properly gitignored; do not commit cookies/session data anywhere
+- Playwright suite at `scratch/run_qa.js` can be reused for Phase 6 regression
+- Code style notes for consistency:
+  - Conventional commits, per logical unit (~3-8 commits per phase)
+  - Inline styles OK for ≤5 props, CSS Modules for layout
+  - No `any` types
+  - Use barrel exports
+  - Use `useTheme()` not prop drilling
 
 ---
 
-## Commit convention for Phase 5.1
+## Phase 6 Brief — Polish + v1.0 Release
 
-```
-fix(onboarding): wire profile form inputs to real state
-fix(onboarding): wire goal form inputs to real state
-feat(stores): onboarding draft store
-fix(log): wire meal-type selector and preset selection
-fix(log): persist meal type through confirm flow
-fix(dates): ensure todayKey uses local timezone
-fix(log): audit and wire remaining log-* screens
+Goal: Transform working app → polished v1.0 ready for daily use.
+
+### Task list (suggested order; agent may reorder if defensible)
+
+#### 6.1 — Loading skeletons (~3 hours)
+
+Replace generic "Loading..." text with proper skeleton UIs that match final layout shape.
+
+Screens needing skeletons:
+- Home (calorie ring + meal cards + habit list)
+- Progress (chart placeholder + summary cards)
+- Log Meal (preset list)
+- Plan
+- Profile
+
+Create `src/components/primitives/Skeleton.tsx`:
+```typescript
+interface SkeletonProps {
+  width?: number | string
+  height?: number | string
+  radius?: number
+  variant?: 'rect' | 'circle' | 'text'
+}
 ```
 
+Use CSS animation `pulse` already in design system (check tokens.css) or create one. Respect `prefers-reduced-motion`.
+
+#### 6.2 — Toast notifications (~2 hours)
+
+Add toast system for user feedback on actions.
+
+Create `src/components/primitives/Toast.tsx` + `src/stores/toastStore.ts`:
+- Position: top-center, slide-in
+- Variants: success (green), error (red), info (neutral)
+- Auto-dismiss after 3 seconds, swipe up to dismiss
+- Stack up to 3 toasts
+
+Wire to actions:
+- Meal logged → "Saved · 350 kcal"
+- Weight logged → "Logged 78.2 kg (-0.3)"
+- Water added → "+ 250 ml (1.5L / 3L today)"
+- Workout saved → "45 min · 320 kcal burned"
+- Sleep saved → "7h 30m logged"
+- Error states → "Couldn't save. Tap to retry."
+
+Show toast from db.ts wrapper success/failure callbacks OR from each route's save handler.
+
+#### 6.3 — Pull-to-refresh on Home (~1 hour)
+
+Implement custom pull-to-refresh on Home screen:
+- Pull down past threshold → release → animation runs while refetching
+- Use existing `useToday()` and call `.refetch()` (if hook supports) OR force re-mount via key
+- Custom indicator: small calorie ring spinning OR brand-style loader
+
+Library option: `react-pull-to-refresh` (small, lightweight) — or hand-roll with touch events.
+
+#### 6.4 — Haptic feedback (~1 hour)
+
+Add subtle vibration on key actions (Web Vibration API):
+- Meal save: `navigator.vibrate(10)`
+- Water +250 button: `navigator.vibrate(5)`
+- Milestone reached: `navigator.vibrate([15, 30, 15])`
+- Error: `navigator.vibrate([20, 40, 20])`
+
+Create helper `src/lib/haptic.ts`:
+```typescript
+export function haptic(pattern: number | number[]): void {
+  if ('vibrate' in navigator && navigator.vibrate) {
+    navigator.vibrate(pattern)
+  }
+}
+```
+
+Guard for browsers that don't support (Safari iOS desktop). Add user setting to disable.
+
+#### 6.5 — Profile screen — make settings editable (~3 hours)
+
+Currently Profile is static (per Codex's earlier work). Add:
+
+- **Edit profile** — open modal/sheet with same Stepper inputs as onboarding
+  - Sex, age, height, current weight, target weight, target months
+  - Reuse `useOnboardingDraft` pattern with new `useProfileEditDraft` OR
+  - Pre-fill with current profile, on save → `upsertUser(uid, { profile })`
+- **Theme toggle** — wire to `useTheme()` (light / dark / auto)
+- **Notification preferences** — UI only for v1 (functional in v1.1 when FCM added)
+- **Sign out** — calls `logout()` then redirects to /login
+- **Account info** — display email + uid (read-only)
+
+#### 6.6 — Data export (~2 hours)
+
+Add "Export my data" button in Profile → Settings.
+
+Implementation:
+- Query all collections for current user
+- Bundle into single JSON: `{ profile, meals, weights, water, workouts, sleeps, presets }`
+- Trigger browser download via Blob URL
+- Filename: `dietquest-export-{YYYYMMDD}.json`
+
+Why: GDPR-style right to export + manual backup option + portability.
+
+#### 6.7 — Visual + UX details (~2 hours)
+
+- Empty states with friendly copy on every list
+- 404 / unknown route → friendly "Not found" + button back to home
+- Confirm before destructive actions (delete meal, sign out)
+- Loading states for sign-in button (spinner while OAuth popup)
+- Disable submit buttons during pending writes (already partial — audit)
+
+#### 6.8 — Maintenance (~2 hours)
+
+- Run `npm audit` → review the 16 vulnerabilities Codex flagged (15 moderate, 1 high)
+- For each: assess if it's transitive in dev dep (firebase-tools) or affects production
+- Update what's safe; document any that can't be updated in DECISIONS.md
+- Run `npm outdated` → consider patch/minor bumps that look safe
+- Re-test build after updates
+
+#### 6.9 — Refactor consideration (~1-2 hours, OPTIONAL)
+
+Phase 3 flagged `src/routes/log-health.tsx` as a 226-line file containing 6 route components (water/weight/sleep + 3 workout). If you have budget after must-haves:
+- Split into `log-water.tsx`, `log-weight.tsx`, `log-sleep.tsx`, `log-workout.tsx`
+- Keep imports working in `App.tsx`
+- Skip if time is short — current setup works
+
+#### 6.10 — Final Lighthouse audit (~30 min)
+
+Run Lighthouse against production after all changes:
+- Target: maintain Phase 4 scores or improve
+- Performance ≥ 90 (currently 98)
+- Accessibility ≥ 93
+- Best Practices = 100
+- PWA = 100
+- If any drops below threshold → fix top 2-3 issues
+
+Save report to `AGENT_LOG/lighthouse-phase6.report.html` + screenshot.
+
+#### 6.11 — README polish (~30 min)
+
+Update README.md to reflect final v1.0:
+- Add screenshots (use existing AGENT_LOG QA shots)
+- Update "Phase status" section → "v1.0.0 released"
+- Add "Local development" with full setup steps
+- Add "Deploy your own" section (fork → Vercel)
+- Add "License" if applicable (or `Private — personal project`)
+- Link to live demo
+
+#### 6.12 — Git tag v1.0.0 (~5 min)
+
+After all above done + Claude approval:
+```bash
+git tag -a v1.0.0 -m "v1.0.0 — DietQuest first release"
+git push origin v1.0.0
+```
+
+Vercel will create a permalink to v1.0.0 deployment.
+
 ---
 
-## DoD Phase 5.1 (fill in STATUS.md when done)
+## Rules for Phase 6
 
-- [ ] Onboarding profile: Sex/Age/Height/Weight all editable, persist to Firestore correctly
-- [ ] Onboarding goal: Target weight + timeline editable, daily kcal computed from inputs
-- [ ] Verify in Firestore Console: `users/{uid}.profile.weight_start_kg` matches what was entered
-- [ ] BMI/TDEE/kcal preview updates live as user changes inputs
-- [ ] Log Meal: meal-type selector switches between breakfast/lunch/dinner/snack
-- [ ] Log Meal: "Starter preset" card is clickable when user has no saved presets
-- [ ] Log Meal: selected meal type carries through to confirm + saved screens
-- [ ] Home refreshes within 2 sec after meal is logged (onSnapshot working)
-- [ ] todayKey uses local timezone (test: log meal at 23:30 local, should appear under today's date)
-- [ ] Other log screens audited and any placeholder UI fixed
-- [ ] `npm run build` clean
-- [ ] Deployed to Vercel; production has fixes
-- [ ] STATUS.md updated, HISTORY.md appended (entry: "Phase 5.1 — form interactivity fixes")
-
-When done, STOP for Claude review.
+- DO NOT add Storage / photo upload (still out of v1 scope)
+- DO NOT touch Firebase config (`firebase.ts`) — backend is stable
+- DO NOT change Firestore schema (only ADD fields if needed, never rename/remove)
+- Reuse Playwright QA script from `scratch/` for any retest needed
+- Keep bundle under 350 KB JS gzipped (currently 71 KB — plenty of room)
+- Match existing code style (named exports, tokens.css colors, etc.)
 
 ---
 
-## Notes for next agent (if switching from Codex to Antigravity)
+## Commit convention for Phase 6
 
-This is Antigravity's first phase on this project. To onboard quickly:
-
-1. Read `AGENT_LOG/README.md` (the loop)
-2. Read this REVIEW.md (current task — Phase 5.1 fixes)
-3. Read `AGENT_LOG/STATUS.md` (Codex's last report — what was built)
-4. Read `AGENT_LOG/HISTORY.md` (phase outcomes so far)
-5. Read `BUILD_HANDOFF.md` (project spec) — sections 2, 4, 6 are most relevant
-6. Read `src/lib/mock.ts`, `src/types/domain.ts`, `src/lib/db.ts` — to understand data shape
-7. Then start fixing per the Fix 1-6 list above
-
-Coding style observed so far: Inline styles for small (≤5 props), CSS Modules for layout. Conventional commits. No `any` types. CSS variables from `tokens.css` for colors. Use `appStyles as styles` import pattern from `@/components/layout/AppScreen`. Components use named exports (not default).
-
-The previous agent (Codex) wrote ~15 commits per phase, well-scoped. Follow the same granularity.
+```
+feat(ui): skeleton loading components
+feat(ui): toast notification system
+feat(home): pull-to-refresh
+feat(ux): haptic feedback on actions
+feat(profile): editable settings and goals
+feat(profile): theme selector
+feat(profile): data export to JSON
+feat(ux): empty states + 404 + confirm dialogs
+chore(deps): npm audit cleanup
+refactor(routes): split log-health into per-feature files  (if done)
+chore(perf): lighthouse fixes if needed
+docs: README polish for v1.0
+chore(release): tag v1.0.0
+```
 
 ---
 
-## After Phase 5.1 → Phase 6 brief (will be provided when 5.1 closes)
+## DoD Phase 6 (fill in STATUS.md when done)
 
-Phase 6 will cover: toasts, skeletons, pull-to-refresh, haptic, data export, npm audit, Lighthouse re-audit, README polish, v1.0.0 tag. Do NOT start Phase 6 until 5.1 is reviewed and approved.
+### Must-have
+- [ ] Skeletons on Home, Progress, Log Meal, Plan, Profile
+- [ ] Toast system + wired to all save actions
+- [ ] Pull-to-refresh on Home
+- [ ] Haptic feedback on saves (with fallback for unsupported browsers)
+- [ ] Profile editable (sex/age/height/weight/target/timeline) saves to Firestore
+- [ ] Theme toggle in Profile (light/dark/auto)
+- [ ] Sign out button works
+- [ ] Data export downloads JSON of all user data
+- [ ] Empty states + 404 page + confirmations on destructive actions
+- [ ] `npm audit` reviewed (fixed or documented)
+- [ ] Lighthouse Performance ≥ 90, Accessibility ≥ 93, Best Practices ≥ 95, PWA = 100
+- [ ] README polished for v1.0
+- [ ] Git tag `v1.0.0` pushed
+- [ ] Vercel production has the tagged version
+
+### Nice-to-have (skip if time short)
+- [ ] log-health.tsx split into per-feature files
+- [ ] Playwright regression run against Phase 6 changes
+
+### Sign-off
+- [ ] STATUS.md updated with Phase 6 final report
+- [ ] HISTORY.md appended with PASS + commit range
+- [ ] All changes pushed to GitHub
+- [ ] STOP and wait for Claude final review + v1.0 sign-off
+
+---
+
+## After v1.0 (out of scope, future versions)
+
+These are deliberately deferred — do NOT do in Phase 6:
+- Push notifications (FCM scheduling) — v1.1
+- Photo upload + Progress photos tab — v1.1
+- Weekly backup to Google Drive — v1.1
+- Apple sign-in — v1.2
+- Multi-user (couple mode) — v2.0
+- Apple Health integration — v2.1
+
+---
+
+## How to QA Phase 6 (recommendation for agent)
+
+After implementing, reuse + extend the Playwright script:
+- Existing tests still pass
+- New: toast appears on meal save
+- New: pull-to-refresh triggers refetch
+- New: profile edits persist
+- New: data export downloads valid JSON
+- New: Lighthouse via `lighthouse` CLI against production URL
+
+Save extended QA report to `AGENT_LOG/phase6-qa-report.md`.
+
+---
+
+*Phase 6 estimated effort: 16-20 hours total. Could be split across 2-3 work sessions.*

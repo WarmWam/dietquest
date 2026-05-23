@@ -55,6 +55,12 @@ Format per entry:
 
 ## Phase 5.1 — Form interactivity fixes
 - Date: 2026-05-23
-- Verdict: PASS
-- Commit: 10a8aa5...0f9f494 (5 commits)
-- Notes: Wired onboarding profile and goal form inputs to Zustand store (useOnboardingDraft) with formula-based target calculations. Wired meal-type segmented selector, starter preset card, dynamic eyebrow headers, and saved screens to Zustand store (useMealDraft). Checked todayKey to use local timezone. Audited and wired sleep time pickers and star rating selectors. Clean production build compiles without errors.
+- Verdict: PASS (Claude review)
+- Commit: 10a8aa5...0f9f494 (5 commits) + 9aeff2e (QA suite)
+- Notes: Wired onboarding profile/goal form inputs (useOnboardingDraft) with formula-based target calculations. Wired meal-type segmented selector + starter preset + dynamic eyebrow + saved screens (useMealDraft). Fixed todayKey to local timezone. Audited & wired sleep time pickers + star rating. Antigravity executed Playwright E2E QA against production: 28/28 PASS (17 onboarding + 6 meal flow + 1 timezone + 4 sleep), 0 console errors. Screenshots archived in AGENT_LOG/phase5.1-qa/. Code quality + QA discipline: best of project so far.
+
+## Phase 6 — Polish + v1.0 release
+- Date: (pending)
+- Verdict: pending
+- Commit: pending
+- Notes: Loading skeletons, toast notifications, pull-to-refresh, haptic feedback, Profile goal editing, data export (JSON), npm audit cleanup, final Lighthouse audit, v1.0.0 git tag, iPhone install verification.
