@@ -153,6 +153,24 @@ function deserializePreset(snapshot: QueryDocumentSnapshot<DocumentData>): MealP
   }
 }
 
+function deserializeDayTotals(id: string, data: DocumentData): DayTotals {
+  return {
+    date: String(data.date ?? id),
+    totals: {
+      kcal: Number(data.totals?.kcal ?? 0),
+      protein_g: Number(data.totals?.protein_g ?? 0),
+      carb_g: Number(data.totals?.carb_g ?? 0),
+      fat_g: Number(data.totals?.fat_g ?? 0),
+      water_ml: Number(data.totals?.water_ml ?? 0),
+    },
+    habits: {
+      water_done: Boolean(data.habits?.water_done ?? Number(data.totals?.water_ml ?? 0) >= 3000),
+      walk_done: Boolean(data.habits?.walk_done ?? false),
+      sleep_on_time: Boolean(data.habits?.sleep_on_time ?? false),
+    },
+  }
+}
+
 export async function getUser(uid: string): Promise<User | null> {
   const snapshot = await getDoc(userRef(uid))
   return snapshot.exists() ? deserializeUser(snapshot.id, snapshot.data()) : null
@@ -173,7 +191,7 @@ export async function upsertUser(uid: string, partial: Partial<User>): Promise<v
 export function watchDayTotals(uid: string, date: string, cb: WatchCallback<DayTotals | null>): Unsubscribe {
   return onSnapshot(
     doc(db, 'users', uid, 'days', date),
-    (snapshot) => cb({ data: snapshot.exists() ? (snapshot.data() as DayTotals) : null, error: null }),
+    (snapshot) => cb({ data: snapshot.exists() ? deserializeDayTotals(snapshot.id, snapshot.data()) : null, error: null }),
     (error) => cb({ data: null, error }),
   )
 }
