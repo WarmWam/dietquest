@@ -1,0 +1,146 @@
+{
+  "base": "https://dietquest-sigma.vercel.app",
+  "results": [
+    {
+      "route": "/",
+      "expected": "Today",
+      "ok": true,
+      "path": "/",
+      "text": "9:41Good morningFriday, May 23AToday710 kcal lefteaten1,240/ 1,950 kcalPROTEIN 78/140g1.5 / 3.0 LWater45 / 60 minInclineToday’s mealsEdit🌅Breakfast350 kcalWhey BAAM, Boiled eggs, Banana☀️Lunch620 kcalChicken breast, Brown rice, Mixed vegetables🌙Dinnertap to "
+    },
+    {
+      "route": "/login",
+      "expected": "DietQuest",
+      "ok": true,
+      "path": "/login",
+      "text": "DQDietQuestTrack the cut without the noise.Mock sign-in for asuna.posie@gmail.com. Firebase auth lands in Phase 5.Sign in"
+    },
+    {
+      "route": "/splash",
+      "expected": "DietQuest",
+      "ok": true,
+      "path": "/splash",
+      "text": "9:41DQDietQuestPreparing today’s quest"
+    },
+    {
+      "route": "/onboarding/welcome",
+      "expected": "Your journey",
+      "ok": true,
+      "path": "/onboarding/welcome",
+      "text": "9:4115kg to goalDietQuestYour journey80 to 65 kgstarts here.Track meals, water, walks and weight in under 3 taps a day. Built for one person: you.Get startedBack to sign in"
+    },
+    {
+      "route": "/onboarding/profile",
+      "expected": "About you",
+      "ok": true,
+      "path": "/onboarding/profile",
+      "text": "9:412/3About youWe’ll use this to calculate your daily targets.SexMaleFemaleOtherAge-31 yrs+Height-169 cm+Current weight80.0kgYour BMI · TDEE28.0 BMI · 2,450 kcalContinue"
+    },
+    {
+      "route": "/onboarding/goal",
+      "expected": "Set your goal",
+      "ok": true,
+      "path": "/onboarding/goal",
+      "text": "9:413/3Set your goalWe’ll build your plan around this.Target weight80.0Now65.0TargetTimeline5 monthsby Nov 2026Your daily plan1,950 kcal · 140g proteinRate: 0.7 kg/weekBuild my plan"
+    },
+    {
+      "route": "/log/meal",
+      "expected": "Breakfast",
+      "ok": true,
+      "path": "/log/meal",
+      "text": "9:41Log mealWhich meal?BreakfastLunchDinnerSnackSuggested for breakfast🌅Whey + 2 eggs + bananaBreakfast regular · 350 kcal · 38g PTop pick🍗Chicken breast + brown rice + saladLean cut · 620 kcal · 64g P🐟Grilled fish + vegetablesFish day · 450 kcal · 48g P🥩B"
+    },
+    {
+      "route": "/log/meal/confirm",
+      "expected": "Confirm",
+      "ok": true,
+      "path": "/log/meal/confirm",
+      "text": "9:41BreakfastConfirm mealTotal · meal350kcal38g protein27g carbs11g fatItemsWhey BAAM120 kcal · 24g P · 3g C · 1g F1xBoiled eggs140 kcal · 13g P · 1g C · 10g F2xBanana90 kcal · 1g P · 23g C · 0g F1xSave · 350 kcal"
+    },
+    {
+      "route": "/log/meal/saved",
+      "expected": "Breakfast logged",
+      "ok": true,
+      "path": "/log/meal/saved",
+      "text": "9:41Breakfast logged350 kcal · 38g protein · 1,600 kcal left todayDay 15 streak unlockedBack to home"
+    },
+    {
+      "route": "/log/water",
+      "expected": "Water",
+      "ok": true,
+      "path": "/log/water",
+      "text": "9:41Water1.5of 3.0 L · 50%+ 250 ml+ 500 ml500 ml07:00500 ml10:30500 ml14:20"
+    },
+    {
+      "route": "/log/weight",
+      "expected": "Weight",
+      "ok": true,
+      "path": "/log/weight",
+      "text": "9:41WeightToday78.2 kgPrevious 78.5 · -0.3 kg789456123.0⌫Save weight"
+    },
+    {
+      "route": "/log/workout",
+      "expected": "Workout",
+      "ok": true,
+      "path": "/log/workout",
+      "text": "9:41WorkoutTemplateIncline walk45 min · 8% incline · 5.5 km/hIncline8%treadmillSpeed5.5km/hStart"
+    },
+    {
+      "route": "/log/workout/active",
+      "expected": "LIVE",
+      "ok": true,
+      "path": "/log/workout/active",
+      "text": "9:41LIVE · Incline walkELAPSED27:14of 45 min targetkcal186incline8%speed5.5heart132"
+    },
+    {
+      "route": "/log/workout/summary",
+      "expected": "Workout complete",
+      "ok": true,
+      "path": "/log/workout/summary",
+      "text": "9:41Workout completeIncline walk45:222 sec over target. Nailed it.Calories328kcalDistance3.6kmAvg incline8.2%Avg speed5.5km/hSave workout"
+    },
+    {
+      "route": "/log/sleep",
+      "expected": "Sleep",
+      "ok": true,
+      "path": "/log/sleep",
+      "text": "9:41Sleep7h 24mwithin target windowBedtime22:38last nightWake06:02this morningSleep qualitySave sleep"
+    },
+    {
+      "route": "/progress?tab=weight",
+      "expected": "Progress",
+      "ok": true,
+      "path": "/progress?tab=weight",
+      "text": "9:41ProgressWeightCaloriesActivityPhotosCurrent78.2 kg 1.8 kgStart80.0 kgNow78.2 kgLost-1.8 kgTo target13.2 kgTodayProgressPlanProfile"
+    },
+    {
+      "route": "/plan",
+      "expected": "Plan",
+      "ok": true,
+      "path": "/plan",
+      "text": "9:41PlanYour reference for meals, recipes and routines.Search meals, recipes...Your 5-month plan1,950 kcal · 140g protein3 meals + 1 snack · 6 days/week walk · 7.5 hr sleepOpen full plan🌅Breakfast3 itemsWhey + 2 eggs + bananaUseOvernight oats + Greek yogurtUs"
+    },
+    {
+      "route": "/profile",
+      "expected": "Profile",
+      "ok": true,
+      "path": "/profile",
+      "text": "9:41ProfileAAsuna Posie31 · 169 cm · day 14 · BMI 27.4Goal65.0 kg1.8 / 15 kg lost · target Nov 15, 2026ThemelightdarkautoNotificationsBreakfast 06:30Lunch 11:00Water every 2hWalk 16:30Bedtime 22:30DataExport dataCSV · PDFAbout DietQuestv1.0.0Sign outTodayProgr"
+    },
+    {
+      "route": "/achievement",
+      "expected": "MILESTONE",
+      "ok": true,
+      "path": "/achievement",
+      "text": "9:41-2kilogramsMILESTONE UNLOCKEDFirst 2 kg in the books!14 days of logging, 11 walks completed, and you’re on pace for November.ShareContinue"
+    },
+    {
+      "route": "/design",
+      "expected": "Design",
+      "ok": true,
+      "path": "/design",
+      "text": "DietQuest Design SystemPrimitive components ported from the prototype, using the production token sheet and the app theme hook.lightdarkautoButtonsLog mealAdjust goalSettingsIconsRing + Image Sloteaten1,240/ 1,950 kcalPROTEIN 78/140gDrop progress photoBottom N"
+    }
+  ],
+  "logs": []
+}

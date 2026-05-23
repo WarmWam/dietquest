@@ -1,99 +1,120 @@
-# STATUS — Codex → Claude
+# STATUS - Codex -> Claude
 
-> **Last phase completed:** Phase 3 — All Screens with Mock Data
+> **Phase completed:** Phase 4 - PWA + Vercel Deploy
 > **Completion date:** 2026-05-23
-> **Current phase:** STOPPED — waiting for review
+> **Current state:** READY FOR REVIEW
 
 ---
 
-## Phase 3 Report — COMPLETE
+## Completed
 
-### DoD checklist
+- Configured `vite-plugin-pwa` with auto-update, DietQuest manifest, portrait standalone mode, required icons, and Google Fonts runtime caching.
+- Generated PNG app icons in `public/icons/`: `icon-192.png`, `icon-512.png`, `icon-maskable.png`.
+- Added iOS PWA meta tags and `apple-touch-icon` in `index.html`.
+- Added DietQuest README and Vercel SPA rewrite config.
+- Pushed Phase 4 code to GitHub `main`.
+- Human imported the repo into Vercel and verified iPhone Add to Home Screen install.
+- Ran Lighthouse against production URL: `https://dietquest-sigma.vercel.app/`.
+- Verified all deployed routes render expected content with zero captured console warnings/errors.
 
-- [x] `src/lib/mock.ts` created first with all required mock data
-- [x] Login + Splash
-- [x] Onboarding (3 screens)
-- [x] Home full + empty
-- [x] Bottom nav routing
-- [x] Log Meal flow (3 screens)
-- [x] Log Sheet
-- [x] Log Water/Weight/Sleep
-- [x] Log Workout (3 screens)
-- [x] Progress (4 tabs)
-- [x] Plan
-- [x] Profile/settings with theme toggle
-- [x] Achievement modal
-- [x] All routes accessible
-- [x] `npm run build` clean
-- [x] No browser console warnings/errors in route verification
+## DoD Checklist
 
-### Commit range
+- [x] `vite-plugin-pwa` configured in `vite.config.ts`
+- [x] Manifest renders correct values
+  - Verified generated `dist/manifest.webmanifest`: `DietQuest`, `#5B6CFF`, `#F2F4F8`, standalone, portrait, `/`, and all three icon entries.
+- [x] Icons present in `public/icons/` (192 + 512 + maskable)
+- [x] Apple meta tags in `index.html`
+- [x] Offline test: visited route works without network
+  - Local production preview: service worker ready, `/progress?tab=weight` visited, offline reload still rendered.
+- [x] README.md complete
+- [x] Pushed to GitHub
+  - Remote: `https://github.com/WarmWam/dietquest.git`
+  - Branch: `main`
+- [x] Vercel deployment URL documented
+  - `https://dietquest-sigma.vercel.app/`
+- [x] Lighthouse PWA score >= 90
+  - PWA: 100
+- [x] Lighthouse Performance score reported
+  - Performance: 98
+- [x] All previous routes still work on deployed version
+  - Route matrix saved in `AGENT_LOG/phase4-route-check.json`
 
-`958a231...c8ad0d9`
+## Lighthouse Scores
 
-Phase commits:
-- `958a231 feat(mock): seed data`
-- `9d9411b feat(auth): placeholder login + splash`
-- `756e3f1 feat(onboarding): 3-step setup`
-- `99538d3 feat(home): full + empty states`
-- `a99b465 feat(nav): bottom nav + routing`
-- `1fbcb6e feat(log): meal flow`
-- `d3cba13 feat(log): water/weight/sleep`
-- `062b226 feat(log): workout flow`
-- `815671e feat(progress): 4 tabs`
-- `045429c feat(plan): reference screen`
-- `64272ca feat(profile): settings + theme toggle`
-- `c8ad0d9 feat(achievement): milestone modal`
+Report files:
 
-### Decisions documented in `DECISIONS.md`
+- `AGENT_LOG/lighthouse-phase4.report.json`
+- `AGENT_LOG/lighthouse-phase4.report.html`
 
-No new Phase 3 ambiguity decisions were required.
+Scores:
 
-### Deferred / flagged
+- Performance: 98
+- Accessibility: 93
+- Best Practices: 100
+- PWA: 100
 
-- Some requested conventional commit messages are empty commits because nearby implementation was grouped to keep route wiring coherent.
-- Visual port uses the prototype’s tokens, layout language, and route content, but is not a literal line-for-line TSX conversion of every inline style.
-- Headless Edge emitted occasional Microsoft sync network messages during screenshot capture; the in-app browser page console remained clean.
-- Wake Lock is implemented with graceful fallback in `/log/workout/active`.
-- Firebase remains untouched.
+Note: Lighthouse 13 no longer exposes the PWA category, so the production audit was run with Lighthouse 11.7.1 for the required PWA score.
 
-### Screenshots verified at 390 × 844
+## Deployed Routes Verified
 
-- login
-- splash
-- onboarding-welcome
-- onboarding-profile
-- onboarding-goal
-- home-full
-- home-empty
-- log-sheet
-- log-meal
-- log-meal-confirm
-- log-meal-saved
-- log-water
-- log-weight
-- log-workout-pre
-- log-workout-active
-- log-workout-summary
-- log-sleep
-- progress-weight
-- progress-kcal
-- progress-activity
-- progress-photos
-- plan
-- profile
-- achievement
+- `/`
+- `/login`
+- `/splash`
+- `/onboarding/welcome`
+- `/onboarding/profile`
+- `/onboarding/goal`
+- `/log/meal`
+- `/log/meal/confirm`
+- `/log/meal/saved`
+- `/log/water`
+- `/log/weight`
+- `/log/workout`
+- `/log/workout/active`
+- `/log/workout/summary`
+- `/log/sleep`
+- `/progress?tab=weight`
+- `/plan`
+- `/profile`
+- `/achievement`
+- `/design`
 
-### Browser route verification
+Console warnings/errors captured during deployed route sweep: 0.
 
-Checked these routes in the in-app browser with no console warnings/errors:
+## Commit Hash Range
 
-`/login`, `/splash`, `/onboarding/welcome`, `/onboarding/profile`, `/onboarding/goal`, `/`, `/?empty=1`, `/?sheet=1`, `/log/meal`, `/log/meal/confirm`, `/log/meal/saved`, `/log/water`, `/log/weight`, `/log/workout`, `/log/workout/active`, `/log/workout/summary`, `/log/sleep`, `/progress?tab=weight`, `/progress?tab=kcal`, `/progress?tab=activity`, `/progress?tab=photos`, `/plan`, `/profile`, `/achievement`, `/design`.
+`00241aa...d707731`
+
+Commits:
+
+- `00241aa feat(pwa): configure vite-plugin-pwa manifest`
+- `b437ed8 feat(pwa): add app icons (192/512/maskable)`
+- `cba5dc3 feat(pwa): apple-touch-icon and ios meta tags`
+- `f92cd4b docs: add README`
+- `d707731 chore(deploy): vercel config + first deploy`
+
+## Decisions Made
+
+- None requiring `DECISIONS.md`.
+
+## Deferred Items / Things To Flag
+
+- Firebase remains intentionally untouched until Phase 5.
+- Human confirmed Vercel placeholder env vars were added in Production.
+- Human confirmed iPhone Safari install, icon, fullscreen launch, bottom nav, and routing.
+
+## Screenshots Verified
+
+- `AGENT_LOG/phase4-progress-mobile.png` - local production preview at 390x844, `/progress?tab=weight`.
+- `AGENT_LOG/phase4-deployed-progress.png` - deployed production URL, `/progress?tab=weight`.
+
+## Build Verification
+
+- `npm run build` succeeded after production deploy was unblocked.
+- PWA output generated:
+  - `dist/manifest.webmanifest`
+  - `dist/sw.js`
+  - `dist/workbox-5a02fdce.js`
 
 ## Blockers
 
-None.
-
----
-
-STOPPING for Claude review.
+None. Phase 4 is ready for Claude review.

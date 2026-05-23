@@ -1,151 +1,402 @@
 # REVIEW — Claude → Codex
 
-> **Last updated:** 2026-05-23 (after Phase 3 approval)
-> **Verdict on Phase 3:** ✅ **PASS** — solid work, build clean, bundle 227 KB
-> **Active phase:** **Phase 4 — PWA + Vercel Deploy**
+> **Last updated:** 2026-05-23 (after Phase 4 approval)
+> **Verdict on Phase 4:** ✅✅ **PASS** — Lighthouse 98/93/100/100, production live
+> **Active phase:** **Phase 5 — Firebase Wire-up** (the big one)
 
 ---
 
-## Notes from Phase 3 review (read once)
+## Pre-flight — Human action required (Codex: check before starting)
 
-These are observations to keep in mind through remaining phases:
+If `.env.local` is missing or has empty values, write `## BLOCKED` in STATUS.md
+and stop. Do not attempt Phase 5 without these.
 
-1. **Missing data hooks** — components import `MOCK_*` directly. Phase 5 must create `useToday`, `useMeals`, `useWeights`, `useWater`, `useWorkouts`, `useSleep`, `useUser` hooks AND search/replace all `MOCK_*` imports across all route files. Plan ~1 day for this conversion alone.
-2. **`log-health.tsx` consolidation** — six routes (water/weight/sleep + 3 workout) live in one file. Leave as-is for Phase 4. If Phase 6 refactor budget allows, split into separate files for maintainability.
-3. **Component subfolders empty** — all UI in route files. OK for now. If a UI fragment is repeated 3+ times in different routes during Phase 5-6, extract to `src/components/<feature>/`.
-4. **Inline styles** — acceptable per BUILD_HANDOFF for ≤5 props. If a route file accumulates many large inline style blocks, extract to its own `*.module.css` during Phase 6.
-5. **Working tree** — STATUS.md and HISTORY.md from Phase 3 are now committed (chore: phase 3 closeout).
+Required in `dietquest/.env.local`:
+
+```
+VITE_FB_API_KEY=...
+VITE_FB_AUTH_DOMAIN=...firebaseapp.com
+VITE_FB_PROJECT_ID=...
+VITE_FB_STORAGE_BUCKET=....firebasestorage.app
+VITE_FB_MSG_SENDER_ID=...
+VITE_FB_APP_ID=...
+VITE_FB_VAPID_KEY=...
+```
+
+Verify presence with:
+```bash
+test -f .env.local && grep -c "^VITE_FB" .env.local
+# Expected: 7
+```
+
+Also required: Firebase project must have these enabled in console:
+- Authentication → Google sign-in method enabled
+- Cloud Firestore → created, region `asia-southeast1`
+- Storage → created, same region
+- Cloud Messaging → Web Push certificate generated (VAPID key)
+
+Human will have done these before starting Phase 5. If not, ask via STATUS.md.
 
 ---
 
-## Phase 4 Brief — PWA + Vercel Deploy
+## Phase 5 Brief — Firebase Wire-up
 
-Goal: App is installable as PWA on iPhone via Vercel-hosted URL.
+Goal: Replace all mock data with real Firebase reads/writes. App requires Google
+sign-in. Data persists across devices and survives offline.
 
-### Pre-flight (human responsibility — confirm before starting)
+### Implementation order (do EXACTLY in this sequence)
 
-Codex: before writing any code for Phase 4, check that these are TRUE. If not, ask human via `## BLOCKED` in STATUS.md.
+#### Step 1 — Firebase init (30 min)
 
-- [ ] GitHub repo created (name: `dietquest`, private)
-- [ ] Vercel account exists (signed in via GitHub)
-- [ ] Human will provide GitHub remote URL when ready to push
+Create `src/lib/firebase.ts`:
 
-### Tasks
+```typescript
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
-1. **Configure PWA in `vite.config.ts`** — use `vite-plugin-pwa` (already installed):
-   - `registerType: 'autoUpdate'`
-   - Manifest:
-     - `name: 'DietQuest'`
-     - `short_name: 'DietQuest'`
-     - `theme_color: '#5B6CFF'` (Aurora primary)
-     - `background_color: '#F2F4F8'` (light bg) — or `#0F1419` (dark) — choose `#F2F4F8`
-     - `display: 'standalone'`
-     - `orientation: 'portrait'`
-     - `start_url: '/'`
-     - Icons: 192, 512, maskable (see icon task below)
-   - Workbox: cache Google Fonts as `StaleWhileRevalidate`
+const app = initializeApp({
+  apiKey: import.meta.env.VITE_FB_API_KEY,
+  authDomain: import.meta.env.VITE_FB_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FB_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FB_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FB_MSG_SENDER_ID,
+  appId: import.meta.env.VITE_FB_APP_ID,
+});
 
-2. **Create app icons** — `public/icons/`:
-   - `icon-192.png` (192x192)
-   - `icon-512.png` (512x512)
-   - `icon-maskable.png` (512x512, with 80px safe area padding)
-   - Design: Simple "DQ" text in white, on Aurora gradient (`#5B6CFF → #B17AFF → #FF6B9D` 135°)
-   - If you can't generate PNG programmatically, create SVG and convert via `sharp` (already a vite-plugin-pwa transitive dep) OR document in DECISIONS.md and request human upload
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
+export const storage = getStorage(app);
+```
 
-3. **Splash screen for iOS** — add `apple-touch-icon` link in `index.html` + Apple-specific meta tags:
-   ```html
-   <meta name="apple-mobile-web-app-capable" content="yes" />
-   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-   <meta name="apple-mobile-web-app-title" content="DietQuest" />
-   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-   ```
+**Verify:** `import { db } from '@/lib/firebase'` works without runtime error.
 
-4. **Offline strategy** — verify:
-   - Build → preview → DevTools offline mode → already-visited routes still render
-   - First-load offline = OK to show "no connection" page
+#### Step 2 — Security rules (30 min)
 
-5. **README.md** — write project README with:
-   - Project name + one-line description
-   - Tech stack list
-   - Local dev: `npm install`, `npm run dev`
-   - Build: `npm run build`, `npm run preview`
-   - Env vars (link to .env.example)
-   - Deploy: link to Vercel
-   - Phase status (in progress, current = Phase 4)
+Create `firestore.rules` (project root):
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
 
-6. **Deploy to Vercel** (after human provides GitHub remote):
-   - Push to `main` branch
-   - Wait for human to import repo into Vercel dashboard
-   - Confirm build succeeds on Vercel
-   - Get production URL
-   - **Add Firebase env vars in Vercel dashboard as PLACEHOLDERS** (empty values) — agent cannot do this, ask human via STATUS.md
-   - **DO NOT attempt to use Firebase config** — Phase 4 has no real Firebase code. Just placeholder env vars in Vercel.
+Create `storage.rules` (project root):
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
 
-7. **Test on real device**:
-   - Human opens production URL in iPhone Safari
-   - Confirm: Share → Add to Home Screen works
-   - Confirm: Icon shows up, app opens fullscreen
-   - Human will report visual check via your STATUS.md prompt
+Create `firebase.json` (project root):
+```json
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
+```
+
+Create empty `firestore.indexes.json`:
+```json
+{ "indexes": [], "fieldOverrides": [] }
+```
+
+**Deploy rules:** Need `firebase-tools` CLI. Install with `npm i -D firebase-tools`. Document this in DECISIONS.md.
+
+For deploy, write a `## BLOCKED` if you need human to run `firebase login` once. After that, `npx firebase deploy --only firestore:rules,storage:rules --project <PROJECT_ID>` works.
+
+#### Step 3 — Auth layer (1 day)
+
+`src/lib/auth.ts`:
+```typescript
+import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
+import { auth, googleProvider } from './firebase';
+
+export const signInGoogle = () => signInWithPopup(auth, googleProvider);
+export const logout = () => signOut(auth);
+export const watchAuth = (cb: (user: User | null) => void) =>
+  onAuthStateChanged(auth, cb);
+```
+
+`src/stores/authStore.ts` — Zustand store with current user + loading:
+```typescript
+// Listens to onAuthStateChanged in module init
+// Exposes: { user, loading, signIn, signOut }
+```
+
+`src/hooks/useAuth.ts` — convenience hook over store.
+
+#### Step 4 — Auth gate in App.tsx
+
+Wrap routes with auth check:
+
+```typescript
+function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <SplashRoute />;
+  if (!user) return <LoginRoute />;  // bypass router entirely
+
+  // existing routes...
+}
+```
+
+Replace placeholder login (`/login`) implementation:
+- Single button "Sign in with Google" → calls `signInGoogle()`
+- On success, auth state changes → App re-renders → user sees Home
+
+#### Step 5 — First-time user detection + onboarding hook
+
+After sign-in, check if user doc exists in Firestore:
+- If exists → go to `/`
+- If missing → go to `/onboarding/welcome`
+- Onboarding final step writes user doc
+
+`src/hooks/useUser.ts`:
+- Subscribes to `users/{uid}` doc
+- Returns `{ user, profile, loading, exists }`
+
+#### Step 6 — Typed Firestore wrappers in `src/lib/db.ts`
+
+Per BUILD_HANDOFF section 4 schema, implement these typed functions:
+
+```typescript
+// User
+getUser(uid): Promise<User | null>
+upsertUser(uid, partial: Partial<User>): Promise<void>
+
+// Day totals (denormalized)
+watchDayTotals(uid, date): Unsubscribe + observable
+upsertDayTotals(uid, date, totals): Promise<void>
+
+// Meals
+addMeal(uid, meal): Promise<string>  // returns id
+watchMeals(uid, date): observable
+deleteMeal(uid, mealId): Promise<void>
+
+// Weights
+addWeight(uid, weight): Promise<void>  // doc ID = YYYY-MM-DD
+watchWeights(uid, days: number): observable
+deleteWeight(uid, date): Promise<void>
+
+// Water
+addWater(uid, ml): Promise<string>
+watchWaterToday(uid, date): observable
+deleteWater(uid, id): Promise<void>
+
+// Workouts
+addWorkout(uid, workout): Promise<string>
+watchWorkouts(uid, daysBack): observable
+
+// Sleep
+upsertSleep(uid, sleep): Promise<void>  // doc ID = YYYY-MM-DD
+watchSleep(uid, date): observable
+
+// Presets
+addPreset(uid, preset): Promise<string>
+watchPresets(uid): observable
+markPresetUsed(uid, presetId): Promise<void>  // bumps last_used_at, use_count
+```
+
+**Rules:**
+- All functions strongly typed using `src/types/domain.ts`
+- Convert Firestore Timestamp <-> Date at the boundary (never leak Timestamp into UI)
+- Use `serverTimestamp()` for `logged_at` / `created_at` / `updated_at`
+- All writes inside a transaction or batch when they update multiple docs
+
+#### Step 7 — Data hooks (THE BIG ONE, ~1 day)
+
+Create these hooks — each is a thin wrapper over the `db.ts` watchers, adds React lifecycle:
+
+```typescript
+src/hooks/
+  useUser.ts          // current user + profile
+  useToday.ts         // today's day totals doc
+  useMeals.ts         // useMeals(date) → meals for that day
+  useWeights.ts       // useWeights(daysBack) → recent weights
+  useWater.ts         // useWater(date) → water logs for day, with sum
+  useWorkouts.ts      // useWorkouts(daysBack) → recent workouts
+  useSleep.ts         // useSleep(date) → sleep doc for date
+  usePresets.ts       // user's meal presets
+```
+
+Each hook:
+- Returns `{ data, loading, error }`
+- Unsubscribes on unmount
+- Uses Firestore SDK directly (NOT through Zustand — listeners are the store)
+
+#### Step 8 — Migrate all routes from mock to hooks
+
+Search all routes for `from '@/lib/mock'` and replace:
+
+| Before | After |
+|---|---|
+| `import { MOCK_TODAY } from '@/lib/mock'` | `const { data: today } = useToday()` |
+| `import { MOCK_MEALS } from '@/lib/mock'` | `const { data: meals } = useMeals(today)` |
+| `import { MOCK_WEIGHTS } from '@/lib/mock'` | `const { data: weights } = useWeights(30)` |
+| `import { MOCK_USER } from '@/lib/mock'` | `const { user, profile } = useUser()` |
+| `import { MOCK_WATER_LOGS } from '@/lib/mock'` | `const { data: water } = useWater(today)` |
+| `import { MOCK_WORKOUT } from '@/lib/mock'` | `const { data: workouts } = useWorkouts(30)` |
+| `import { MOCK_SLEEP } from '@/lib/mock'` | `const { data: sleep } = useSleep(today)` |
+| `import { MOCK_PRESETS } from '@/lib/mock'` | `const { data: presets } = usePresets()` |
+
+**Add loading states:** every screen that fetches must render a skeleton/spinner during loading.
+
+**Add empty states:** every list must handle 0 items gracefully.
+
+After migration, `src/lib/mock.ts` may stay as **dev seed helper** for testing (don't import in production routes).
+
+#### Step 9 — Denormalization (after meal/water/workout write)
+
+After each write that affects the day's totals, also update the day totals doc.
+
+Example: `addMeal(uid, meal)`:
+1. Write meal doc
+2. In same batch: read `users/{uid}/days/{date}`, increment totals, write back
+
+Use Firestore `runTransaction` to avoid race conditions:
+
+```typescript
+import { runTransaction, doc, increment } from 'firebase/firestore';
+
+await runTransaction(db, async (tx) => {
+  const dayRef = doc(db, `users/${uid}/days/${date}`);
+  const mealRef = doc(collection(db, `users/${uid}/meals`));
+
+  tx.set(mealRef, meal);
+  tx.set(dayRef, {
+    date,
+    totals: {
+      kcal: increment(meal.total_kcal),
+      protein_g: increment(meal.total_protein_g),
+      // ...
+    },
+    updated_at: serverTimestamp(),
+  }, { merge: true });
+});
+```
+
+#### Step 10 — Onboarding writes user doc
+
+On final onboarding step (Goal screen → "Create plan" button):
+1. Compute initial daily_kcal_target from BMR + activity factor (see `src/lib/nutrition.ts` — create if missing)
+2. Write `users/{uid}` doc with profile + settings
+3. Navigate to `/`
+
+#### Step 11 — Storage for weight photos (defer to last)
+
+`src/lib/storage.ts`:
+```typescript
+uploadWeightPhoto(uid, date, file): Promise<string>  // returns Storage path
+deleteWeightPhoto(uid, path): Promise<void>
+```
+
+Wire to `LogWeight` screen — optional photo upload before save.
 
 ### Rules
 
-- **DO NOT integrate Firebase in this phase** — Phase 4 is purely PWA + hosting infrastructure
-- **DO NOT write any Firebase imports** — `src/lib/firebase.ts` does not exist yet (Phase 5)
-- Keep all routes still using mock data
-- Commit convention same as Phase 3 (conventional commits, per logical unit)
+- **NEVER write Firestore from outside `src/lib/db.ts`** — components only use hooks
+- **NEVER assume user is signed in inside a hook** — guard with `if (!uid) return`
+- **NEVER store Date in Firestore** — always Timestamp via `serverTimestamp()` or `Timestamp.fromDate()`
+- **NEVER skip cleanup** — every `onSnapshot` listener must unsubscribe in useEffect cleanup
+- **NEVER use `getDocs` for screens that need realtime** — use `onSnapshot`
+- **DO use `getDoc` (one-shot)** for: onboarding check, profile read
+- **DO add an error boundary** at App level to catch Firebase errors
+
+### Commit convention for Phase 5
+
+```
+chore(firebase): init + env config
+feat(rules): firestore + storage security rules
+feat(auth): google sign-in + auth gate
+feat(auth): first-time user detection + onboarding write
+feat(db): typed firestore wrappers
+feat(hooks): user/today/meals
+feat(hooks): weights/water
+feat(hooks): workouts/sleep/presets
+refactor(routes): migrate from mock to hooks
+feat(db): denormalized day totals via transaction
+feat(storage): weight photo upload
+chore(deploy): firestore rules deploy
+```
 
 ### DoD checklist (fill in STATUS.md when done)
 
-- [ ] `vite-plugin-pwa` configured in `vite.config.ts`
-- [ ] Manifest renders correct values (verify via `npm run preview` → DevTools → Application → Manifest)
-- [ ] Icons present in `public/icons/` (192 + 512 + maskable)
-- [ ] Apple meta tags in `index.html`
-- [ ] Offline test: visited route works without network
-- [ ] README.md complete
-- [ ] Pushed to GitHub (commit hash range documented)
-- [ ] Vercel deployment URL documented in STATUS.md
-- [ ] Lighthouse PWA score ≥ 90 (run on production URL, paste score)
-- [ ] Lighthouse Performance score reported (target ≥ 80)
-- [ ] All previous routes still work on deployed version
-
-### Commit convention for Phase 4
-
-```
-feat(pwa): configure vite-plugin-pwa manifest
-feat(pwa): add app icons (192/512/maskable)
-feat(pwa): apple-touch-icon and ios meta tags
-docs: add README
-chore(deploy): vercel config + first deploy
-```
+- [ ] `.env.local` exists with 7 VITE_FB_* values (human-provided)
+- [ ] `src/lib/firebase.ts` initializes app + auth + db + storage
+- [ ] Persistent local cache enabled (Firestore offline)
+- [ ] `firestore.rules` + `storage.rules` + `firebase.json` + `firestore.indexes.json` in repo
+- [ ] Rules deployed to Firebase project
+- [ ] Auth gate works: sign out → see login, sign in → see home
+- [ ] Google sign-in works in production (test on deployed URL)
+- [ ] First-time sign-in routes to onboarding; second time goes to home
+- [ ] Onboarding writes user doc; can verify in Firestore console
+- [ ] All 7 data hooks created + typed
+- [ ] All routes migrated from `MOCK_*` to hooks (grep for remaining imports)
+- [ ] Loading + empty states on every screen
+- [ ] Logging a meal persists across reload
+- [ ] Logging a meal updates day totals (denormalization works)
+- [ ] Open app on 2 devices simultaneously → see real-time sync
+- [ ] Airplane mode → log meal → re-enable network → meal appears in server
+- [ ] Security test: create test user via emulator OR second Google account; confirm they cannot read your data
+- [ ] `npm run build` clean
+- [ ] Deployed to Vercel; production URL works with real Firebase
+- [ ] STATUS.md updated, HISTORY.md appended
 
 ### Blockers expected (call out in STATUS.md)
 
-These require human action — pause and ask via STATUS.md `## BLOCKED` section:
-- GitHub remote URL needed for `git remote add origin`
-- Vercel project import needs human at dashboard
-- Adding env var placeholders in Vercel dashboard
-- iPhone visual check needs human with device
+These require human action:
+- `.env.local` values (human must provide if missing)
+- `firebase login` once (one-time CLI auth)
+- `firebase use <PROJECT_ID>` to select project
+- Adding REAL Firebase env vars to Vercel (replacing placeholders from Phase 4)
+- After Vercel env vars updated: redeploy to pick them up
+- Production sign-in test with real Google account
 
-### When Phase 4 done
+### When Phase 5 done
 
 1. `npm run build` succeeds
-2. Production URL works
-3. Lighthouse audited
-4. Update STATUS.md with full report
-5. Append HISTORY.md entry
-6. STOP and wait
+2. Production URL works with real Firebase
+3. Sign-in / log / persistence all working end-to-end
+4. Multi-device sync verified
+5. Update STATUS.md + HISTORY.md
+6. STOP — wait for review before Phase 6 polish
 
 ---
 
-## Reminder: Phase 5 will require
+## Why this is the most complex phase
 
-Codex, when you reach Phase 5, the human will provide:
-- `VITE_FB_API_KEY`
-- `VITE_FB_AUTH_DOMAIN`
-- `VITE_FB_PROJECT_ID`
-- `VITE_FB_STORAGE_BUCKET`
-- `VITE_FB_MSG_SENDER_ID`
-- `VITE_FB_APP_ID`
-- `VITE_FB_VAPID_KEY`
+- **Type discipline** — Firebase Timestamp <-> Date is a common bug source
+- **Listener leaks** — `onSnapshot` without cleanup = memory leak + ghost writes
+- **Race conditions** — concurrent writes need transactions
+- **Auth state** — handling loading/signed-in/signed-out states without flicker
+- **Security rules** — must test, not just write
+- **Migration scope** — every route file touched
 
-You will paste them into `.env.local` (gitignored). Then implement Firebase per BUILD_HANDOFF Phase 5 task list. Also create the data hooks mentioned in "Notes from Phase 3" above.
+Plan for ~3 days. If hit blocker, write to STATUS.md early, don't grind.
+
+Phase 6 (polish) becomes much faster once this is solid.
