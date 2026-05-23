@@ -1,20 +1,12 @@
 .stage {
-  min-height: 100svh;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  background:
-    radial-gradient(circle at 24% 0%, var(--glow-blue), transparent 28rem),
-    radial-gradient(circle at 76% 8%, var(--glow-violet), transparent 30rem),
-    radial-gradient(circle at 56% 92%, var(--glow-pink), transparent 28rem),
-    var(--bg);
+  width: 100vw;
+  height: 100svh;
+  background: var(--bg);
 }
 
 .appFrame {
-  width: 390px;
-  height: 844px;
-  max-width: 100vw;
-  max-height: 100svh;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: var(--bg);
 }

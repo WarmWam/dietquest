@@ -19,7 +19,7 @@ import { useAuth } from './hooks/useAuth'
 import { useUser } from './hooks/useUser'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { listenForForegroundNotifications } from './lib/notifications'
-import { bulkAddFoods, getCatalogCount, getLegacyUserFoods } from './lib/db'
+import { bulkAddFoods, getCatalogCount, getLegacyUserFoods, watchFoods } from './lib/db'
 import { STARTER_FOODS } from './data/starterFoods'
 import { STARTER_COM_FOODS } from './data/starterComFoods'
 
@@ -45,21 +45,42 @@ function AuthGate() {
   const { user, loading } = useAuth()
   const seedAttempted = useRef(false)
 
-  // One-time auto-seed of shared library catalog on first authenticated load.
-  // If user has legacy per-user foods (pre-v1.4.0), migrate those first to
-  // preserve any customizations. Otherwise fall back to hardcoded starter
-  // pack. Idempotent: short-circuits if catalog already has any food.
+  // Auto-seed + auto-fill shared library catalog on first authenticated load.
+  // Two passes:
+  //   1) If catalog empty: migrate user's legacy per-user foods (preserves
+  //      customizations) OR fall back to STARTER_FOODS pack.
+  //   2) Always: fill any starter items (food/fruit/com_food) missing from
+  //      catalog by name. Idempotent — running on every load is safe.
   useEffect(() => {
     if (!user || seedAttempted.current) return
     seedAttempted.current = true
     void (async () => {
       try {
         const count = await getCatalogCount()
-        if (count > 0) return
-        const legacy = await getLegacyUserFoods(user.uid)
-        const seed = legacy.length > 0 ? legacy : [...STARTER_FOODS, ...STARTER_COM_FOODS]
-        await bulkAddFoods(seed)
-        console.log(`[catalog] seeded ${seed.length} foods from ${legacy.length > 0 ? 'legacy library' : 'starter pack'}`)
+
+        // Pass 1: initial seed if catalog truly empty
+        if (count === 0) {
+          const legacy = await getLegacyUserFoods(user.uid)
+          const seed = legacy.length > 0 ? legacy : [...STARTER_FOODS, ...STARTER_COM_FOODS]
+          await bulkAddFoods(seed)
+          console.log(`[catalog] seeded ${seed.length} foods from ${legacy.length > 0 ? 'legacy library' : 'starter pack'}`)
+        }
+
+        // Pass 2: fill missing starter items (by name)
+        // Read a fresh snapshot of catalog after potential seed
+        await new Promise<void>((resolve) => {
+          const unsub = watchFoods('', async ({ data }) => {
+            unsub()
+            const existingNames = new Set(data.map((f) => f.name))
+            const candidates = [...STARTER_FOODS, ...STARTER_COM_FOODS]
+            const missing = candidates.filter((f) => !existingNames.has(f.name))
+            if (missing.length > 0) {
+              await bulkAddFoods(missing)
+              console.log(`[catalog] filled ${missing.length} missing starter items:`, missing.map((m) => m.name).join(', '))
+            }
+            resolve()
+          })
+        })
       } catch (err) {
         console.error('[catalog] auto-seed failed:', err)
       }

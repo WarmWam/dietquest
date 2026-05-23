@@ -22,8 +22,8 @@ export function Phone({ children, hideNav = false, activeNav = 'home', onNav, bg
       className={`dq-app ${dark ? 'dq-dark' : 'dq-light'}`}
       data-accent="aurora"
       style={{
-        width: 390,
-        height: 844,
+        width: '100%',
+        height: '100%',
         position: 'relative',
         overflow: 'hidden',
         background: bg || 'var(--bg)',
