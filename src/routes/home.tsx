@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Ring, Skeleton, type IconName } from '@/components/primitives'
@@ -23,9 +23,10 @@ const mealMeta: Record<MealType, { label: string; icon: string }> = {
 export function HomeRoute() {
   const [params] = useSearchParams()
   const { profile, loading: userLoading } = useUser()
-  const { data: meals, loading: mealsLoading } = useMeals()
-  const { data: today, loading: todayLoading } = useToday()
-  const empty = params.get('empty') === '1' || (!mealsLoading && meals.length === 0)
+  const { data: meals, loading: mealsLoading, error: mealsError } = useMeals()
+  const { data: today, loading: todayLoading, error: todayError } = useToday()
+  const hasError = mealsError || todayError
+  const empty = !hasError && (params.get('empty') === '1' || (!mealsLoading && meals.length === 0))
   const sheet = params.get('sheet') === '1'
   const settings = profile?.settings ?? DEFAULT_SETTINGS
 
@@ -33,6 +34,10 @@ export function HomeRoute() {
   const [refreshing, setRefreshing] = useState(false)
   const [pullProgress, setPullProgress] = useState(0)
   const [touchStart, setTouchStart] = useState(0)
+
+  useEffect(() => {
+    if (hasError) toast.error("Couldn't load today. Try again.")
+  }, [hasError])
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.currentTarget.scrollTop === 0) {
@@ -118,6 +123,8 @@ export function HomeRoute() {
 
         {userLoading || mealsLoading || todayLoading ? (
           <HomeSkeleton />
+        ) : hasError ? (
+          <HomeErrorCard error={hasError} />
         ) : empty ? (
           <HomeEmptyContent target={settings.daily_kcal_target} />
         ) : (
@@ -131,13 +138,17 @@ export function HomeRoute() {
 
 function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; settings: UserSettings; today: ReturnType<typeof useToday>['data'] }) {
   const navigate = useNavigate()
-  const { data: weights } = useWeights(30)
-  const { data: workouts } = useWorkouts(1)
+  const { data: weights, error: weightsError } = useWeights(30)
+  const { data: workouts, error: workoutsError } = useWorkouts(1)
   const latestWeight = weights[weights.length - 1]
   const todayWorkouts = workouts.filter((w) => w.date === getTodayKey())
   const totalWorkoutMin = todayWorkouts.reduce((sum, w) => sum + w.duration_min, 0)
   const workoutTarget = 60
   const workoutPct = Math.min(totalWorkoutMin / workoutTarget, 1)
+
+  useEffect(() => {
+    if (weightsError || workoutsError) toast.error("Couldn't load home stats. Try again.")
+  }, [weightsError, workoutsError])
 
   return (
     <>
@@ -204,6 +215,18 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
         </>
       ) : null}
     </>
+  )
+}
+
+function HomeErrorCard({ error }: { error: Error }) {
+  return (
+    <Card padding={18}>
+      <strong>Couldn't load today</strong>
+      <p className={styles.subtitle}>{error.message}</p>
+      <Button onClick={() => window.location.reload()} variant="secondary">
+        Retry
+      </Button>
+    </Card>
   )
 }
 
