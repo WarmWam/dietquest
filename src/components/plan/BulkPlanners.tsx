@@ -7,8 +7,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { haptic } from '@/lib/haptic'
 import { toast } from '@/stores/toastStore'
 import {
+  FOOD_CATEGORIES,
   WORKOUT_PLAN_TYPES,
   type Food,
+  type FoodCategory,
   type MealPlan,
   type MealPlanItem,
   type WorkoutPlan,
@@ -19,65 +21,56 @@ import {
 // Date range helpers
 // ─────────────────────────────────────────────────────────────
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
-function isoDate(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
+function pad(n: number): string { return String(n).padStart(2, '0') }
+function isoDate(d: Date): string { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
 function datesInRange(startIso: string, endIso: string): string[] {
   const out: string[] = []
-  const start = new Date(startIso)
-  const end = new Date(endIso)
+  const start = new Date(startIso), end = new Date(endIso)
   if (end < start) return out
   const cur = new Date(start)
-  while (cur <= end) {
-    out.push(isoDate(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
+  while (cur <= end) { out.push(isoDate(cur)); cur.setDate(cur.getDate() + 1) }
   return out
 }
-
-function defaultRange(): { start: string; end: string } {
-  const today = new Date()
-  const end = new Date(today)
-  end.setDate(end.getDate() + 6) // default next 7 days incl today
+function defaultRange() {
+  const today = new Date(), end = new Date(today)
+  end.setDate(end.getDate() + 6)
   return { start: isoDate(today), end: isoDate(end) }
+}
+
+function pickRandom<T>(pool: T[]): T | null {
+  return pool.length === 0 ? null : pool[Math.floor(Math.random() * pool.length)]
+}
+
+function makeMealItem(food: Food, portion: number): MealPlanItem {
+  return {
+    food_id: food.id,
+    food_name: food.name,
+    portion,
+    kcal: Math.round(food.kcal_per_portion * portion),
+    protein_g: Math.round(food.protein_g_per_portion * portion * 10) / 10,
+  }
+}
+
+function findFoodMatch(foods: Food[], patterns: string[]): Food | null {
+  const lower = (s: string) => s.toLowerCase()
+  for (const p of patterns) {
+    const match = foods.find((f) => lower(f.name).includes(lower(p)))
+    if (match) return match
+  }
+  return null
 }
 
 // ─────────────────────────────────────────────────────────────
 // Shared chrome
 // ─────────────────────────────────────────────────────────────
 
-function SheetShell({
-  title,
-  onClose,
-  children,
-}: {
-  title: string
-  onClose: () => void
-  children: React.ReactNode
-}) {
+function SheetShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(15,23,42,0.55)',
-        zIndex: 115,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
-    >
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 115, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div className={styles.sheet} style={{ height: '95%', display: 'flex', flexDirection: 'column' }}>
         <div className={styles.sheetHandle} />
         <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onClose} type="button">
-            <Icon name="x" />
-          </button>
+          <button className={styles.iconButton} onClick={onClose} type="button"><Icon name="x" /></button>
           <strong>{title}</strong>
           <span style={{ width: 40 }} />
         </header>
@@ -87,15 +80,7 @@ function SheetShell({
   )
 }
 
-function DateRangeRow({
-  start,
-  end,
-  onChange,
-}: {
-  start: string
-  end: string
-  onChange: (next: { start: string; end: string }) => void
-}) {
+function DateRangeRow({ start, end, onChange }: { start: string; end: string; onChange: (next: { start: string; end: string }) => void }) {
   const count = datesInRange(start, end).length
   return (
     <Card padding={14} style={{ marginBottom: 14 }}>
@@ -114,157 +99,166 @@ function DateRangeRow({
 
 function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        padding: '10px 12px',
-        fontSize: 14,
-        fontWeight: 700,
-        border: 0,
-        background: 'var(--bg-soft)',
-        borderRadius: 'var(--r-md)',
-        outline: 'none',
-        fontFamily: 'inherit',
-        color: 'var(--t-1)',
-        width: '100%',
-        textAlign: 'center',
-      }}
-    />
+    <input type="date" value={value} onChange={(e) => onChange(e.target.value)}
+      style={{ padding: '10px 12px', fontSize: 14, fontWeight: 700, border: 0, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', outline: 'none', fontFamily: 'inherit', color: 'var(--t-1)', width: '100%', textAlign: 'center' }} />
   )
 }
 
 // ─────────────────────────────────────────────────────────────
-// Bulk MEAL planner
+// Slot item model (lunch / dinner / snack)
 // ─────────────────────────────────────────────────────────────
 
-type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+type SlotItem =
+  | { id: string; kind: 'food'; food_id: string; portion: number; is_random: boolean }
+  | { id: string; kind: 'random_category'; category: FoodCategory; portion: number }
+  | { id: string; kind: 'random_all'; portion: number }
 
-const MEAL_SLOTS: { id: MealSlot; label: string }[] = [
-  { id: 'breakfast', label: 'Breakfast' },
+type GenericSlot = {
+  enabled: boolean
+  items: SlotItem[]
+}
+
+type BreakfastConfig = {
+  enabled: boolean
+  whey_portion: number
+  egg_portion: number
+  fruit_mode: 'random_all' | 'pick'
+  fruit_picks: string[] // food_ids
+}
+
+type MealSlot = 'lunch' | 'dinner' | 'snack'
+
+const GENERIC_SLOTS: { id: MealSlot; label: string }[] = [
   { id: 'lunch', label: 'Lunch' },
   { id: 'dinner', label: 'Dinner' },
   { id: 'snack', label: 'Snack' },
 ]
 
-type SlotPlan = {
-  enabled: boolean
-  items: SlotPlanItem[]
-}
+let _idCounter = 0
+const nextId = () => `item-${++_idCounter}-${Date.now()}`
 
-type SlotPlanItem = {
-  food_id: string
-  portion: number
-  is_random: boolean // if true, this food is in the per-day random pool
-}
-
-function emptySlot(): SlotPlan {
-  return { enabled: false, items: [] }
-}
-
-function pickRandom<T>(pool: T[]): T | null {
-  if (pool.length === 0) return null
-  return pool[Math.floor(Math.random() * pool.length)]
-}
+// ─────────────────────────────────────────────────────────────
+// Bulk MEAL planner
+// ─────────────────────────────────────────────────────────────
 
 export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
   const { data: foods } = useFoods()
   const [{ start, end }, setRange] = useState(defaultRange())
-  const [slots, setSlots] = useState<Record<MealSlot, SlotPlan>>({
-    breakfast: { enabled: true, items: [] },
-    lunch: emptySlot(),
-    dinner: emptySlot(),
-    snack: emptySlot(),
+  const [breakfast, setBreakfast] = useState<BreakfastConfig>({
+    enabled: true,
+    whey_portion: 1,
+    egg_portion: 2,
+    fruit_mode: 'random_all',
+    fruit_picks: [],
   })
-  const [overwrite, setOverwrite] = useState(false)
-  const [picking, setPicking] = useState<MealSlot | null>(null)
+  const [slots, setSlots] = useState<Record<MealSlot, GenericSlot>>({
+    lunch: { enabled: false, items: [] },
+    dinner: { enabled: false, items: [] },
+    snack: { enabled: false, items: [] },
+  })
+  const [addMenu, setAddMenu] = useState<MealSlot | null>(null)
+  const [picking, setPicking] = useState<{ slot: MealSlot; mode: 'specific' | 'category' } | null>(null)
   const [applying, setApplying] = useState(false)
 
   const dates = useMemo(() => datesInRange(start, end), [start, end])
-  const canApply = dates.length > 0 && Object.values(slots).some((s) => s.enabled && s.items.length > 0)
+  const foodMap = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
+  const fruits = useMemo(() => foods.filter((f) => f.category === 'fruit'), [foods])
+  const whey = useMemo(() => findFoodMatch(foods, ['Whey']), [foods])
+  const egg = useMemo(() => findFoodMatch(foods, ['ไข่', 'Egg']), [foods])
 
-  function updateSlot(slot: MealSlot, next: Partial<SlotPlan>) {
+  const canApply =
+    dates.length > 0 &&
+    (
+      (breakfast.enabled && (breakfast.whey_portion > 0 || breakfast.egg_portion > 0 || fruits.length > 0)) ||
+      Object.values(slots).some((s) => s.enabled && s.items.length > 0)
+    )
+
+  function updateSlot(slot: MealSlot, next: Partial<GenericSlot>) {
     setSlots((cur) => ({ ...cur, [slot]: { ...cur[slot], ...next } }))
   }
 
-  function addFoodToSlot(slot: MealSlot, food: Food) {
-    setSlots((cur) => {
-      if (cur[slot].items.some((it) => it.food_id === food.id)) return cur
-      return {
-        ...cur,
-        [slot]: {
-          ...cur[slot],
-          enabled: true,
-          items: [...cur[slot].items, { food_id: food.id, portion: 1, is_random: false }],
-        },
+  function addItem(slot: MealSlot, item: SlotItem) {
+    setSlots((cur) => ({ ...cur, [slot]: { enabled: true, items: [...cur[slot].items, item] } }))
+  }
+
+  function removeItem(slot: MealSlot, itemId: string) {
+    setSlots((cur) => ({ ...cur, [slot]: { ...cur[slot], items: cur[slot].items.filter((it) => it.id !== itemId) } }))
+  }
+
+  function updateItem(slot: MealSlot, itemId: string, patch: Partial<SlotItem>) {
+    setSlots((cur) => ({
+      ...cur,
+      [slot]: {
+        ...cur[slot],
+        items: cur[slot].items.map((it) => (it.id === itemId ? ({ ...it, ...patch } as SlotItem) : it)),
+      },
+    }))
+  }
+
+  // ─── Generation ──────────────────────────────────────────────
+
+  function buildBreakfast(): MealPlanItem[] {
+    if (!breakfast.enabled) return []
+    const out: MealPlanItem[] = []
+    if (whey && breakfast.whey_portion > 0) out.push(makeMealItem(whey, breakfast.whey_portion))
+    if (egg && breakfast.egg_portion > 0) out.push(makeMealItem(egg, breakfast.egg_portion))
+    const pool = breakfast.fruit_mode === 'random_all'
+      ? fruits
+      : fruits.filter((f) => breakfast.fruit_picks.includes(f.id))
+    const picked = pickRandom(pool)
+    if (picked) out.push(makeMealItem(picked, 1))
+    return out
+  }
+
+  function buildSlot(slot: MealSlot): MealPlanItem[] {
+    const cfg = slots[slot]
+    if (!cfg.enabled) return []
+    const out: MealPlanItem[] = []
+    const fixedFoods: SlotItem[] = []
+    const randomFoodPool: SlotItem[] = []
+    const categoryItems: SlotItem[] = []
+    const anyItems: SlotItem[] = []
+
+    cfg.items.forEach((it) => {
+      if (it.kind === 'food') {
+        if (it.is_random) randomFoodPool.push(it)
+        else fixedFoods.push(it)
+      } else if (it.kind === 'random_category') {
+        categoryItems.push(it)
+      } else {
+        anyItems.push(it)
       }
     })
-  }
 
-  function removeItem(slot: MealSlot, idx: number) {
-    setSlots((cur) => ({
-      ...cur,
-      [slot]: { ...cur[slot], items: cur[slot].items.filter((_, i) => i !== idx) },
-    }))
-  }
-
-  function setItemPortion(slot: MealSlot, idx: number, portion: number) {
-    setSlots((cur) => ({
-      ...cur,
-      [slot]: {
-        ...cur[slot],
-        items: cur[slot].items.map((it, i) => (i === idx ? { ...it, portion } : it)),
-      },
-    }))
-  }
-
-  function toggleRandom(slot: MealSlot, idx: number) {
-    setSlots((cur) => ({
-      ...cur,
-      [slot]: {
-        ...cur[slot],
-        items: cur[slot].items.map((it, i) => (i === idx ? { ...it, is_random: !it.is_random } : it)),
-      },
-    }))
-  }
-
-  function buildSlotItems(slot: MealSlot): MealPlanItem[] {
-    const slotPlan = slots[slot]
-    if (!slotPlan.enabled) return []
-    const foodMap = new Map(foods.map((f) => [f.id, f]))
-    const fixed = slotPlan.items.filter((it) => !it.is_random)
-    const randomPool = slotPlan.items.filter((it) => it.is_random)
-    const items: MealPlanItem[] = []
-
-    fixed.forEach((it) => {
+    fixedFoods.forEach((it) => {
+      if (it.kind !== 'food') return
       const food = foodMap.get(it.food_id)
-      if (!food) return
-      items.push({
-        food_id: food.id,
-        food_name: food.name,
-        portion: it.portion,
-        kcal: Math.round(food.kcal_per_portion * it.portion),
-        protein_g: Math.round(food.protein_g_per_portion * it.portion * 10) / 10,
-      })
+      if (food) out.push(makeMealItem(food, it.portion))
     })
 
-    if (randomPool.length > 0) {
-      const pick = pickRandom(randomPool)
-      const food = pick ? foodMap.get(pick.food_id) : null
-      if (pick && food) {
-        items.push({
-          food_id: food.id,
-          food_name: food.name,
-          portion: pick.portion,
-          kcal: Math.round(food.kcal_per_portion * pick.portion),
-          protein_g: Math.round(food.protein_g_per_portion * pick.portion * 10) / 10,
-        })
+    if (randomFoodPool.length > 0) {
+      const picked = pickRandom(randomFoodPool)
+      if (picked && picked.kind === 'food') {
+        const food = foodMap.get(picked.food_id)
+        if (food) out.push(makeMealItem(food, picked.portion))
       }
     }
 
-    return items
+    categoryItems.forEach((it) => {
+      if (it.kind !== 'random_category') return
+      const candidates = foods.filter((f) => f.category === it.category)
+      const picked = pickRandom(candidates)
+      if (picked) out.push(makeMealItem(picked, it.portion))
+    })
+
+    anyItems.forEach((it) => {
+      if (it.kind !== 'random_all') return
+      const picked = pickRandom(foods)
+      if (picked) out.push(makeMealItem(picked, it.portion))
+    })
+
+    return out
   }
 
   async function applyPlan() {
@@ -273,15 +267,12 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
     try {
       const plans: MealPlan[] = dates.map((date) => ({
         date,
-        breakfast: buildSlotItems('breakfast'),
-        lunch: buildSlotItems('lunch'),
-        dinner: buildSlotItems('dinner'),
-        snack: buildSlotItems('snack'),
-        totals: { kcal: 0, protein_g: 0 }, // recomputed in db
+        breakfast: buildBreakfast(),
+        lunch: buildSlot('lunch'),
+        dinner: buildSlot('dinner'),
+        snack: buildSlot('snack'),
+        totals: { kcal: 0, protein_g: 0 },
       }))
-      // Note: overwrite=false would require fetching existing per-day; for v1.3 we always merge,
-      // which means random pool items can be added but won't overwrite existing fixed items.
-      // For full overwrite behavior, we still write all slots (merge replaces these fields entirely).
       await bulkUpsertMealPlans(user.uid, plans)
       toast.success(`Planned ${dates.length} day${dates.length === 1 ? '' : 's'}`)
       haptic(10)
@@ -299,56 +290,63 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
     <SheetShell title="Bulk meal planner" onClose={onClose}>
       <DateRangeRow start={start} end={end} onChange={setRange} />
 
-      {MEAL_SLOTS.map((slot) => (
-        <MealSlotCard
+      <BreakfastSection config={breakfast} fruits={fruits} whey={whey} egg={egg} onChange={setBreakfast} />
+
+      {GENERIC_SLOTS.map((slot) => (
+        <GenericSlotCard
           key={slot.id}
           slot={slots[slot.id]}
           slotId={slot.id}
           label={slot.label}
-          foods={foods}
+          foodMap={foodMap}
           onToggleEnabled={() => updateSlot(slot.id, { enabled: !slots[slot.id].enabled })}
-          onAdd={() => setPicking(slot.id)}
-          onRemove={(idx) => removeItem(slot.id, idx)}
-          onPortion={(idx, p) => setItemPortion(slot.id, idx, p)}
-          onToggleRandom={(idx) => toggleRandom(slot.id, idx)}
+          onShowAddMenu={() => setAddMenu(slot.id)}
+          onRemove={(itemId) => removeItem(slot.id, itemId)}
+          onUpdate={(itemId, patch) => updateItem(slot.id, itemId, patch)}
         />
       ))}
 
-      <Card padding={14} style={{ marginTop: 8, marginBottom: 14, background: 'var(--bg-soft)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <Icon color="var(--a1)" name="sparkle" size={20} />
-          <span className={styles.rowText} style={{ flex: 1 }}>
-            <strong style={{ fontSize: 13 }}>Random rotation</strong>
-            <span className={styles.rowSub}>
-              Toggle 🎲 on items to add them to a per-day random pool — one will be picked each day.
-              Fixed items appear every day.
-            </span>
-          </span>
-        </div>
-      </Card>
-
-      <Card padding={14} style={{ marginBottom: 14 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-          <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
-          <span className={styles.rowText}>
-            <strong style={{ fontSize: 14 }}>Overwrite existing plans</strong>
-            <span className={styles.rowSub}>Off: merge into days that already have items. On: replace.</span>
-          </span>
-        </label>
-      </Card>
-
+      <div style={{ height: 8 }} />
       <Button disabled={!canApply || applying} onClick={() => void applyPlan()}>
         {applying ? 'Applying...' : `Apply to ${dates.length} day${dates.length === 1 ? '' : 's'}`}
       </Button>
 
-      {picking && (
+      {addMenu && (
+        <AddItemMenu
+          slotLabel={GENERIC_SLOTS.find((s) => s.id === addMenu)?.label ?? ''}
+          onCancel={() => setAddMenu(null)}
+          onPick={(mode) => {
+            if (mode === 'all') {
+              addItem(addMenu, { id: nextId(), kind: 'random_all', portion: 1 })
+              setAddMenu(null)
+            } else if (mode === 'specific') {
+              setPicking({ slot: addMenu, mode: 'specific' })
+              setAddMenu(null)
+            } else {
+              setPicking({ slot: addMenu, mode: 'category' })
+              setAddMenu(null)
+            }
+          }}
+        />
+      )}
+
+      {picking?.mode === 'specific' && (
         <FoodPickerLite
           foods={foods}
-          excludeIds={new Set(slots[picking].items.map((it) => it.food_id))}
-          slotLabel={MEAL_SLOTS.find((s) => s.id === picking)?.label ?? ''}
+          slotLabel={GENERIC_SLOTS.find((s) => s.id === picking.slot)?.label ?? ''}
           onCancel={() => setPicking(null)}
           onPick={(food) => {
-            addFoodToSlot(picking, food)
+            addItem(picking.slot, { id: nextId(), kind: 'food', food_id: food.id, portion: 1, is_random: false })
+            setPicking(null)
+          }}
+        />
+      )}
+
+      {picking?.mode === 'category' && (
+        <CategoryPicker
+          onCancel={() => setPicking(null)}
+          onPick={(category) => {
+            addItem(picking.slot, { id: nextId(), kind: 'random_category', category, portion: 1 })
             setPicking(null)
           }}
         />
@@ -357,30 +355,172 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
   )
 }
 
-function MealSlotCard({
-  slot,
-  slotId,
-  label,
-  foods,
-  onToggleEnabled,
-  onAdd,
-  onRemove,
-  onPortion,
-  onToggleRandom,
+// ─────────────────────────────────────────────────────────────
+// Breakfast section — whey + egg + fruit
+// ─────────────────────────────────────────────────────────────
+
+function BreakfastSection({
+  config, fruits, whey, egg, onChange,
 }: {
-  slot: SlotPlan
+  config: BreakfastConfig
+  fruits: Food[]
+  whey: Food | null
+  egg: Food | null
+  onChange: (next: BreakfastConfig) => void
+}) {
+  function patch(p: Partial<BreakfastConfig>) { onChange({ ...config, ...p }) }
+  function toggleFruit(id: string) {
+    const next = config.fruit_picks.includes(id)
+      ? config.fruit_picks.filter((x) => x !== id)
+      : [...config.fruit_picks, id]
+    patch({ fruit_picks: next })
+  }
+
+  return (
+    <Card padding={14} style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: config.enabled ? 14 : 0 }}>
+        <button
+          className={styles.switch}
+          data-on={config.enabled}
+          onClick={() => patch({ enabled: !config.enabled })}
+          type="button"
+          aria-label="Toggle breakfast planning"
+        >
+          <span className={styles.switchKnob} />
+        </button>
+        <span className={styles.rowText} style={{ flex: 1 }}>
+          <strong>Breakfast</strong>
+          <span className={styles.rowSub}>
+            {config.enabled ? 'Whey + Egg fixed · random fruit per day' : 'Off'}
+          </span>
+        </span>
+      </div>
+
+      {config.enabled && (
+        <>
+          {/* Whey + Egg */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <div>
+              <p className={styles.fieldLabel}>Whey</p>
+              {whey ? (
+                <PortionStepper value={config.whey_portion} unit={whey.portion_unit} step={0.5} min={0} max={10} onChange={(v) => patch({ whey_portion: v })} />
+              ) : (
+                <MissingItemNote label="Add a 'Whey' food in Library" />
+              )}
+            </div>
+            <div>
+              <p className={styles.fieldLabel}>Egg</p>
+              {egg ? (
+                <PortionStepper value={config.egg_portion} unit={egg.portion_unit} step={1} min={0} max={10} onChange={(v) => patch({ egg_portion: v })} />
+              ) : (
+                <MissingItemNote label="Add 'ไข่ต้ม' in Library" />
+              )}
+            </div>
+          </div>
+
+          {/* Fruit mode */}
+          <p className={styles.fieldLabel}>Fruit</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
+            <ModeChip active={config.fruit_mode === 'random_all'} label="Random all" onClick={() => patch({ fruit_mode: 'random_all' })} />
+            <ModeChip active={config.fruit_mode === 'pick'} label="Pick specific" onClick={() => patch({ fruit_mode: 'pick' })} />
+          </div>
+          {config.fruit_mode === 'pick' && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {fruits.length === 0 ? (
+                <MissingItemNote label="No fruits in library. Add some first." />
+              ) : (
+                fruits.map((f) => {
+                  const on = config.fruit_picks.includes(f.id)
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => toggleFruit(f.id)}
+                      type="button"
+                      style={{
+                        padding: '6px 12px',
+                        border: 0,
+                        borderRadius: 'var(--r-pill)',
+                        background: on ? 'var(--a1)' : 'var(--bg-soft)',
+                        color: on ? '#fff' : 'var(--t-2)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        outline: 'none',
+                      }}
+                    >
+                      {on ? '✓ ' : ''}{f.name}
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
+}
+
+function MissingItemNote({ label }: { label: string }) {
+  return (
+    <p style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600, padding: '8px 10px', background: 'rgba(245,158,11,0.08)', borderRadius: 'var(--r-sm)' }}>
+      ⚠ {label}
+    </p>
+  )
+}
+
+function ModeChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      type="button"
+      style={{
+        padding: '10px 8px',
+        border: active ? '2px solid var(--a1)' : '1px solid var(--line)',
+        borderRadius: 'var(--r-md)',
+        background: active ? 'var(--a-soft)' : 'var(--surface)',
+        color: active ? 'var(--a1)' : 'var(--t-2)',
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function PortionStepper({ value, unit, step, min, max, onChange }: { value: number; unit: string; step: number; min: number; max: number; onChange: (v: number) => void }) {
+  const display = step % 1 === 0 ? value : value.toFixed(1)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-soft)', borderRadius: 'var(--r-pill)', padding: '4px 8px', height: 38 }}>
+      <button type="button" onClick={() => onChange(Math.max(min, Number((value - step).toFixed(2))))} disabled={value <= min}
+        style={{ width: 26, height: 26, borderRadius: '50%', border: 0, background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>−</button>
+      <span style={{ fontSize: 14, fontWeight: 800 }}>{display} <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>{unit}</span></span>
+      <button type="button" onClick={() => onChange(Math.min(max, Number((value + step).toFixed(2))))} disabled={value >= max}
+        style={{ width: 26, height: 26, borderRadius: '50%', border: 0, background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>+</button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Generic slot (lunch / dinner / snack)
+// ─────────────────────────────────────────────────────────────
+
+function GenericSlotCard({
+  slot, slotId, label, foodMap, onToggleEnabled, onShowAddMenu, onRemove, onUpdate,
+}: {
+  slot: GenericSlot
   slotId: MealSlot
   label: string
-  foods: Food[]
+  foodMap: Map<string, Food>
   onToggleEnabled: () => void
-  onAdd: () => void
-  onRemove: (idx: number) => void
-  onPortion: (idx: number, portion: number) => void
-  onToggleRandom: (idx: number) => void
+  onShowAddMenu: () => void
+  onRemove: (itemId: string) => void
+  onUpdate: (itemId: string, patch: Partial<SlotItem>) => void
 }) {
-  const foodMap = new Map(foods.map((f) => [f.id, f]))
-  const hint = slotId === 'breakfast' ? 'Tip: lock whey + egg; toggle 🎲 on fruits to rotate.' : null
-
+  void slotId
   return (
     <Card padding={14} style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -395,19 +535,15 @@ function MealSlotCard({
         </button>
         <span className={styles.rowText} style={{ flex: 1 }}>
           <strong>{label}</strong>
-          <span className={styles.rowSub}>
-            {slot.enabled
-              ? slot.items.length === 0
-                ? 'Tap + to add foods'
-                : `${slot.items.filter((i) => !i.is_random).length} fixed · ${slot.items.filter((i) => i.is_random).length} random`
-              : 'Off'}
-          </span>
+          {slot.enabled && slot.items.length > 0 ? (
+            <span className={styles.rowSub}>{slot.items.length} item{slot.items.length === 1 ? '' : 's'}</span>
+          ) : null}
         </span>
         {slot.enabled ? (
           <button
-            aria-label={`Add food to ${label}`}
+            aria-label={`Add to ${label}`}
             className={styles.iconButton}
-            onClick={onAdd}
+            onClick={onShowAddMenu}
             type="button"
             style={{ background: 'var(--a-soft)', color: 'var(--a1)' }}
           >
@@ -416,126 +552,196 @@ function MealSlotCard({
         ) : null}
       </div>
 
-      {slot.enabled && hint && slot.items.length === 0 ? (
-        <p className={styles.subtitle} style={{ marginTop: 8, fontSize: 12 }}>{hint}</p>
-      ) : null}
-
       {slot.enabled && slot.items.length > 0 ? (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {slot.items.map((it, idx) => {
-            const food = foodMap.get(it.food_id)
-            if (!food) return null
-            return (
-              <div
-                key={it.food_id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 10px',
-                  background: it.is_random ? 'var(--a-soft)' : 'var(--bg-soft)',
-                  borderRadius: 'var(--r-sm)',
-                }}
-              >
-                <button
-                  aria-label="Toggle random"
-                  onClick={() => onToggleRandom(idx)}
-                  type="button"
-                  style={{
-                    border: 0,
-                    background: it.is_random ? 'var(--a1)' : 'var(--surface)',
-                    color: it.is_random ? '#fff' : 'var(--t-3)',
-                    cursor: 'pointer',
-                    borderRadius: '50%',
-                    width: 26,
-                    height: 26,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 12,
-                    outline: 'none',
-                  }}
-                >
-                  🎲
-                </button>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{food.name}</span>
-                <PortionMini value={it.portion} onChange={(v) => onPortion(idx, v)} unit={food.portion_unit} />
-                <button
-                  aria-label="Remove"
-                  onClick={() => onRemove(idx)}
-                  type="button"
-                  style={{ border: 0, background: 'transparent', color: 'var(--t-3)', cursor: 'pointer', padding: 4, outline: 'none' }}
-                >
-                  <Icon name="x" size={14} />
-                </button>
-              </div>
-            )
-          })}
+          {slot.items.map((it) => (
+            <SlotItemRow key={it.id} item={it} foodMap={foodMap} onUpdate={(patch) => onUpdate(it.id, patch)} onRemove={() => onRemove(it.id)} />
+          ))}
         </div>
       ) : null}
     </Card>
   )
 }
 
-function PortionMini({ value, unit, onChange }: { value: number; unit: string; onChange: (v: number) => void }) {
+function SlotItemRow({
+  item, foodMap, onUpdate, onRemove,
+}: {
+  item: SlotItem
+  foodMap: Map<string, Food>
+  onUpdate: (patch: Partial<SlotItem>) => void
+  onRemove: () => void
+}) {
+  const isRandom = item.kind === 'random_category' || item.kind === 'random_all' || (item.kind === 'food' && item.is_random)
+
+  let title = ''
+  let unit = 'serving'
+  if (item.kind === 'food') {
+    const food = foodMap.get(item.food_id)
+    title = food?.name ?? '(missing food)'
+    unit = food?.portion_unit ?? 'serving'
+  } else if (item.kind === 'random_category') {
+    const cat = FOOD_CATEGORIES.find((c) => c.id === item.category)
+    title = `🎲 Random ${cat?.label ?? item.category}`
+  } else {
+    title = '🎲 Random any food'
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface)', borderRadius: 999, padding: '2px 6px' }}>
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(0.25, Number((value - 0.25).toFixed(2))))}
-        style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, fontSize: 14, color: 'var(--t-2)', outline: 'none' }}
-      >
-        −
-      </button>
-      <span style={{ fontSize: 12, fontWeight: 700, minWidth: 30, textAlign: 'center' }}>
-        {value % 1 === 0 ? value : value.toFixed(2)} {unit}
-      </span>
-      <button
-        type="button"
-        onClick={() => onChange(Number((value + 0.25).toFixed(2)))}
-        style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, fontSize: 14, color: 'var(--t-2)', outline: 'none' }}
-      >
-        +
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 10px',
+        background: isRandom ? 'var(--a-soft)' : 'var(--bg-soft)',
+        borderRadius: 'var(--r-sm)',
+      }}
+    >
+      {item.kind === 'food' && (
+        <button
+          aria-label="Toggle random"
+          onClick={() => onUpdate({ is_random: !item.is_random } as any)}
+          type="button"
+          style={{
+            border: 0,
+            background: item.is_random ? 'var(--a1)' : 'var(--surface)',
+            color: item.is_random ? '#fff' : 'var(--t-3)',
+            cursor: 'pointer',
+            borderRadius: '50%',
+            width: 26,
+            height: 26,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            outline: 'none',
+          }}
+        >
+          🎲
+        </button>
+      )}
+      <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{title}</span>
+      <PortionMini value={item.portion} unit={unit} onChange={(v) => onUpdate({ portion: v } as any)} />
+      <button aria-label="Remove" onClick={onRemove} type="button"
+        style={{ border: 0, background: 'transparent', color: 'var(--t-3)', cursor: 'pointer', padding: 4, outline: 'none' }}>
+        <Icon name="x" size={14} />
       </button>
     </div>
   )
 }
 
+function PortionMini({ value, unit, onChange }: { value: number; unit: string; onChange: (v: number) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface)', borderRadius: 999, padding: '2px 6px' }}>
+      <button type="button" onClick={() => onChange(Math.max(0.25, Number((value - 0.25).toFixed(2))))}
+        style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, fontSize: 14, color: 'var(--t-2)', outline: 'none' }}>−</button>
+      <span style={{ fontSize: 12, fontWeight: 700, minWidth: 30, textAlign: 'center' }}>
+        {value % 1 === 0 ? value : value.toFixed(2)} {unit}
+      </span>
+      <button type="button" onClick={() => onChange(Number((value + 0.25).toFixed(2)))}
+        style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 4, fontSize: 14, color: 'var(--t-2)', outline: 'none' }}>+</button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Add item menu — pick mode (specific / category / all)
+// ─────────────────────────────────────────────────────────────
+
+function AddItemMenu({ slotLabel, onPick, onCancel }: { slotLabel: string; onPick: (mode: 'specific' | 'category' | 'all') => void; onCancel: () => void }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div className={styles.sheet} style={{ height: 'auto', maxHeight: '60%' }}>
+        <div className={styles.sheetHandle} />
+        <header className={styles.screenHeader}>
+          <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
+          <strong>{slotLabel}</strong>
+          <span style={{ width: 40 }} />
+        </header>
+        <div style={{ padding: '0 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <ModeButton icon="fork" title="Pick specific food" subtitle="Choose from library" onClick={() => onPick('specific')} />
+          <ModeButton icon="sparkle" title="Random by category" subtitle="One picked per day from a category" onClick={() => onPick('category')} />
+          <ModeButton icon="sparkle" title="Random any food" subtitle="One picked per day from all foods" onClick={() => onPick('all')} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ModeButton({ icon, title, subtitle, onClick }: { icon: 'fork' | 'sparkle'; title: string; subtitle: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      type="button"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '14px 16px',
+        border: '1px solid var(--line)',
+        borderRadius: 'var(--r-md)',
+        background: 'var(--surface)',
+        cursor: 'pointer',
+        outline: 'none',
+        textAlign: 'left',
+      }}
+    >
+      <span style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--a-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon color="var(--a1)" name={icon} size={18} />
+      </span>
+      <span style={{ flex: 1 }}>
+        <strong style={{ display: 'block', fontSize: 14 }}>{title}</strong>
+        <span style={{ fontSize: 12, color: 'var(--t-3)' }}>{subtitle}</span>
+      </span>
+      <Icon color="var(--t-3)" name="chevron" size={14} />
+    </button>
+  )
+}
+
+function CategoryPicker({ onPick, onCancel }: { onPick: (cat: FoodCategory) => void; onCancel: () => void }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 140, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div className={styles.sheet} style={{ height: 'auto', maxHeight: '50%' }}>
+        <div className={styles.sheetHandle} />
+        <header className={styles.screenHeader}>
+          <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
+          <strong>Pick category</strong>
+          <span style={{ width: 40 }} />
+        </header>
+        <div style={{ padding: '0 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {FOOD_CATEGORIES.map((cat) => (
+            <button key={cat.id} onClick={() => onPick(cat.id)} type="button"
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', textAlign: 'left' }}>
+              <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{cat.label}</span>
+              <Icon color="var(--t-3)" name="chevron" size={14} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Food picker (specific food)
+// ─────────────────────────────────────────────────────────────
+
 function FoodPickerLite({
-  foods,
-  excludeIds,
-  slotLabel,
-  onPick,
-  onCancel,
+  foods, slotLabel, onPick, onCancel,
 }: {
   foods: Food[]
-  excludeIds: Set<string>
   slotLabel: string
   onPick: (food: Food) => void
   onCancel: () => void
 }) {
   const [query, setQuery] = useState('')
-  const filtered = foods.filter((f) => !excludeIds.has(f.id) && f.name.toLowerCase().includes(query.toLowerCase()))
+  const filtered = foods.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(15,23,42,0.55)',
-        zIndex: 130,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
-    >
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div className={styles.sheet} style={{ height: '70%', display: 'flex', flexDirection: 'column' }}>
         <div className={styles.sheetHandle} />
         <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button">
-            <Icon name="x" />
-          </button>
-          <strong>Add to {slotLabel}</strong>
+          <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
+          <strong>Pick food for {slotLabel}</strong>
           <span style={{ width: 40 }} />
         </header>
         <div style={{ padding: '0 20px' }}>
@@ -544,49 +750,22 @@ function FoodPickerLite({
             placeholder="Search foods..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              fontSize: 14,
-              border: 0,
-              background: 'var(--bg-soft)',
-              borderRadius: 'var(--r-md)',
-              outline: 'none',
-              fontFamily: 'inherit',
-              color: 'var(--t-1)',
-              marginBottom: 10,
-            }}
+            style={{ width: '100%', padding: '10px 14px', fontSize: 14, border: 0, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', outline: 'none', fontFamily: 'inherit', color: 'var(--t-1)', marginBottom: 10 }}
           />
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
           {filtered.length === 0 ? (
             <p className={styles.subtitle} style={{ textAlign: 'center', padding: 20 }}>
-              {foods.length === 0 ? 'Library empty. Add foods in Library tab first.' : 'No matches.'}
+              {foods.length === 0 ? 'Library empty. Add foods in Library tab.' : 'No matches.'}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {filtered.map((food) => (
-                <button
-                  key={food.id}
-                  onClick={() => onPick(food)}
-                  type="button"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '10px 12px',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: 'var(--r-md)',
-                    width: '100%',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  <span className={styles.rowText} style={{ flex: 1 }}>
-                    <strong style={{ fontSize: 14 }}>{food.name}</strong>
-                    <span className={styles.rowSub}>{food.kcal_per_portion} kcal · {food.protein_g_per_portion}g P / {food.portion_unit}</span>
+                <button key={food.id} onClick={() => onPick(food)} type="button"
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none' }}>
+                  <span style={{ flex: 1 }}>
+                    <strong style={{ display: 'block', fontSize: 14 }}>{food.name}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--t-3)' }}>{food.kcal_per_portion} kcal · {food.protein_g_per_portion}g / {food.portion_unit}</span>
                   </span>
                   <Icon color="var(--a1)" name="plus" size={16} />
                 </button>
@@ -600,7 +779,7 @@ function FoodPickerLite({
 }
 
 // ─────────────────────────────────────────────────────────────
-// Bulk WORKOUT planner
+// Bulk WORKOUT planner (unchanged from v1.3.0)
 // ─────────────────────────────────────────────────────────────
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -615,14 +794,8 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
   const [applying, setApplying] = useState(false)
 
   const allDates = useMemo(() => datesInRange(start, end), [start, end])
-  const activeDates = useMemo(
-    () => allDates.filter((d) => weekdays[new Date(d).getDay()]),
-    [allDates, weekdays],
-  )
-  const restDates = useMemo(
-    () => (restOnOffDays ? allDates.filter((d) => !weekdays[new Date(d).getDay()]) : []),
-    [allDates, weekdays, restOnOffDays],
-  )
+  const activeDates = useMemo(() => allDates.filter((d) => weekdays[new Date(d).getDay()]), [allDates, weekdays])
+  const restDates = useMemo(() => (restOnOffDays ? allDates.filter((d) => !weekdays[new Date(d).getDay()]) : []), [allDates, weekdays, restOnOffDays])
 
   const totalDates = activeDates.length + restDates.length
   const canApply = totalDates > 0
@@ -659,22 +832,8 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
         <p className={styles.fieldLabel}>Workout on which days?</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
           {WEEKDAY_LABELS.map((label, i) => (
-            <button
-              key={label}
-              onClick={() => toggleWeekday(i)}
-              type="button"
-              style={{
-                padding: '10px 0',
-                border: 0,
-                borderRadius: 'var(--r-sm)',
-                background: weekdays[i] ? 'var(--a1)' : 'var(--bg-soft)',
-                color: weekdays[i] ? '#fff' : 'var(--t-2)',
-                fontWeight: 700,
-                fontSize: 12,
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
+            <button key={label} onClick={() => toggleWeekday(i)} type="button"
+              style={{ padding: '10px 0', border: 0, borderRadius: 'var(--r-sm)', background: weekdays[i] ? 'var(--a1)' : 'var(--bg-soft)', color: weekdays[i] ? '#fff' : 'var(--t-2)', fontWeight: 700, fontSize: 12, cursor: 'pointer', outline: 'none' }}>
               {label[0]}
             </button>
           ))}
@@ -688,25 +847,8 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
         <p className={styles.fieldLabel}>Workout type</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           {WORKOUT_PLAN_TYPES.filter((t) => t.id !== 'rest').map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setType(t.id)}
-              type="button"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 14px',
-                border: type === t.id ? '2px solid var(--a1)' : '1px solid var(--line)',
-                borderRadius: 'var(--r-md)',
-                background: type === t.id ? 'var(--a-soft)' : 'var(--surface)',
-                cursor: 'pointer',
-                outline: 'none',
-                fontWeight: 700,
-                color: type === t.id ? 'var(--a1)' : 'var(--t-1)',
-                fontSize: 13,
-              }}
-            >
+            <button key={t.id} onClick={() => setType(t.id)} type="button"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: type === t.id ? '2px solid var(--a1)' : '1px solid var(--line)', borderRadius: 'var(--r-md)', background: type === t.id ? 'var(--a-soft)' : 'var(--surface)', cursor: 'pointer', outline: 'none', fontWeight: 700, color: type === t.id ? 'var(--a1)' : 'var(--t-1)', fontSize: 13 }}>
               <Icon name={t.icon as any} size={16} />
               {t.label}
             </button>
@@ -724,9 +866,7 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
           <span className={styles.rowText}>
             <strong style={{ fontSize: 14 }}>Mark off-days as Rest</strong>
             <span className={styles.rowSub}>
-              {restOnOffDays
-                ? `${restDates.length} day${restDates.length === 1 ? '' : 's'} will get a "Rest" plan`
-                : 'Off-days stay blank'}
+              {restOnOffDays ? `${restDates.length} day${restDates.length === 1 ? '' : 's'} will get a "Rest" plan` : 'Off-days stay blank'}
             </span>
           </span>
         </label>

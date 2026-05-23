@@ -124,7 +124,7 @@ export type SleepLog = {
   quality_1_5: number
 }
 
-export type FoodCategory = 'food' | 'fruit' | 'other'
+export type FoodCategory = 'food' | 'fruit' | 'com_food' | 'other'
 
 export type Food = {
   id: string
@@ -140,6 +140,7 @@ export type Food = {
 export const FOOD_CATEGORIES: { id: FoodCategory; label: string; icon: string }[] = [
   { id: 'food', label: 'Food', icon: 'FD' },
   { id: 'fruit', label: 'Fruit', icon: 'FR' },
+  { id: 'com_food', label: 'Com.Food', icon: 'CF' },
   { id: 'other', label: 'Other', icon: 'OT' },
 ]
 
@@ -154,7 +155,7 @@ const LEGACY_CATEGORY_MAP: Record<string, FoodCategory> = {
 
 export function normalizeFoodCategory(raw: unknown): FoodCategory {
   if (typeof raw !== 'string') return 'other'
-  if (raw === 'food' || raw === 'fruit' || raw === 'other') return raw
+  if (raw === 'food' || raw === 'fruit' || raw === 'other' || raw === 'com_food') return raw
   return LEGACY_CATEGORY_MAP[raw] ?? 'other'
 }
 
