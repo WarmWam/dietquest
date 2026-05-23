@@ -4,12 +4,12 @@ import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, ImageSlot } from '@/components/primitives'
 import { useTheme, type ThemeMode } from '@/hooks/useTheme'
 import { MOCK_USER } from '@/lib/mock'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuth } from '@/hooks/useAuth'
 
 export function ProfileRoute() {
   const { mode, setTheme } = useTheme()
   const navigate = useNavigate()
-  const signOut = useAuthStore((state) => state.signOut)
+  const { signOut } = useAuth()
 
   return (
     <AppScreen activeNav="profile">
@@ -57,7 +57,7 @@ export function ProfileRoute() {
 
         <Button
           onClick={() => {
-            signOut()
+            void signOut()
             navigate('/login')
           }}
           variant="ghost"

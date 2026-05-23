@@ -1,27 +1,33 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { MOCK_USER } from '@/lib/mock'
-import type { User } from '@/types/domain'
+import type { User as FirebaseUser } from 'firebase/auth'
+import { logout, signInGoogle, watchAuth } from '@/lib/auth'
 
 type AuthState = {
-  user: User | null
-  onboarded: boolean
-  signInMock: () => void
-  signOut: () => void
-  completeOnboarding: () => void
+  user: FirebaseUser | null
+  loading: boolean
+  error: string | null
+  signIn: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      onboarded: false,
-      signInMock: () => set({ user: MOCK_USER }),
-      signOut: () => set({ user: null, onboarded: false }),
-      completeOnboarding: () => set({ onboarded: true, user: MOCK_USER }),
-    }),
-    {
-      name: 'dietquest-auth',
-    },
-  ),
-)
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  loading: true,
+  error: null,
+  signIn: async () => {
+    set({ error: null })
+    try {
+      await signInGoogle()
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Unable to sign in' })
+    }
+  },
+  signOut: async () => {
+    set({ error: null })
+    await logout()
+  },
+}))
+
+watchAuth((user) => {
+  useAuthStore.setState({ user, loading: false, error: null })
+})

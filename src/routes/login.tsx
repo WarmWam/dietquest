@@ -1,12 +1,9 @@
-import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/primitives'
-import { useAuthStore } from '@/stores/authStore'
-import { MOCK_USER } from '@/lib/mock'
+import { useAuth } from '@/hooks/useAuth'
 import { appStyles as styles } from '@/components/layout/AppScreen'
 
 export function LoginRoute() {
-  const navigate = useNavigate()
-  const signInMock = useAuthStore((state) => state.signInMock)
+  const { error, signIn } = useAuth()
 
   return (
     <main className={styles.stage}>
@@ -15,15 +12,11 @@ export function LoginRoute() {
         <div>
           <p className="dq-eyebrow">DietQuest</p>
           <h1 className={styles.headerTitle}>Track the cut without the noise.</h1>
-          <p className={styles.subtitle}>Mock sign-in for {MOCK_USER.email}. Firebase auth lands in Phase 5.</p>
+          <p className={styles.subtitle}>Sign in with Google to sync meals, weight, water, workouts and sleep.</p>
         </div>
-        <Button
-          onClick={() => {
-            signInMock()
-            navigate('/splash')
-          }}
-        >
-          Sign in
+        {error ? <p className={styles.subtitle}>{error}</p> : null}
+        <Button onClick={() => void signIn()}>
+          Sign in with Google
         </Button>
       </section>
     </main>
