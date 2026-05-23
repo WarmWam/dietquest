@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
+import { useOnboarding } from '@/hooks/useOnboarding'
 
 function ProgressHeader({ step, onBack }: { step: number; onBack?: () => void }) {
   return (
@@ -131,6 +132,7 @@ function Stepper({ label, value, suffix }: { label: string; value: number; suffi
 
 export function OnboardingGoalRoute() {
   const navigate = useNavigate()
+  const { completeOnboarding } = useOnboarding()
   const profile = DEFAULT_PROFILE
 
   return (
@@ -187,7 +189,7 @@ export function OnboardingGoalRoute() {
           <Button
             icon="sparkle"
             onClick={() => {
-              navigate('/')
+              void completeOnboarding(profile).then(() => navigate('/'))
             }}
           >
             Build my plan
