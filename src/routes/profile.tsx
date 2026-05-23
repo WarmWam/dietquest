@@ -2,30 +2,37 @@ import { useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, ImageSlot } from '@/components/primitives'
-import { useTheme, type ThemeMode } from '@/hooks/useTheme'
-import { MOCK_USER } from '@/lib/mock'
+import { DEFAULT_PROFILE } from '@/data/defaults'
 import { useAuth } from '@/hooks/useAuth'
+import { useTheme, type ThemeMode } from '@/hooks/useTheme'
+import { useUser } from '@/hooks/useUser'
 
 export function ProfileRoute() {
   const { mode, setTheme } = useTheme()
   const navigate = useNavigate()
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
+  const { profile } = useUser()
+  const userProfile = profile?.profile ?? DEFAULT_PROFILE
+  const displayName = profile?.display_name ?? user?.displayName ?? 'DietQuest'
+  const targetSpan = Math.abs(userProfile.weight_start_kg - userProfile.weight_target_kg)
 
   return (
     <AppScreen activeNav="profile">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
         <h1 className={styles.headerTitle}>Profile</h1>
         <Card className={styles.habitRow} raised padding={18} style={{ marginTop: 14 }}>
-          <ImageSlot id="avatar" placeholder="A" shape="circle" style={{ width: 64, height: 64, minHeight: 64 }} />
+          <ImageSlot id="avatar" placeholder={displayName[0] ?? 'D'} shape="circle" style={{ width: 64, height: 64, minHeight: 64 }} />
           <span className={styles.rowText}>
-            <strong>{MOCK_USER.display_name}</strong>
-            <span className={styles.rowSub}>31 · 169 cm · day 14 · BMI 27.4</span>
+            <strong>{displayName}</strong>
+            <span className={styles.rowSub}>{userProfile.age} - {userProfile.height_cm} cm - Firebase sync on</span>
           </span>
         </Card>
         <Card padding={16} style={{ margin: '14px 0' }}>
           <p className="dq-eyebrow">Goal</p>
-          <strong className="dq-num" style={{ fontSize: 28 }}>65.0 kg</strong>
-          <p className={styles.subtitle}>1.8 / 15 kg lost · target Nov 15, 2026</p>
+          <strong className="dq-num" style={{ fontSize: 28 }}>
+            {userProfile.weight_target_kg.toFixed(1)} kg
+          </strong>
+          <p className={styles.subtitle}>{targetSpan.toFixed(1)} kg target span</p>
           <div className={styles.progressBar} style={{ marginTop: 12 }}>
             <div className={styles.progressFill} style={{ width: '12%' }} />
           </div>
@@ -51,7 +58,7 @@ export function ProfileRoute() {
         </Section>
 
         <Section title="Data">
-          <div className={styles.settingRow}><Icon name="download" /><span className={styles.rowText}>Export data</span><span className={styles.rowSub}>CSV · PDF</span></div>
+          <div className={styles.settingRow}><Icon name="download" /><span className={styles.rowText}>Export data</span><span className={styles.rowSub}>CSV</span></div>
           <div className={styles.settingRow}><Icon name="info" /><span className={styles.rowText}>About DietQuest</span><span className={styles.rowSub}>v1.0.0</span></div>
         </Section>
 

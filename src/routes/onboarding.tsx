@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
-import { MOCK_USER } from '@/lib/mock'
+import { DEFAULT_PROFILE } from '@/data/defaults'
 
 function ProgressHeader({ step, onBack }: { step: number; onBack?: () => void }) {
   return (
@@ -53,7 +53,7 @@ export function OnboardingWelcomeRoute() {
 
 export function OnboardingProfileRoute() {
   const navigate = useNavigate()
-  const profile = MOCK_USER.profile
+  const profile = DEFAULT_PROFILE
 
   return (
     <AppScreen hideNav>
@@ -131,7 +131,7 @@ function Stepper({ label, value, suffix }: { label: string; value: number; suffi
 
 export function OnboardingGoalRoute() {
   const navigate = useNavigate()
-  const profile = MOCK_USER.profile
+  const profile = DEFAULT_PROFILE
 
   return (
     <AppScreen hideNav>

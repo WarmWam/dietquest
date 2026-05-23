@@ -1,67 +1,79 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Ring, type IconName } from '@/components/primitives'
-import { MOCK_MEALS, MOCK_TODAY, MOCK_USER, MOCK_WEIGHTS } from '@/lib/mock'
-import type { MealType } from '@/types/domain'
+import { DEFAULT_SETTINGS } from '@/data/defaults'
+import { useMeals } from '@/hooks/useMeals'
+import { useToday } from '@/hooks/useToday'
+import { useUser } from '@/hooks/useUser'
+import { useWeights } from '@/hooks/useWeights'
+import type { MealLog, MealType, UserSettings } from '@/types/domain'
 
 const mealMeta: Record<MealType, { label: string; icon: string }> = {
-  breakfast: { label: 'Breakfast', icon: '🌅' },
-  lunch: { label: 'Lunch', icon: '☀️' },
-  dinner: { label: 'Dinner', icon: '🌙' },
-  snack: { label: 'Snack', icon: '🍎' },
+  breakfast: { label: 'Breakfast', icon: 'AM' },
+  lunch: { label: 'Lunch', icon: 'NO' },
+  dinner: { label: 'Dinner', icon: 'PM' },
+  snack: { label: 'Snack', icon: 'SN' },
 }
 
 export function HomeRoute() {
   const [params] = useSearchParams()
-  const empty = params.get('empty') === '1'
+  const { profile, loading: userLoading } = useUser()
+  const { data: meals, loading: mealsLoading } = useMeals()
+  const { data: today, loading: todayLoading } = useToday()
+  const empty = params.get('empty') === '1' || (!mealsLoading && meals.length === 0)
   const sheet = params.get('sheet') === '1'
+  const settings = profile?.settings ?? DEFAULT_SETTINGS
+
   return (
     <AppScreen activeNav="home">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
         <header className={styles.screenHeader}>
           <div>
             <p className={styles.subtitle}>Good morning</p>
-            <h1 className={styles.headerTitle}>{empty ? 'Day 1 · let’s go' : 'Friday, May 23'}</h1>
+            <h1 className={styles.headerTitle}>{empty ? 'Day 1 - let us go' : 'Today'}</h1>
           </div>
-          <div className={styles.avatar}>{MOCK_USER.display_name[0]}</div>
+          <div className={styles.avatar}>{profile?.display_name?.[0] ?? 'D'}</div>
         </header>
 
-        {empty ? <HomeEmptyContent /> : <HomeFullContent />}
+        {userLoading || mealsLoading || todayLoading ? (
+          <LoadingCard />
+        ) : empty ? (
+          <HomeEmptyContent target={settings.daily_kcal_target} />
+        ) : (
+          <HomeFullContent meals={meals} settings={settings} today={today} />
+        )}
       </div>
       {sheet ? <LogSheet /> : null}
     </AppScreen>
   )
 }
 
-function HomeFullContent() {
+function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; settings: UserSettings; today: ReturnType<typeof useToday>['data'] }) {
   const navigate = useNavigate()
-  const latestWeight = MOCK_WEIGHTS[MOCK_WEIGHTS.length - 1]
+  const { data: weights } = useWeights(30)
+  const latestWeight = weights[weights.length - 1]
 
   return (
     <>
       <Card raised padding={18}>
         <div className={styles.screenHeader}>
           <span className="dq-eyebrow">Today</span>
-          <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>710 kcal left</span>
+          <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
+            {Math.max(settings.daily_kcal_target - today.totals.kcal, 0)} kcal left
+          </span>
         </div>
-        <Ring
-          eaten={MOCK_TODAY.totals.kcal}
-          protein={MOCK_TODAY.totals.protein_g}
-          proteinTarget={MOCK_USER.settings.daily_protein_target}
-          size={210}
-          target={MOCK_USER.settings.daily_kcal_target}
-        />
+        <Ring eaten={today.totals.kcal} protein={today.totals.protein_g} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} />
       </Card>
 
       <div className={styles.topStats}>
-        <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={0.5} target="3.0 L" value="1.5" />
-        <MiniStat color="#10B981" icon="walk" label="Incline" pct={0.75} target="60 min" value="45" />
+        <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(today.totals.water_ml / 3000, 1)} target="3.0 L" value={(today.totals.water_ml / 1000).toFixed(1)} />
+        <MiniStat color="#10B981" icon="walk" label="Incline" pct={today.habits.walk_done ? 0.75 : 0} target="60 min" value={today.habits.walk_done ? '45' : '0'} />
       </div>
 
-      <SectionLabel action="Edit">Today’s meals</SectionLabel>
+      <SectionLabel action="Edit">Today's meals</SectionLabel>
       <div className={styles.mealList}>
         {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
-          const meal = MOCK_MEALS.find((item) => item.meal_type === type)
+          const meal = meals.find((item) => item.meal_type === type)
           return (
             <MealRow
               key={type}
@@ -77,41 +89,45 @@ function HomeFullContent() {
 
       <SectionLabel>Daily habits</SectionLabel>
       <div className={styles.habitBox}>
-        <Habit done={MOCK_TODAY.habits.water_done} label="Drink 3 L of water" sub="1.5 / 3.0 L" />
+        <Habit done={today.habits.water_done || today.totals.water_ml >= 3000} label="Drink 3 L of water" sub={`${(today.totals.water_ml / 1000).toFixed(1)} / 3.0 L`} />
         <div className="dq-divider" />
-        <Habit done={MOCK_TODAY.habits.walk_done} label="Incline walk 45 min" sub="logged · 328 kcal" />
+        <Habit done={today.habits.walk_done} label="Incline walk 45 min" sub={today.habits.walk_done ? 'logged' : 'not logged yet'} />
         <div className="dq-divider" />
-        <Habit done={MOCK_TODAY.habits.sleep_on_time} label="Sleep by 22:30" sub="goal · 7.5 hrs" />
+        <Habit done={today.habits.sleep_on_time} label="Sleep by 22:30" sub="goal - 7.5 hrs" />
       </div>
 
-      <div style={{ height: 14 }} />
-      <Card padding={14}>
-        <div className={styles.habitRow}>
-          <div className={styles.statIcon}>
-            <Icon color="var(--success)" name="trend" />
-          </div>
-          <div className={styles.rowText}>
-            <p className="dq-eyebrow">Weight</p>
-            <strong className="dq-num" style={{ fontSize: 20 }}>
-              {latestWeight.weight_kg.toFixed(1)} kg
-            </strong>
-          </div>
-          <Button onClick={() => navigate('/log/weight')} variant="secondary">
-            Log
-          </Button>
-        </div>
-      </Card>
+      {latestWeight ? (
+        <>
+          <div style={{ height: 14 }} />
+          <Card padding={14}>
+            <div className={styles.habitRow}>
+              <div className={styles.statIcon}>
+                <Icon color="var(--success)" name="trend" />
+              </div>
+              <div className={styles.rowText}>
+                <p className="dq-eyebrow">Weight</p>
+                <strong className="dq-num" style={{ fontSize: 20 }}>
+                  {latestWeight.weight_kg.toFixed(1)} kg
+                </strong>
+              </div>
+              <Button onClick={() => navigate('/log/weight')} variant="secondary">
+                Log
+              </Button>
+            </div>
+          </Card>
+        </>
+      ) : null}
     </>
   )
 }
 
-function HomeEmptyContent() {
+function HomeEmptyContent({ target }: { target: number }) {
   const navigate = useNavigate()
 
   return (
     <>
       <Card raised padding={18}>
-        <Ring eaten={0} label="not logged yet" protein={0} size={210} target={MOCK_USER.settings.daily_kcal_target} />
+        <Ring eaten={0} label="not logged yet" protein={0} size={210} target={target} />
         <p className={styles.subtitle} style={{ textAlign: 'center', margin: '14px 0' }}>
           Log your first meal to start tracking. The streak starts with one tap.
         </p>
@@ -119,11 +135,11 @@ function HomeEmptyContent() {
           Log breakfast
         </Button>
       </Card>
-      <SectionLabel>Today’s meals</SectionLabel>
+      <SectionLabel>Today's meals</SectionLabel>
       <div className={styles.mealList}>
-        <MealRow icon="🌅" items="Tap to log" label="Breakfast" onClick={() => navigate('/log/meal')} />
-        <MealRow icon="☀️" items="Tap to log" label="Lunch" onClick={() => navigate('/log/meal')} />
-        <MealRow icon="🌙" items="Tap to log" label="Dinner" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="AM" items="Tap to log" label="Breakfast" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="NO" items="Tap to log" label="Lunch" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="PM" items="Tap to log" label="Dinner" onClick={() => navigate('/log/meal')} />
       </div>
       <div className={styles.emptyBox}>
         <Icon color="var(--a1)" name="sparkle" />
@@ -131,6 +147,18 @@ function HomeEmptyContent() {
         <p className={styles.subtitle}>Log 6 days a week to keep it alive.</p>
       </div>
     </>
+  )
+}
+
+function LoadingCard() {
+  return (
+    <Card raised padding={18}>
+      <p className="dq-eyebrow">Loading</p>
+      <h2 className={styles.headerTitle} style={{ fontSize: 24 }}>
+        Syncing today
+      </h2>
+      <p className={styles.subtitle}>Pulling your Firebase data.</p>
+    </Card>
   )
 }
 
@@ -202,11 +230,11 @@ function Habit({ done, label, sub }: { done: boolean; label: string; sub: string
 function LogSheet() {
   const navigate = useNavigate()
   const items: Array<{ id: string; label: string; sub: string; icon: IconName; path: string }> = [
-    { id: 'meal', label: 'Meal', sub: 'Preset · custom · recent', icon: 'fork', path: '/log/meal' },
-    { id: 'water', label: 'Water', sub: '+250 ml · +500 ml', icon: 'drop', path: '/log/water' },
-    { id: 'workout', label: 'Workout', sub: 'Incline walk · bodyweight', icon: 'walk', path: '/log/workout' },
+    { id: 'meal', label: 'Meal', sub: 'Preset - custom - recent', icon: 'fork', path: '/log/meal' },
+    { id: 'water', label: 'Water', sub: '+250 ml - +500 ml', icon: 'drop', path: '/log/water' },
+    { id: 'workout', label: 'Workout', sub: 'Incline walk - bodyweight', icon: 'walk', path: '/log/workout' },
     { id: 'weight', label: 'Weight', sub: 'Daily weigh-in', icon: 'trend', path: '/log/weight' },
-    { id: 'sleep', label: 'Sleep', sub: 'Bedtime · wake · quality', icon: 'moon', path: '/log/sleep' },
+    { id: 'sleep', label: 'Sleep', sub: 'Bedtime - wake - quality', icon: 'moon', path: '/log/sleep' },
   ]
 
   return (
@@ -218,7 +246,7 @@ function LogSheet() {
           <h2 className={styles.headerTitle} style={{ fontSize: 22 }}>
             Quick log
           </h2>
-          <span className={styles.subtitle}>9:41 · Fri</span>
+          <span className={styles.subtitle}>Today</span>
         </div>
         <div className={styles.sheetItems}>
           {items.map((item) => (

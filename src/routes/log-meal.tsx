@@ -1,10 +1,21 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
-import { MOCK_PRESETS } from '@/lib/mock'
+import { DEFAULT_BREAKFAST } from '@/data/defaults'
+import { todayKey } from '@/lib/dates'
+import { useMeals } from '@/hooks/useMeals'
+import { usePresets } from '@/hooks/usePresets'
+import type { MealPreset } from '@/types/domain'
+
+function useSelectedPreset(): MealPreset {
+  const { data } = usePresets()
+  return data[0] ?? DEFAULT_BREAKFAST
+}
 
 export function LogMealRoute() {
   const navigate = useNavigate()
+  const { data: presets, loading } = usePresets()
 
   return (
     <AppScreen hideNav>
@@ -29,19 +40,30 @@ export function LogMealRoute() {
 
         <Section title="Suggested for breakfast" />
         <div className={styles.presetList}>
-          {MOCK_PRESETS.slice(0, 4).map((preset, index) => (
-            <button className={styles.presetRow} data-highlight={index === 0} key={preset.id} onClick={() => navigate('/log/meal/confirm')} type="button">
-              <span className={styles.mealIcon}>{preset.icon}</span>
-              <span className={styles.rowText}>
-                <span className={styles.rowTitle}>{preset.name}</span>
-                <span className={styles.rowSub}>
-                  {preset.tag} · {preset.total_kcal} kcal · {preset.total_protein_g}g P
+          {loading ? (
+            <Card padding={16}>
+              <p className={styles.subtitle}>Loading presets...</p>
+            </Card>
+          ) : presets.length === 0 ? (
+            <Card padding={16}>
+              <strong>Starter preset</strong>
+              <p className={styles.subtitle}>No saved presets yet. Use the default breakfast to create your first meal log.</p>
+            </Card>
+          ) : (
+            presets.slice(0, 4).map((preset, index) => (
+              <button className={styles.presetRow} data-highlight={index === 0} key={preset.id} onClick={() => navigate('/log/meal/confirm')} type="button">
+                <span className={styles.mealIcon}>{preset.icon}</span>
+                <span className={styles.rowText}>
+                  <span className={styles.rowTitle}>{preset.name}</span>
+                  <span className={styles.rowSub}>
+                    {preset.tag} - {preset.total_kcal} kcal - {preset.total_protein_g}g P
+                  </span>
                 </span>
-              </span>
-              {index === 0 ? <span className="dq-pill">Top pick</span> : null}
-              <Icon color="var(--t-3)" name="chevron" size={16} />
-            </button>
-          ))}
+                {index === 0 ? <span className="dq-pill">Top pick</span> : null}
+                <Icon color="var(--t-3)" name="chevron" size={16} />
+              </button>
+            ))
+          )}
         </div>
         <Button icon="plus" onClick={() => navigate('/log/meal/confirm')} variant="secondary">
           Build custom meal
@@ -53,7 +75,31 @@ export function LogMealRoute() {
 
 export function LogMealConfirmRoute() {
   const navigate = useNavigate()
-  const preset = MOCK_PRESETS[0]
+  const preset = useSelectedPreset()
+  const { add } = useMeals()
+  const { markUsed } = usePresets()
+  const [saving, setSaving] = useState(false)
+  const carbs = preset.items.reduce((sum, item) => sum + item.carb_g, 0)
+  const fat = preset.items.reduce((sum, item) => sum + item.fat_g, 0)
+
+  async function saveMeal() {
+    setSaving(true)
+    try {
+      await add({
+        date: todayKey(),
+        meal_type: preset.meal_type,
+        items: preset.items,
+        total_kcal: preset.total_kcal,
+        total_protein_g: preset.total_protein_g,
+        total_carb_g: carbs,
+        total_fat_g: fat,
+      })
+      if (preset.id !== DEFAULT_BREAKFAST.id) await markUsed(preset.id)
+      navigate('/log/meal/saved')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <AppScreen hideNav>
@@ -73,7 +119,7 @@ export function LogMealConfirmRoute() {
 
         <div className={styles.heroPanel}>
           <p className="dq-eyebrow" style={{ color: 'rgba(255,255,255,.82)' }}>
-            Total · meal
+            Total - meal
           </p>
           <div className={styles.heroKpi}>
             {preset.total_kcal}
@@ -81,8 +127,8 @@ export function LogMealConfirmRoute() {
           </div>
           <div className={styles.macroGrid}>
             <span>{preset.total_protein_g}g protein</span>
-            <span>27g carbs</span>
-            <span>11g fat</span>
+            <span>{carbs}g carbs</span>
+            <span>{fat}g fat</span>
           </div>
         </div>
 
@@ -93,7 +139,7 @@ export function LogMealConfirmRoute() {
               <span className={styles.rowText}>
                 <strong>{item.name}</strong>
                 <span className={styles.rowSub}>
-                  {item.kcal} kcal · {item.protein_g}g P · {item.carb_g}g C · {item.fat_g}g F
+                  {item.kcal} kcal - {item.protein_g}g P - {item.carb_g}g C - {item.fat_g}g F
                 </span>
               </span>
               <span className="dq-pill">{item.portion}x</span>
@@ -102,7 +148,7 @@ export function LogMealConfirmRoute() {
         </Card>
 
         <div className={styles.pageFooter}>
-          <Button onClick={() => navigate('/log/meal/saved')}>Save · {preset.total_kcal} kcal</Button>
+          <Button onClick={() => void saveMeal()}>{saving ? 'Saving...' : `Save - ${preset.total_kcal} kcal`}</Button>
         </div>
       </div>
     </AppScreen>
@@ -121,11 +167,11 @@ export function LogMealSavedRoute() {
               <Icon color="#fff" name="check" size={86} stroke={3} />
             </div>
             <h1 className={styles.headerTitle}>Breakfast logged</h1>
-            <p className={styles.subtitle}>350 kcal · 38g protein · 1,600 kcal left today</p>
+            <p className={styles.subtitle}>Saved to Firebase and synced to today's totals.</p>
             <div style={{ height: 22 }} />
             <span className="dq-pill">
               <Icon color="var(--a1)" fill="var(--a1)" name="flame" size={14} />
-              Day 15 streak unlocked
+              Streak ready
             </span>
           </div>
         </div>

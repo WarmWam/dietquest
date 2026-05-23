@@ -1,8 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
-import { MOCK_SLEEP, MOCK_WATER_LOGS, MOCK_WEIGHTS, MOCK_WORKOUT } from '@/lib/mock'
+import { todayKey } from '@/lib/dates'
+import { useSleep } from '@/hooks/useSleep'
+import { useWater } from '@/hooks/useWater'
+import { useWeights } from '@/hooks/useWeights'
+import { useWorkouts } from '@/hooks/useWorkouts'
 
 function Header({ title }: { title: string }) {
   const navigate = useNavigate()
@@ -18,27 +22,31 @@ function Header({ title }: { title: string }) {
 }
 
 export function LogWaterRoute() {
+  const { data, totalMl, add, loading } = useWater()
+  const percent = Math.min(totalMl / 3000, 1)
+
   return (
     <AppScreen hideNav>
       <div className={styles.screen}>
         <Header title="Water" />
         <div className={styles.waterGlass}>
-          <div className={styles.waterLevel} />
+          <div className={styles.waterLevel} style={{ height: `${percent * 100}%` }} />
           <div className={styles.glassText}>
             <div>
               <strong className="dq-num" style={{ fontSize: 56 }}>
-                1.5
+                {(totalMl / 1000).toFixed(1)}
               </strong>
-              <p>of 3.0 L · 50%</p>
+              <p>of 3.0 L - {Math.round(percent * 100)}%</p>
             </div>
           </div>
         </div>
         <div className={styles.metricGrid}>
-          <Button variant="secondary">+ 250 ml</Button>
-          <Button variant="secondary">+ 500 ml</Button>
+          <Button onClick={() => void add(250)} variant="secondary">+ 250 ml</Button>
+          <Button onClick={() => void add(500)} variant="secondary">+ 500 ml</Button>
         </div>
         <Card padding={12}>
-          {MOCK_WATER_LOGS.map((log) => (
+          {loading ? <p className={styles.subtitle}>Loading water logs...</p> : data.length === 0 ? <p className={styles.subtitle}>No water logged yet today.</p> : null}
+          {data.map((log) => (
             <div className={styles.habitRow} key={log.id}>
               <Icon color="#0EA5E9" name="drop" />
               <span className={styles.rowText}>
@@ -54,7 +62,20 @@ export function LogWaterRoute() {
 }
 
 export function LogWeightRoute() {
-  const latest = MOCK_WEIGHTS[MOCK_WEIGHTS.length - 1]
+  const { data, add } = useWeights(30)
+  const latest = data[data.length - 1]
+  const [value, setValue] = useState(latest?.weight_kg.toFixed(1) ?? '80.0')
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (latest) setValue(latest.weight_kg.toFixed(1))
+  }, [latest])
+
+  async function saveWeight() {
+    await add({ date: todayKey(), weight_kg: Number(value) })
+    navigate('/progress?tab=weight')
+  }
+
   return (
     <AppScreen hideNav>
       <div className={styles.screen}>
@@ -63,27 +84,32 @@ export function LogWeightRoute() {
           <div>
             <p className="dq-eyebrow">Today</p>
             <strong className="dq-num" style={{ fontSize: 88 }}>
-              {latest.weight_kg.toFixed(1)}
+              {Number(value || 0).toFixed(1)}
             </strong>
             <span className={styles.subtitle}> kg</span>
-            <p className={styles.subtitle}>Previous 78.5 · -0.3 kg</p>
+            <p className={styles.subtitle}>{latest ? `Previous ${latest.weight_kg.toFixed(1)} kg` : 'First weight log'}</p>
           </div>
         </div>
         <div className={styles.numberPad}>
-          {['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '⌫'].map((key) => (
-            <button className={styles.padButton} key={key} type="button">
+          {['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '<'].map((key) => (
+            <button className={styles.padButton} key={key} onClick={() => setValue((current) => (key === '<' ? current.slice(0, -1) || '0' : `${current}${key}`))} type="button">
               {key}
             </button>
           ))}
         </div>
         <div style={{ height: 14 }} />
-        <Button>Save weight</Button>
+        <Button onClick={() => void saveWeight()}>Save weight</Button>
       </div>
     </AppScreen>
   )
 }
 
 export function LogSleepRoute() {
+  const { data, upsert } = useSleep()
+  const sleep = data ?? { id: todayKey(), date: todayKey(), bedtime: '22:30', wake_time: '06:00', duration_min: 450, quality_1_5: 4 }
+  const hours = Math.floor(sleep.duration_min / 60)
+  const minutes = sleep.duration_min % 60
+
   return (
     <AppScreen hideNav>
       <div className={`${styles.screen} ${styles.scroll}`}>
@@ -92,25 +118,25 @@ export function LogSleepRoute() {
           <div style={{ textAlign: 'center' }}>
             <Icon color="var(--a1)" name="moon" size={30} />
             <div className="dq-num" style={{ fontSize: 62, fontWeight: 900 }}>
-              7h 24m
+              {hours}h {minutes}m
             </div>
             <p style={{ color: 'var(--success)', fontWeight: 800 }}>within target window</p>
           </div>
         </Card>
         <div className={styles.topStats}>
-          <Metric label="Bedtime" sub="last night" value={MOCK_SLEEP.bedtime} />
-          <Metric label="Wake" sub="this morning" value={MOCK_SLEEP.wake_time} />
+          <Metric label="Bedtime" sub="last night" value={sleep.bedtime} />
+          <Metric label="Wake" sub="this morning" value={sleep.wake_time} />
         </div>
         <Card padding={16}>
           <p className={styles.fieldLabel}>Sleep quality</p>
           <div className={styles.screenHeader}>
             {[1, 2, 3, 4, 5].map((rating) => (
-              <Icon color={rating <= MOCK_SLEEP.quality_1_5 ? '#F59E0B' : 'var(--line-strong)'} fill={rating <= MOCK_SLEEP.quality_1_5 ? '#F59E0B' : 'none'} key={rating} name="star" size={30} />
+              <Icon color={rating <= sleep.quality_1_5 ? '#F59E0B' : 'var(--line-strong)'} fill={rating <= sleep.quality_1_5 ? '#F59E0B' : 'none'} key={rating} name="star" size={30} />
             ))}
           </div>
         </Card>
         <div className={styles.pageFooter}>
-          <Button>Save sleep</Button>
+          <Button onClick={() => void upsert({ date: todayKey(), bedtime: sleep.bedtime, wake_time: sleep.wake_time, duration_min: sleep.duration_min, quality_1_5: sleep.quality_1_5 })}>Save sleep</Button>
         </div>
       </div>
     </AppScreen>
@@ -126,11 +152,11 @@ export function LogWorkoutRoute() {
         <Card raised padding={20}>
           <p className="dq-eyebrow">Template</p>
           <h1 className={styles.headerTitle}>Incline walk</h1>
-          <p className={styles.subtitle}>45 min · 8% incline · 5.5 km/h</p>
+          <p className={styles.subtitle}>45 min - 8% incline - 5.5 km/h</p>
         </Card>
         <div className={styles.topStats}>
-          <Metric label="Incline" sub="treadmill" value={`${MOCK_WORKOUT.incline_pct}%`} />
-          <Metric label="Speed" sub="km/h" value={`${MOCK_WORKOUT.speed_kmh}`} />
+          <Metric label="Incline" sub="treadmill" value="8%" />
+          <Metric label="Speed" sub="km/h" value="5.5" />
         </div>
         <div className={styles.pageFooter}>
           <Button icon="play" onClick={() => navigate('/log/workout/active')}>
@@ -161,7 +187,7 @@ export function LogWorkoutActiveRoute() {
     <AppScreen bg="linear-gradient(180deg, #5B6CFF 0%, #B17AFF 50%, #FF6B9D 100%)" hideNav statusDark={false}>
       <div className={`${styles.screen} ${styles.activeWorkout}`}>
         <div className={styles.screenHeader}>
-          <span className="dq-pill" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>LIVE · Incline walk</span>
+          <span className="dq-pill" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>LIVE - Incline walk</span>
           <Icon color="#fff" name="bell" />
         </div>
         <div className={styles.fullCenter}>
@@ -189,6 +215,13 @@ export function LogWorkoutActiveRoute() {
 
 export function LogWorkoutSummaryRoute() {
   const navigate = useNavigate()
+  const { add } = useWorkouts(30)
+
+  async function saveWorkout() {
+    await add({ date: todayKey(), type: 'incline_walk', duration_min: 45, incline_pct: 8.2, speed_kmh: 5.5, kcal_burned: 328, mood: 'strong' })
+    navigate('/')
+  }
+
   return (
     <AppScreen hideNav>
       <div className={`${styles.screen} ${styles.scroll}`}>
@@ -206,7 +239,7 @@ export function LogWorkoutSummaryRoute() {
           <Metric label="Avg speed" sub="km/h" value="5.5" />
         </div>
         <div className={styles.pageFooter}>
-          <Button onClick={() => navigate('/')}>Save workout</Button>
+          <Button onClick={() => void saveWorkout()}>Save workout</Button>
         </div>
       </div>
     </AppScreen>
