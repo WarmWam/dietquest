@@ -2,6 +2,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Card, Icon, Skeleton } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
+import { todayKey, daysAgoKey } from '@/lib/dates'
+import { useDayTotals } from '@/hooks/useDayTotals'
 import { useMeals } from '@/hooks/useMeals'
 import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
@@ -15,6 +17,8 @@ const tabs: Array<{ id: ProgressTab; label: string }> = [
   { id: 'kcal', label: 'Calories' },
   { id: 'activity', label: 'Activity' },
 ]
+
+const DAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 export function ProgressRoute() {
   const [params] = useSearchParams()
@@ -124,7 +128,18 @@ function WeightTab() {
 function CaloriesTab() {
   const { data: today } = useToday()
   const { data: meals } = useMeals()
-  const days = [0, 0, 0, 0, 0, 0, today.totals.kcal]
+  const { data: weekTotals } = useDayTotals(7)
+
+  // Build 7-day data: oldest to newest
+  const days = weekTotals.map((t) => t.totals.kcal)
+  const dayLabels = weekTotals.map((t) => {
+    const d = new Date(t.date + 'T00:00:00')
+    return DAY_SHORT[d.getDay()]
+  })
+
+  const todayDate = todayKey()
+  const maxKcal = Math.max(...days, 1)
+
   return (
     <>
       <div className={styles.chartCard}>
@@ -134,12 +149,15 @@ function CaloriesTab() {
         </strong>
         <p className={styles.subtitle}>{today.totals.protein_g}g protein logged</p>
         <div className={styles.bars}>
-          {days.map((kcal, index) => (
-            <div className={styles.barColumn} key={`${kcal}-${index}`}>
-              <div className={styles.bar} style={{ background: index === 6 ? 'var(--a-grad)' : 'var(--bg-soft)', height: `${Math.max((kcal / 2400) * 100, 6)}%` }} />
-              <span className="dq-eyebrow">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][index]}</span>
-            </div>
-          ))}
+          {days.map((kcal, index) => {
+            const isToday = weekTotals[index]?.date === todayDate
+            return (
+              <div className={styles.barColumn} key={`${weekTotals[index]?.date}-${index}`}>
+                <div className={styles.bar} style={{ background: isToday ? 'var(--a-grad)' : 'var(--bg-soft)', height: `${Math.max((kcal / maxKcal) * 100, 6)}%` }} />
+                <span className="dq-eyebrow">{dayLabels[index] ?? '?'}</span>
+              </div>
+            )
+          })}
         </div>
       </div>
       <Card padding={16}>
@@ -163,6 +181,30 @@ function ActivityTab() {
   const { data: workouts } = useWorkouts(90)
   const totalMinutes = workouts.reduce((sum, workout) => sum + workout.duration_min, 0)
   const burned = workouts.reduce((sum, workout) => sum + workout.kcal_burned, 0)
+
+  // Build heatmap: 13 weeks × 7 days = 91 cells representing last 91 days
+  const today = new Date()
+  const workoutDates = new Set(workouts.map((w) => w.date))
+
+  // Compute best week (most workout minutes in any 7-day window)
+  function computeBestWeek(): number {
+    if (workouts.length === 0) return 0
+    let best = 0
+    for (let weekStart = 0; weekStart < 13; weekStart++) {
+      let weekMin = 0
+      for (let d = 0; d < 7; d++) {
+        const dayOffset = weekStart * 7 + d
+        const dateKey = daysAgoKey(90 - dayOffset)
+        const dayWorkouts = workouts.filter((w) => w.date === dateKey)
+        weekMin += dayWorkouts.reduce((s, w) => s + w.duration_min, 0)
+      }
+      best = Math.max(best, weekMin)
+    }
+    return best
+  }
+
+  const bestWeekMin = computeBestWeek()
+
   return (
     <>
       <div className={styles.chartCard}>
@@ -179,8 +221,12 @@ function ActivityTab() {
           {Array.from({ length: 13 }, (_, week) => (
             <div className={styles.heatCol} key={week}>
               {Array.from({ length: 7 }, (_, day) => {
-                const active = workouts.length > week + day
-                return <span className={styles.heatCell} key={day} style={{ opacity: active ? 0.8 : 0.12 }} />
+                const dayOffset = (12 - week) * 7 + (6 - day)
+                const cellDate = new Date(today)
+                cellDate.setDate(cellDate.getDate() - dayOffset)
+                const cellKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`
+                const hasWorkout = workoutDates.has(cellKey)
+                return <span className={styles.heatCell} key={day} style={{ opacity: hasWorkout ? 0.8 : 0.12 }} />
               })}
             </div>
           ))}
@@ -190,7 +236,7 @@ function ActivityTab() {
         <Metric label="Walks" value={`${workouts.length}`} />
         <Metric label="Minutes" value={`${totalMinutes}`} />
         <Metric label="Burned" value={`${burned}`} />
-        <Metric label="Best week" value={workouts.length ? 'active' : 'none'} />
+        <Metric label="Best week" value={bestWeekMin ? `${bestWeekMin} min` : '—'} />
       </div>
     </>
   )

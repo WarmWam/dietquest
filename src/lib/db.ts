@@ -197,6 +197,21 @@ export function watchDayTotals(uid: string, date: string, cb: WatchCallback<DayT
   )
 }
 
+export async function getDayTotalsRange(uid: string, dates: string[]): Promise<DayTotals[]> {
+  const snapshots = await Promise.all(
+    dates.map((date) => getDoc(doc(db, 'users', uid, 'days', date)))
+  )
+  return dates.map((date, i) => {
+    const snap = snapshots[i]
+    if (snap.exists()) return deserializeDayTotals(snap.id, snap.data())
+    return {
+      date,
+      totals: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, water_ml: 0 },
+      habits: { water_done: false, walk_done: false, sleep_on_time: false },
+    }
+  })
+}
+
 export async function upsertDayTotals(uid: string, date: string, totals: DayTotals): Promise<void> {
   await setDoc(doc(db, 'users', uid, 'days', date), { ...totals, updated_at: serverTimestamp() }, { merge: true })
 }
