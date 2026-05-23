@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { useWatch } from '@/hooks/useWatch'
+import { watchUser } from '@/lib/db'
 import type { User } from '@/types/domain'
 
 type UserHookState = {
@@ -14,35 +14,9 @@ type UserHookState = {
 
 export function useUser(): UserHookState {
   const { user } = useAuth()
-  const [profile, setProfile] = useState<User | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [exists, setExists] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const fallback = useMemo<User | null>(() => null, [])
+  const subscribe = useCallback((uid: string, next: (data: User | null, error: Error | null) => void) => watchUser(uid, ({ data, error }) => next(data, error)), [])
+  const { data: profile, loading, error } = useWatch(fallback, subscribe)
 
-  useEffect(() => {
-    if (!user) {
-      setProfile(null)
-      setLoading(false)
-      setExists(false)
-      setError(null)
-      return undefined
-    }
-
-    setLoading(true)
-    return onSnapshot(
-      doc(db, 'users', user.uid),
-      (snapshot) => {
-        setExists(snapshot.exists())
-        setProfile(snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as User) : null)
-        setLoading(false)
-        setError(null)
-      },
-      (nextError) => {
-        setError(nextError)
-        setLoading(false)
-      },
-    )
-  }, [user])
-
-  return { user, profile, loading, exists, error }
+  return { user, profile, loading, exists: Boolean(profile), error }
 }
