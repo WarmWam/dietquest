@@ -165,8 +165,8 @@ export function CalendarTab() {
             const meal = mealMap.get(cell.date)
             const workout = workoutMap.get(cell.date)
             const isToday = cell.date === todayKey
-            const mealStarted = !!meal && (meal.breakfast.length + meal.lunch.length + meal.dinner.length + meal.snack.length) > 0
-            const mealIncomplete = mealStarted && (meal!.breakfast.length === 0 || meal!.lunch.length === 0 || meal!.dinner.length === 0)
+            const mealIncomplete = !meal || meal.breakfast.length === 0 || meal.lunch.length === 0 || meal.dinner.length === 0
+            const showWorkout = !!workout && workout.type !== 'rest'
             return (
               <button
                 key={cell.date}
@@ -190,17 +190,13 @@ export function CalendarTab() {
                 }}
               >
                 <span>{cell.day}</span>
-                {(mealIncomplete || workout) ? (
+                {(mealIncomplete || showWorkout) ? (
                   <span style={{ display: 'flex', gap: 2, marginTop: 2 }}>
                     {mealIncomplete ? (
                       <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--danger)' }} />
                     ) : null}
-                    {workout ? (
-                      <span style={{
-                        width: 4, height: 4, borderRadius: '50%',
-                        background: workout.type === 'rest' ? 'var(--t-3)' : 'var(--success)',
-                        opacity: workout.type === 'rest' ? 0.5 : 1,
-                      }} />
+                    {showWorkout ? (
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--success)' }} />
                     ) : null}
                   </span>
                 ) : null}
@@ -214,9 +210,6 @@ export function CalendarTab() {
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} /> workout
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--t-3)', opacity: 0.5 }} /> rest
           </span>
         </div>
       </Card>
@@ -238,13 +231,13 @@ function TodayPlanCard({
   onOpen: () => void
 }) {
   const hasAny = !!meal && meal.totals.kcal > 0
-  const items: { slot: string; tag: string; items: MealPlanItem[] }[] = meal
-    ? [
-        { slot: 'Breakfast', tag: 'AM', items: meal.breakfast },
-        { slot: 'Lunch', tag: 'NO', items: meal.lunch },
-        { slot: 'Dinner', tag: 'PM', items: meal.dinner },
-        { slot: 'Snack', tag: 'SN', items: meal.snack },
-      ].filter((s) => s.items.length > 0)
+  const items = meal
+    ? ([
+        { slot: 'breakfast', icon: 'sun' as const, color: '#FB923C', items: meal.breakfast },
+        { slot: 'lunch', icon: 'sun' as const, color: '#F59E0B', items: meal.lunch },
+        { slot: 'dinner', icon: 'moon' as const, color: '#6366F1', items: meal.dinner },
+        { slot: 'snack', icon: 'sparkle' as const, color: '#EC4899', items: meal.snack },
+      ]).filter((s) => s.items.length > 0)
     : []
   const workoutMeta = workout ? WORKOUT_PLAN_TYPES.find((t) => t.id === workout.type) : null
 
@@ -280,13 +273,10 @@ function TodayPlanCard({
       </button>
 
       {items.map((slot) => (
-        <div key={slot.slot} style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
-          <span className={styles.mealIcon} style={{ fontSize: 11, fontWeight: 800 }}>{slot.tag}</span>
-          <span className={styles.rowText} style={{ flex: 1 }}>
-            <strong style={{ fontSize: 14 }}>{slot.slot}</strong>
-            <span className={styles.rowSub}>
-              {slot.items.map((it) => `${it.food_name}${it.portion !== 1 ? ` ×${it.portion}` : ''}`).join(', ')}
-            </span>
+        <div key={slot.slot} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+          <Icon color={slot.color} name={slot.icon} size={22} />
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--t-1)', lineHeight: 1.4 }}>
+            {slot.items.map((it) => `${it.food_name}${it.portion !== 1 ? ` ×${it.portion}` : ''}`).join(', ')}
           </span>
           <span className="dq-pill" style={{ alignSelf: 'center' }}>
             {slot.items.reduce((s, it) => s + it.kcal, 0)} kcal
@@ -294,14 +284,11 @@ function TodayPlanCard({
         </div>
       ))}
 
-      {workout ? (
-        <div style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', opacity: workout.type === 'rest' ? 0.5 : 1 }}>
-          <span className={styles.statIcon} style={{ color: workout.type === 'rest' ? 'var(--t-3)' : 'var(--success)' }}>
-            <Icon name={(workoutMeta?.icon as any) ?? 'walk'} size={18} />
-          </span>
-          <span className={styles.rowText} style={{ flex: 1 }}>
-            <strong style={{ fontSize: 14 }}>{workout.type === 'rest' ? 'Rest day' : 'Workout'}</strong>
-            <span className={styles.rowSub}>{workoutMeta?.label ?? workout.type}{workout.duration_min ? ` · ${workout.duration_min} min` : ''}</span>
+      {workout && workout.type !== 'rest' ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+          <Icon color="var(--success)" name={(workoutMeta?.icon as any) ?? 'walk'} size={22} />
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--t-1)' }}>
+            {workoutMeta?.label ?? workout.type}{workout.duration_min ? ` · ${workout.duration_min} min` : ''}
           </span>
         </div>
       ) : null}
