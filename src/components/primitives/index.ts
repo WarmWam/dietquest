@@ -6,6 +6,7 @@ export { ImageSlot } from './ImageSlot'
 export { Phone } from './Phone'
 export { Ring } from './Ring'
 export { Skeleton } from './Skeleton'
+export { Stepper } from './Stepper'
 export { ToastContainer } from './Toast'
 
 
