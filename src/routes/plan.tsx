@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Skeleton, Stepper } from '@/components/primitives'
 import { CalendarTab } from '@/components/plan/Calendar'
-import { DEFAULT_SETTINGS } from '@/data/defaults'
 import { useFoods } from '@/hooks/useFoods'
 import { useUser } from '@/hooks/useUser'
 import { toast } from '@/stores/toastStore'
@@ -12,8 +11,7 @@ import { FOOD_CATEGORIES, type Food, type FoodCategory } from '@/types/domain'
 type PlanTab = 'calendar' | 'library'
 
 export function PlanRoute() {
-  const { profile, loading: userLoading, error: userError } = useUser()
-  const settings = profile?.settings ?? DEFAULT_SETTINGS
+  const { error: userError } = useUser()
   const [tab, setTab] = useState<PlanTab>('calendar')
 
   useEffect(() => {
@@ -24,20 +22,6 @@ export function PlanRoute() {
     <AppScreen activeNav="plan">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
         <h1 className={styles.headerTitle}>Plan</h1>
-        <p className={styles.subtitle}>Calendar your week + manage your food library.</p>
-
-        {userLoading ? (
-          <div className={styles.heroPanel} style={{ minHeight: 110 }}>
-            <Skeleton width={80} height={12} variant="text" style={{ background: 'rgba(255,255,255,0.25)' }} />
-            <Skeleton width="70%" height={26} variant="text" style={{ background: 'rgba(255,255,255,0.25)', marginTop: 8 }} />
-          </div>
-        ) : (
-          <div className={styles.heroPanel}>
-            <p className="dq-eyebrow" style={{ color: 'rgba(255,255,255,.82)' }}>Daily target</p>
-            <h2 style={{ margin: '4px 0' }}>{settings.daily_kcal_target} kcal · {settings.daily_protein_target}g protein</h2>
-            <p>3 meals + 1 snack · walk 6 days/week · 7.5 hr sleep</p>
-          </div>
-        )}
 
         <div className="dq-seg" style={{ width: '100%', margin: '14px 0 16px' }}>
           {(['calendar', 'library'] as PlanTab[]).map((id) => (

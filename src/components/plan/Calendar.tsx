@@ -102,8 +102,13 @@ export function CalendarTab() {
   for (let d = 1; d <= daysInMonth; d += 1) cells.push({ day: d, date: formatDateKey(year, month, d) })
   while (cells.length < 42) cells.push(null)
 
+  const todayMeal = mealMap.get(todayKey) ?? null
+  const todayWorkout = workoutMap.get(todayKey) ?? null
+
   return (
     <>
+      <TodayPlanCard meal={todayMeal} workout={todayWorkout} onOpen={() => setSelectedDate(todayKey)} />
+
       <Card padding={12} style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <button aria-label="Previous month" className={styles.iconButton} onClick={prevMonth} type="button">
@@ -175,30 +180,89 @@ export function CalendarTab() {
         </div>
       </Card>
 
-      <Card padding={14} style={{ background: 'var(--bg-soft)' }}>
-        <p className="dq-eyebrow">Today shortcut</p>
-        <button
-          onClick={() => setSelectedDate(todayKey)}
-          type="button"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            width: '100%',
-            padding: '10px 0 2px',
-            border: 0,
-            background: 'transparent',
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          <strong>Plan today's meals</strong>
-          <Icon color="var(--a1)" name="chevron" />
-        </button>
-      </Card>
-
       {selectedDate && <DaySheet date={selectedDate} onClose={() => setSelectedDate(null)} />}
     </>
+  )
+}
+
+function TodayPlanCard({
+  meal,
+  workout,
+  onOpen,
+}: {
+  meal: MealPlan | null
+  workout: WorkoutPlan | null
+  onOpen: () => void
+}) {
+  const hasAny = !!meal && meal.totals.kcal > 0
+  const items: { slot: string; tag: string; items: MealPlanItem[] }[] = meal
+    ? [
+        { slot: 'Breakfast', tag: 'AM', items: meal.breakfast },
+        { slot: 'Lunch', tag: 'NO', items: meal.lunch },
+        { slot: 'Dinner', tag: 'PM', items: meal.dinner },
+        { slot: 'Snack', tag: 'SN', items: meal.snack },
+      ].filter((s) => s.items.length > 0)
+    : []
+  const workoutMeta = workout ? WORKOUT_PLAN_TYPES.find((t) => t.id === workout.type) : null
+
+  return (
+    <Card padding={16} raised style={{ marginBottom: 14 }}>
+      <button
+        onClick={onOpen}
+        type="button"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          border: 0,
+          background: 'transparent',
+          cursor: 'pointer',
+          outline: 'none',
+          padding: 0,
+          marginBottom: hasAny || workout ? 12 : 0,
+        }}
+      >
+        <span style={{ textAlign: 'left' }}>
+          <p className="dq-eyebrow">Today</p>
+          {hasAny ? (
+            <strong className="dq-num" style={{ fontSize: 22 }}>
+              {meal!.totals.kcal} kcal · {meal!.totals.protein_g}g P
+            </strong>
+          ) : (
+            <strong style={{ fontSize: 15 }}>No plan yet · tap to add</strong>
+          )}
+        </span>
+        <Icon color="var(--a1)" name="chevron" />
+      </button>
+
+      {items.map((slot) => (
+        <div key={slot.slot} style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+          <span className={styles.mealIcon} style={{ fontSize: 11, fontWeight: 800 }}>{slot.tag}</span>
+          <span className={styles.rowText} style={{ flex: 1 }}>
+            <strong style={{ fontSize: 14 }}>{slot.slot}</strong>
+            <span className={styles.rowSub}>
+              {slot.items.map((it) => `${it.food_name}${it.portion !== 1 ? ` ×${it.portion}` : ''}`).join(', ')}
+            </span>
+          </span>
+          <span className="dq-pill" style={{ alignSelf: 'center' }}>
+            {slot.items.reduce((s, it) => s + it.kcal, 0)} kcal
+          </span>
+        </div>
+      ))}
+
+      {workout ? (
+        <div style={{ display: 'flex', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+          <span className={styles.statIcon} style={{ color: 'var(--success)' }}>
+            <Icon name={(workoutMeta?.icon as any) ?? 'walk'} size={18} />
+          </span>
+          <span className={styles.rowText} style={{ flex: 1 }}>
+            <strong style={{ fontSize: 14 }}>Workout</strong>
+            <span className={styles.rowSub}>{workoutMeta?.label ?? workout.type}{workout.duration_min ? ` · ${workout.duration_min} min` : ''}</span>
+          </span>
+        </div>
+      ) : null}
+    </Card>
   )
 }
 
