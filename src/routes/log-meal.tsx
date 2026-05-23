@@ -281,7 +281,7 @@ export function LogMealConfirmRoute() {
         total_carb_g: totalCarbs,
         total_fat_g: totalFat,
       })
-      if (preset.id !== DEFAULT_BREAKFAST.id && preset.id !== 'custom-meal') {
+      if (preset.id !== DEFAULT_BREAKFAST.id && preset.id !== 'custom-meal' && !preset.id.startsWith('food-')) {
         await markUsed(preset.id)
       }
       toast.success(`Saved · ${totalKcal} kcal`)

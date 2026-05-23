@@ -431,22 +431,29 @@ function PlanMealCard({
   const protein = Math.round(items.reduce((sum, item) => sum + item.protein_g, 0) * 10) / 10
   const actualItems = loggedMeals.flatMap((meal) => meal.items)
   const actualNames = new Set(actualItems.map((item) => item.name))
+  const actualKcal = loggedMeals.reduce((sum, meal) => sum + meal.total_kcal, 0)
+  const actualProtein = Math.round(loggedMeals.reduce((sum, meal) => sum + meal.total_protein_g, 0) * 10) / 10
   const ateDifferent = done && items.length > 0 && !items.every((item) => actualNames.has(item.food_name))
+  const overPlan = done && actualKcal > kcal
+  const displayKcal = done ? actualKcal : kcal
+  const displayProtein = done ? actualProtein : protein
 
   return (
     <Card
       padding={14}
       style={{
-        background: done ? 'color-mix(in oklab, #BBF7D0 48%, var(--surface))' : undefined,
-        borderColor: done ? 'rgba(34, 197, 94, 0.36)' : undefined,
+        background: done ? (overPlan ? 'color-mix(in oklab, #FEF3C7 58%, var(--surface))' : 'color-mix(in oklab, #BBF7D0 48%, var(--surface))') : undefined,
+        borderColor: done ? (overPlan ? 'rgba(245, 158, 11, 0.42)' : 'rgba(34, 197, 94, 0.36)') : undefined,
         marginBottom: 10,
       }}
     >
       <div className={styles.habitRow}>
         <Icon color={mealMeta[mealType].color} name={mealMeta[mealType].icon} />
         <span className={styles.rowText}>
-          <strong>{items.length ? `${kcal} kcal` : 'No planned menu'}</strong>
-          <span className={styles.rowSub} style={{ marginTop: 4 }}>{items.length ? `${protein}g protein planned` : 'Use Ate different to log this slot'}</span>
+          <strong>{done ? `${displayKcal} kcal actual` : items.length ? `${displayKcal} kcal` : 'No planned menu'}</strong>
+          <span className={styles.rowSub} style={{ marginTop: 4 }}>
+            {done ? `${displayProtein}g protein actual${items.length ? ` - planned ${kcal} kcal` : ''}` : items.length ? `${displayProtein}g protein planned` : 'Use Ate different to log this slot'}
+          </span>
         </span>
         <span className="dq-check" data-on={done}>
           {done ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
@@ -464,7 +471,7 @@ function PlanMealCard({
       ) : null}
       {ateDifferent ? (
         <p className={styles.subtitle} style={{ margin: '0 0 12px 34px' }}>
-          Actual: {actualItems.map((item) => item.name).join(', ')}
+          Actual: {actualItems.map((item) => `${item.name} (${item.kcal} kcal)`).join(', ')}
         </p>
       ) : null}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
