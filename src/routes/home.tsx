@@ -13,10 +13,10 @@ import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
 import type { MealLog, MealType, UserSettings } from '@/types/domain'
 
-type SlotIcon = 'sun' | 'moon' | 'sparkle'
+type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
 
 const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
-  breakfast: { icon: 'sun', color: '#FB923C' },
+  breakfast: { icon: 'sunrise', color: '#FB923C' },
   lunch: { icon: 'sun', color: '#F59E0B' },
   dinner: { icon: 'moon', color: '#6366F1' },
   snack: { icon: 'sparkle', color: '#EC4899' },
@@ -144,6 +144,11 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
   const workoutTarget = 60
   const workoutPct = Math.min(totalWorkoutMin / workoutTarget, 1)
 
+  // Compute totals live from meals[] (source of truth) — denormalized
+  // today.totals can drift if a meal was deleted without decrementing.
+  const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
+  const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
+
   useEffect(() => {
     if (weightsError || workoutsError) toast.error("Couldn't load home stats. Try again.")
   }, [weightsError, workoutsError])
@@ -154,10 +159,10 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
         <div className={styles.screenHeader}>
           <span className="dq-eyebrow">Today</span>
           <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
-            {Math.max(settings.daily_kcal_target - today.totals.kcal, 0)} kcal left
+            {Math.max(settings.daily_kcal_target - liveKcal, 0)} kcal left
           </span>
         </div>
-        <Ring eaten={today.totals.kcal} protein={today.totals.protein_g} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} />
+        <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} />
       </Card>
 
       <div className={styles.topStats}>
@@ -235,16 +240,13 @@ function HomeEmptyContent({ target }: { target: number }) {
     <>
       <Card raised padding={18}>
         <Ring eaten={0} label="not logged yet" protein={0} size={210} target={target} />
-        <p className={styles.subtitle} style={{ textAlign: 'center', margin: '14px 0' }}>
-          Log your first meal to start tracking. The streak starts with one tap.
+        <p className={styles.subtitle} style={{ textAlign: 'center', margin: '14px 0 4px' }}>
+          Log your first meal to start tracking.
         </p>
-        <Button icon="plus" onClick={() => navigate('/log/meal')}>
-          Log breakfast
-        </Button>
       </Card>
       <SectionLabel>Today's meals</SectionLabel>
       <div className={styles.mealList}>
-        <MealRow icon="sun" color="#FB923C" items="Tap to log" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="sunrise" color="#FB923C" items="Tap to log" onClick={() => navigate('/log/meal')} />
         <MealRow icon="sun" color="#F59E0B" items="Tap to log" onClick={() => navigate('/log/meal')} />
         <MealRow icon="moon" color="#6366F1" items="Tap to log" onClick={() => navigate('/log/meal')} />
       </div>

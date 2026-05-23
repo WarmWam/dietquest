@@ -6,7 +6,6 @@ import { DEFAULT_PROFILE } from '@/data/defaults'
 import { todayKey, daysAgoKey } from '@/lib/dates'
 import { useDayTotals } from '@/hooks/useDayTotals'
 import { useMeals } from '@/hooks/useMeals'
-import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
@@ -131,32 +130,37 @@ function WeightTab() {
 }
 
 function CaloriesTab() {
-  const { data: today, error: todayError } = useToday()
   const { data: meals, error: mealsError } = useMeals()
   const { data: weekTotals, error: weekTotalsError } = useDayTotals(7)
 
-  // Build 7-day data: oldest to newest
-  const days = weekTotals.map((t) => t.totals.kcal)
+  // Live sum from meals[] (source of truth) — denormalized day totals
+  // can drift if a meal was deleted without decrementing.
+  const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
+  const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
+
+  // Build 7-day data: oldest to newest. Replace today's cached entry
+  // with live sum so deletes show up immediately.
+  const todayDate = todayKey()
+  const days = weekTotals.map((t) => t.date === todayDate ? liveKcal : t.totals.kcal)
   const dayLabels = weekTotals.map((t) => {
     const d = new Date(t.date + 'T00:00:00')
     return DAY_SHORT[d.getDay()]
   })
 
-  const todayDate = todayKey()
   const maxKcal = Math.max(...days, 1)
 
   useEffect(() => {
-    if (todayError || mealsError || weekTotalsError) toast.error("Couldn't load calorie progress. Try again.")
-  }, [todayError, mealsError, weekTotalsError])
+    if (mealsError || weekTotalsError) toast.error("Couldn't load calorie progress. Try again.")
+  }, [mealsError, weekTotalsError])
 
   return (
     <>
       <div className={styles.chartCard}>
         <p className="dq-eyebrow">Today</p>
         <strong className="dq-num" style={{ fontSize: 42 }}>
-          {today.totals.kcal}
+          {liveKcal}
         </strong>
-        <p className={styles.subtitle}>{today.totals.protein_g}g protein logged</p>
+        <p className={styles.subtitle}>{liveProtein}g protein logged</p>
         <div className={styles.bars}>
           {days.map((kcal, index) => {
             const isToday = weekTotals[index]?.date === todayDate

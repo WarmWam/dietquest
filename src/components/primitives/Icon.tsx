@@ -20,6 +20,7 @@ export type IconName =
   | 'edit'
   | 'target'
   | 'sun'
+  | 'sunrise'
   | 'play'
   | 'pause'
   | 'stop'
@@ -107,6 +108,15 @@ export function Icon({
       <>
         <circle cx="12" cy="12" r="4" />
         <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </>
+    ),
+    sunrise: (
+      <>
+        <circle cx="12" cy="11" r="3" />
+        <path d="M12 4v2M5 11H3M21 11h-2M6.34 5.34l1.41 1.41M16.25 6.75l1.41-1.41" />
+        <path d="M3 17h4M17 17h4" />
+        <path d="M8 20h8" />
+        <path d="M11.5 14.5c-2 .3-3.5 1.6-3.5 3.5h8c0-1.9-1.5-3.2-3.5-3.5" />
       </>
     ),
     play: <path d="M6 4l14 8-14 8z" fill={color} stroke="none" />,

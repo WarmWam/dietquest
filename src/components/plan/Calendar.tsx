@@ -26,10 +26,10 @@ import {
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
-type SlotIcon = 'sun' | 'moon' | 'sparkle'
+type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
 
 const MEAL_SLOTS: { id: MealSlot; icon: SlotIcon; color: string }[] = [
-  { id: 'breakfast', icon: 'sun', color: '#FB923C' },
+  { id: 'breakfast', icon: 'sunrise', color: '#FB923C' },
   { id: 'lunch', icon: 'sun', color: '#F59E0B' },
   { id: 'dinner', icon: 'moon', color: '#6366F1' },
   { id: 'snack', icon: 'sparkle', color: '#EC4899' },
@@ -235,7 +235,7 @@ function TodayPlanCard({
   const hasAny = !!meal && meal.totals.kcal > 0
   const items = meal
     ? ([
-        { slot: 'breakfast', icon: 'sun' as const, color: '#FB923C', items: meal.breakfast },
+        { slot: 'breakfast', icon: 'sunrise' as const, color: '#FB923C', items: meal.breakfast },
         { slot: 'lunch', icon: 'sun' as const, color: '#F59E0B', items: meal.lunch },
         { slot: 'dinner', icon: 'moon' as const, color: '#6366F1', items: meal.dinner },
         { slot: 'snack', icon: 'sparkle' as const, color: '#EC4899', items: meal.snack },

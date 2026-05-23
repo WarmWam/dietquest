@@ -265,7 +265,32 @@ export function watchMeals(uid: string, date: string, cb: WatchCallback<MealLog[
 }
 
 export async function deleteMeal(uid: string, mealId: string): Promise<void> {
-  await deleteDoc(doc(db, 'users', uid, 'meals', mealId))
+  // Read meal first to decrement day totals atomically. If meal doesn't
+  // exist (already deleted), just no-op.
+  await runTransaction(db, async (tx) => {
+    const mealRef = doc(db, 'users', uid, 'meals', mealId)
+    const snap = await tx.get(mealRef)
+    if (!snap.exists()) return
+    const meal = snap.data() as Partial<MealLog>
+    if (meal.date) {
+      const dayRef = doc(db, 'users', uid, 'days', meal.date)
+      tx.set(
+        dayRef,
+        {
+          date: meal.date,
+          totals: {
+            kcal: increment(-(meal.total_kcal ?? 0)),
+            protein_g: increment(-(meal.total_protein_g ?? 0)),
+            carb_g: increment(-(meal.total_carb_g ?? 0)),
+            fat_g: increment(-(meal.total_fat_g ?? 0)),
+          },
+          updated_at: serverTimestamp(),
+        },
+        { merge: true },
+      )
+    }
+    tx.delete(mealRef)
+  })
 }
 
 export async function addWeight(uid: string, weight: WeightLog): Promise<void> {
