@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Button, Card, Icon } from '@/components/primitives'
+import { Button, Card, Icon, Skeleton } from '@/components/primitives'
 import { DEFAULT_BREAKFAST } from '@/data/defaults'
 import { todayKey } from '@/lib/dates'
 import { useMeals } from '@/hooks/useMeals'
 import { usePresets } from '@/hooks/usePresets'
 import { useMealDraft } from '@/stores/mealDraft'
 import type { MealType } from '@/types/domain'
+import { toast } from '@/stores/toastStore'
+import { haptic } from '@/lib/haptic'
 
 export function LogMealRoute() {
   const navigate = useNavigate()
@@ -67,9 +69,18 @@ export function LogMealRoute() {
         <Section title={`Suggested for ${mealType}`} />
         <div className={styles.presetList}>
           {loading ? (
-            <Card padding={16}>
-              <p className={styles.subtitle}>Loading presets...</p>
-            </Card>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[1, 2, 3, 4].map((i) => (
+                <Card key={i} padding={12} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Skeleton width={36} height={36} variant="circle" />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <Skeleton width="45%" height={16} variant="text" />
+                    <Skeleton width="70%" height={12} variant="text" />
+                  </div>
+                  <Skeleton width={16} height={16} variant="circle" />
+                </Card>
+              ))}
+            </div>
           ) : presets.length === 0 ? (
             <button
               className={styles.presetRow}
@@ -159,7 +170,13 @@ export function LogMealConfirmRoute() {
       if (preset.id !== DEFAULT_BREAKFAST.id && preset.id !== 'custom-meal') {
         await markUsed(preset.id)
       }
+      toast.success(`Saved · ${preset.total_kcal} kcal`)
+      haptic(10)
       navigate('/log/meal/saved')
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't save. Tap to retry.")
+      haptic([20, 40, 20])
     } finally {
       setSaving(false)
     }

@@ -1,6 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Card, Icon } from '@/components/primitives'
+import { Card, Icon, Skeleton } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
 import { useMeals } from '@/hooks/useMeals'
 import { useToday } from '@/hooks/useToday'
@@ -64,7 +64,28 @@ function WeightTab() {
   const toTarget = Number((currentWeight - userProfile.weight_target_kg).toFixed(1))
 
   if (loading) {
-    return <EmptyPanel title="Loading weights" text="Syncing your progress chart." />
+    return (
+      <>
+        <div className={styles.chartCard} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className={styles.screenHeader}>
+            <div>
+              <Skeleton width={80} height={14} variant="text" />
+              <Skeleton width={140} height={38} variant="text" style={{ marginTop: 6 }} />
+            </div>
+            <Skeleton width={70} height={24} radius="var(--r-pill)" />
+          </div>
+          <Skeleton width="100%" height={140} />
+        </div>
+        <div className={styles.metricGrid} style={{ marginTop: 14 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} padding={14} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Skeleton width={40} height={12} variant="text" />
+              <Skeleton width={70} height={24} variant="text" />
+            </Card>
+          ))}
+        </div>
+      </>
+    )
   }
 
   return (
@@ -172,15 +193,6 @@ function ActivityTab() {
         <Metric label="Best week" value={workouts.length ? 'active' : 'none'} />
       </div>
     </>
-  )
-}
-
-function EmptyPanel({ title, text }: { title: string; text: string }) {
-  return (
-    <Card padding={18}>
-      <strong>{title}</strong>
-      <p className={styles.subtitle}>{text}</p>
-    </Card>
   )
 }
 

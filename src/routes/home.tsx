@@ -1,6 +1,9 @@
+import React, { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Button, Card, Icon, Ring, type IconName } from '@/components/primitives'
+import { Button, Card, Icon, Ring, Skeleton, type IconName } from '@/components/primitives'
+import { toast } from '@/stores/toastStore'
+import { haptic } from '@/lib/haptic'
 import { DEFAULT_SETTINGS } from '@/data/defaults'
 import { useMeals } from '@/hooks/useMeals'
 import { useToday } from '@/hooks/useToday'
@@ -24,9 +27,85 @@ export function HomeRoute() {
   const sheet = params.get('sheet') === '1'
   const settings = profile?.settings ?? DEFAULT_SETTINGS
 
+  const [pulling, setPulling] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [pullProgress, setPullProgress] = useState(0)
+  const [touchStart, setTouchStart] = useState(0)
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.currentTarget.scrollTop === 0) {
+      setTouchStart(e.touches[0].clientY)
+      setPulling(true)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!pulling || refreshing) return
+    const currentY = e.touches[0].clientY
+    const diff = currentY - touchStart
+    if (diff > 0) {
+      const progress = Math.min(diff / 1.5, 70)
+      setPullProgress(progress)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (!pulling) return
+    setPulling(false)
+    if (pullProgress >= 50) {
+      setRefreshing(true)
+      haptic(5)
+      setTimeout(() => {
+        setRefreshing(false)
+        setPullProgress(0)
+        toast.success("Synced with Firebase")
+      }, 1000)
+    } else {
+      setPullProgress(0)
+    }
+  }
+
   return (
     <AppScreen activeNav="home">
-      <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+      <div
+        className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {(pullProgress > 0 || refreshing) && (
+          <div
+            style={{
+              height: refreshing ? 50 : pullProgress,
+              transition: pulling ? 'none' : 'height 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              background: 'var(--surface-2)',
+              borderBottom: '1px solid var(--line)',
+              borderRadius: 'var(--r-md)',
+              margin: '0 0 10px 0',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                animation: refreshing ? 'spin 1s linear infinite' : 'none',
+                transform: refreshing ? 'none' : `rotate(${pullProgress * 5}deg)`,
+              }}
+            >
+              <Icon name="sparkle" size={24} color="var(--a1)" />
+            </div>
+          </div>
+        )}
         <header className={styles.screenHeader}>
           <div>
             <p className={styles.subtitle}>Good morning</p>
@@ -36,7 +115,7 @@ export function HomeRoute() {
         </header>
 
         {userLoading || mealsLoading || todayLoading ? (
-          <LoadingCard />
+          <HomeSkeleton />
         ) : empty ? (
           <HomeEmptyContent target={settings.daily_kcal_target} />
         ) : (
@@ -150,15 +229,48 @@ function HomeEmptyContent({ target }: { target: number }) {
   )
 }
 
-function LoadingCard() {
+function HomeSkeleton() {
   return (
-    <Card raised padding={18}>
-      <p className="dq-eyebrow">Loading</p>
-      <h2 className={styles.headerTitle} style={{ fontSize: 24 }}>
-        Syncing today
-      </h2>
-      <p className={styles.subtitle}>Pulling your Firebase data.</p>
-    </Card>
+    <>
+      <Card raised padding={18} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginBottom: 16 }}>
+          <Skeleton width={80} height={14} variant="text" />
+          <Skeleton width={60} height={14} variant="text" />
+        </div>
+        <Skeleton width={210} height={210} variant="circle" />
+      </Card>
+
+      <div className={styles.topStats} style={{ marginTop: 14 }}>
+        <Card padding={14} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Skeleton width={28} height={28} variant="circle" />
+          <Skeleton width="60%" height={20} variant="text" />
+          <Skeleton width="40%" height={12} variant="text" />
+          <Skeleton width="100%" height={6} radius="3px" />
+        </Card>
+        <Card padding={14} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Skeleton width={28} height={28} variant="circle" />
+          <Skeleton width="60%" height={20} variant="text" />
+          <Skeleton width="40%" height={12} variant="text" />
+          <Skeleton width="100%" height={6} radius="3px" />
+        </Card>
+      </div>
+
+      <div className={styles.sectionLabel} style={{ marginTop: 18, marginBottom: 8 }}>
+        <Skeleton width={120} height={14} variant="text" />
+      </div>
+      <div className={styles.mealList} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} padding={12} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Skeleton width={32} height={32} variant="circle" />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Skeleton width="50%" height={16} variant="text" />
+              <Skeleton width="80%" height={12} variant="text" />
+            </div>
+            <Skeleton width={16} height={16} variant="circle" />
+          </Card>
+        ))}
+      </div>
+    </>
   )
 }
 

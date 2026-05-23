@@ -1,11 +1,42 @@
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Button, Card, Icon } from '@/components/primitives'
+import { Button, Card, Icon, Skeleton } from '@/components/primitives'
 import { DEFAULT_SETTINGS, PLAN_SECTIONS } from '@/data/defaults'
 import { useUser } from '@/hooks/useUser'
 
 export function PlanRoute() {
-  const { profile } = useUser()
+  const { profile, loading } = useUser()
   const settings = profile?.settings ?? DEFAULT_SETTINGS
+
+  if (loading) {
+    return (
+      <AppScreen activeNav="plan">
+        <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
+          <h1 className={styles.headerTitle}>Plan</h1>
+          <Skeleton width={220} height={14} variant="text" style={{ marginTop: 4, marginBottom: 12 }} />
+          <Card className={styles.habitRow} padding={12} style={{ margin: '16px 0' }}>
+            <Icon color="var(--t-3)" name="search" />
+            <span className={styles.subtitle}>Search meals, recipes...</span>
+          </Card>
+          <div className={styles.heroPanel} style={{ minHeight: 140 }}>
+            <Skeleton width={80} height={12} variant="text" style={{ background: 'rgba(255,255,255,0.25)' }} />
+            <Skeleton width="70%" height={26} variant="text" style={{ background: 'rgba(255,255,255,0.25)', marginTop: 8 }} />
+            <Skeleton width="90%" height={14} variant="text" style={{ background: 'rgba(255,255,255,0.25)', marginTop: 8 }} />
+          </div>
+          <div className={styles.accordion} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            {[1, 2, 3].map((i) => (
+              <Card key={i} padding={16} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Skeleton width={32} height={32} variant="circle" />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Skeleton width="50%" height={16} variant="text" />
+                  <Skeleton width="30%" height={12} variant="text" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </AppScreen>
+    )
+  }
 
   return (
     <AppScreen activeNav="plan">
