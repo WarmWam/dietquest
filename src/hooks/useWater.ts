@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { todayKey } from '@/lib/dates'
-import { addWater, watchWaterToday } from '@/lib/db'
+import { addWater, deleteWater, watchWaterToday } from '@/lib/db'
 import { useAuth } from '@/hooks/useAuth'
 import { useWatch } from '@/hooks/useWatch'
 import type { WaterLog } from '@/types/domain'
@@ -19,6 +19,10 @@ export function useWater(date = todayKey()) {
     add: (ml: number) => {
       if (!user) throw new Error('Sign in required')
       return addWater(user.uid, date, ml)
+    },
+    remove: (log: WaterLog) => {
+      if (!user) throw new Error('Sign in required')
+      return deleteWater(user.uid, date, log.id, log.ml)
     },
   }
 }

@@ -327,8 +327,15 @@ export function watchWaterToday(uid: string, date: string, cb: WatchCallback<Wat
   )
 }
 
-export async function deleteWater(uid: string, id: string): Promise<void> {
-  await deleteDoc(doc(db, 'users', uid, 'water', id))
+export async function deleteWater(uid: string, date: string, id: string, ml: number): Promise<void> {
+  await runTransaction(db, async (tx) => {
+    tx.delete(doc(db, 'users', uid, 'water', id))
+    tx.set(
+      doc(db, 'users', uid, 'days', date),
+      { date, totals: { water_ml: increment(-ml) }, updated_at: serverTimestamp() },
+      { merge: true },
+    )
+  })
 }
 
 export async function addWorkout(uid: string, workout: Omit<WorkoutLog, 'id'>): Promise<string> {

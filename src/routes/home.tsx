@@ -7,6 +7,7 @@ import { haptic } from '@/lib/haptic'
 import { DEFAULT_SETTINGS } from '@/data/defaults'
 import { useMealPlan } from '@/hooks/useMealPlan'
 import { useMeals } from '@/hooks/useMeals'
+import { useSleep } from '@/hooks/useSleep'
 import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
 import { useWater } from '@/hooks/useWater'
@@ -14,7 +15,7 @@ import { useWorkoutPlan } from '@/hooks/useWorkoutPlan'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
-import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WorkoutPlan } from '@/types/domain'
+import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WaterLog, type WorkoutPlan } from '@/types/domain'
 
 type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
 
@@ -151,10 +152,15 @@ function HomeFullContent({
   const todayKey = getTodayKey()
   const { data: plan, error: planError } = useMealPlan(todayKey)
   const { data: workoutPlan, error: workoutPlanError } = useWorkoutPlan(todayKey)
-  const { add: addWater, totalMl, error: waterError } = useWater(todayKey)
+  const { data: waterLogs, add: addWater, remove: removeWater, totalMl, error: waterError } = useWater(todayKey)
+  const { data: sleep, upsert: upsertSleep, error: sleepError } = useSleep(todayKey)
   const { data: weights, error: weightsError } = useWeights(30)
   const { data: workouts, add: addWorkout, error: workoutsError } = useWorkouts(1)
   const [savingTask, setSavingTask] = useState<string | null>(null)
+  const [waterAmount, setWaterAmount] = useState(0)
+  const [sleepStart, setSleepStart] = useState(sleep?.bedtime ?? '')
+  const [sleepEnd, setSleepEnd] = useState(sleep?.wake_time ?? '')
+  const [workoutKcal, setWorkoutKcal] = useState('')
   const latestWeight = weights[weights.length - 1]
   const todayWorkouts = workouts.filter((w) => w.date === todayKey)
   const totalWorkoutMin = todayWorkouts.reduce((sum, w) => sum + w.duration_min, 0)
@@ -167,8 +173,15 @@ function HomeFullContent({
   const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
 
   useEffect(() => {
-    if (weightsError || workoutsError || planError || workoutPlanError || waterError) toast.error("Couldn't load home plan. Try again.")
-  }, [weightsError, workoutsError, planError, workoutPlanError, waterError])
+    if (sleep) {
+      setSleepStart(sleep.bedtime)
+      setSleepEnd(sleep.wake_time)
+    }
+  }, [sleep])
+
+  useEffect(() => {
+    if (weightsError || workoutsError || planError || workoutPlanError || waterError || sleepError) toast.error("Couldn't load home plan. Try again.")
+  }, [weightsError, workoutsError, planError, workoutPlanError, waterError, sleepError])
 
   async function confirmMeal(mealType: MealType, items: MealPlanItem[], loggedMeals: MealLog[]) {
     if (savingTask) return
@@ -218,11 +231,12 @@ function HomeFullContent({
   }
 
   async function confirmWater() {
-    if (savingTask) return
+    if (savingTask || waterAmount <= 0) return
     setSavingTask('water')
     try {
-      await addWater(500)
-      toast.success('Water confirmed +500 ml')
+      await addWater(waterAmount)
+      toast.success(`+${waterAmount} ml`)
+      setWaterAmount(0)
       haptic(5)
     } catch (err) {
       console.error(err)
@@ -232,11 +246,24 @@ function HomeFullContent({
     }
   }
 
+  async function deleteWaterLog(log: WaterLog) {
+    if (!window.confirm(`Delete ${log.ml} ml at ${log.time}?`)) return
+    setSavingTask(`water-${log.id}`)
+    try {
+      await removeWater(log)
+      toast.success('Water deleted')
+      haptic(5)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't delete water.")
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
   async function confirmWorkout(planToLog: WorkoutPlan) {
     if (savingTask) return
-    const input = prompt('How many kcal did you burn?', '0')
-    if (input === null) return
-    const kcal = Number(input)
+    const kcal = Number(workoutKcal)
     if (!Number.isFinite(kcal) || kcal < 0 || kcal > 3000) {
       toast.error('Enter kcal between 0 and 3000.')
       return
@@ -249,11 +276,37 @@ function HomeFullContent({
         duration_min: planToLog.duration_min,
         kcal_burned: Math.round(kcal),
       })
+      setWorkoutKcal('')
       toast.success('Workout confirmed')
       haptic(10)
     } catch (err) {
       console.error(err)
       toast.error("Couldn't confirm workout.")
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
+  async function saveSleep() {
+    if (savingTask) return
+    if (!sleepStart || !sleepEnd) {
+      toast.error('Choose start and end sleep times.')
+      return
+    }
+    setSavingTask('sleep')
+    try {
+      await upsertSleep({
+        date: todayKey,
+        bedtime: sleepStart,
+        wake_time: sleepEnd,
+        duration_min: calculateSleepDuration(sleepStart, sleepEnd),
+        quality_1_5: sleep?.quality_1_5 ?? 3,
+      })
+      toast.success('Sleep saved')
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't save sleep.")
     } finally {
       setSavingTask(null)
     }
@@ -300,22 +353,36 @@ function HomeFullContent({
 
       <SectionLabel>Daily habits</SectionLabel>
       <div className={styles.habitBox}>
-        <Habit done={today.habits.water_done || totalMl >= 3000} label="Drink 3 L of water" sub={`${(totalMl / 1000).toFixed(1)} / 3.0 L`} />
-        <div style={{ padding: '0 0 10px 38px' }}>
-          <Button disabled={savingTask === 'water'} onClick={() => void confirmWater()} variant="secondary">
-            Confirm +500 ml
-          </Button>
-        </div>
+        <WaterTask
+          amount={waterAmount}
+          done={totalMl >= 3000}
+          logs={waterLogs}
+          onAdd={(ml) => setWaterAmount((current) => current + ml)}
+          onDelete={(log) => void deleteWaterLog(log)}
+          onSubmit={() => void confirmWater()}
+          saving={savingTask === 'water'}
+          totalMl={totalMl}
+        />
         <div className="dq-divider" />
         <WorkoutPlanTask
           done={todayWorkouts.length > 0}
           onConfirm={() => workoutPlan ? void confirmWorkout(workoutPlan) : navigate('/plan')}
           plan={workoutPlan}
           saving={savingTask === 'workout'}
+          setWorkoutKcal={setWorkoutKcal}
           totalWorkoutMin={totalWorkoutMin}
+          workoutKcal={workoutKcal}
         />
         <div className="dq-divider" />
-        <Habit done={today.habits.sleep_on_time} label="Sleep by 22:30" sub="goal - 7.5 hrs" />
+        <SleepTask
+          done={today.habits.sleep_on_time}
+          end={sleepEnd}
+          onEndChange={setSleepEnd}
+          onSave={() => void saveSleep()}
+          onStartChange={setSleepStart}
+          saving={savingTask === 'sleep'}
+          start={sleepStart}
+        />
       </div>
 
       {latestWeight ? (
@@ -417,13 +484,17 @@ function WorkoutPlanTask({
   onConfirm,
   plan,
   saving,
+  setWorkoutKcal,
   totalWorkoutMin,
+  workoutKcal,
 }: {
   done: boolean
   onConfirm: () => void
   plan: WorkoutPlan | null
   saving: boolean
+  setWorkoutKcal: (value: string) => void
   totalWorkoutMin: number
+  workoutKcal: string
 }) {
   const meta = plan ? WORKOUT_PLAN_TYPES.find((type) => type.id === plan.type) : null
   const label = meta?.label ?? 'No workout planned'
@@ -439,12 +510,147 @@ function WorkoutPlanTask({
     <>
       <Habit done={done || plan?.type === 'rest'} label={label} sub={sub} />
       <div style={{ padding: '0 0 10px 38px' }}>
-        <Button disabled={saving || done || plan?.type === 'rest'} onClick={onConfirm} variant="secondary">
-          {plan ? 'Confirm workout' : 'Plan workout'}
-        </Button>
+        {plan && plan.type !== 'rest' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 44px', gap: 8 }}>
+            <input
+              inputMode="numeric"
+              onChange={(event) => setWorkoutKcal(event.target.value)}
+              placeholder="kcal burned"
+              style={{ background: 'var(--bg-soft)', border: 0, borderRadius: 'var(--r-md)', color: 'var(--t-1)', font: 'inherit', fontWeight: 800, outline: 'none', padding: '10px 12px', width: '100%' }}
+              type="number"
+              value={workoutKcal}
+            />
+            <button aria-label="Submit workout" disabled={saving || done} onClick={onConfirm} type="button" style={{ alignItems: 'center', background: 'var(--a-grad)', border: 0, borderRadius: 'var(--r-md)', color: '#fff', display: 'flex', justifyContent: 'center' }}>
+              <Icon name="arrowUp" />
+            </button>
+          </div>
+        ) : (
+          <Button disabled={saving || done || plan?.type === 'rest'} onClick={onConfirm} variant="secondary">
+            {plan ? 'Confirm workout' : 'Plan workout'}
+          </Button>
+        )}
       </div>
     </>
   )
+}
+
+function WaterTask({
+  amount,
+  done,
+  logs,
+  onAdd,
+  onDelete,
+  onSubmit,
+  saving,
+  totalMl,
+}: {
+  amount: number
+  done: boolean
+  logs: WaterLog[]
+  onAdd: (ml: number) => void
+  onDelete: (log: WaterLog) => void
+  onSubmit: () => void
+  saving: boolean
+  totalMl: number
+}) {
+  return (
+    <div style={{ background: done ? 'color-mix(in oklab, #BBF7D0 42%, transparent)' : undefined, borderRadius: 'var(--r-md)', padding: '10px 0' }}>
+      <Habit done={done} label="Drink 3 L of water" sub={`${(totalMl / 1000).toFixed(1)} / 3.0 L`} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 44px', gap: 8, padding: '8px 0 10px 38px' }}>
+        <button onClick={() => onAdd(50)} type="button" style={miniActionStyle}>+50</button>
+        <button onClick={() => onAdd(100)} type="button" style={miniActionStyle}>+100</button>
+        <div style={{ alignItems: 'center', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', display: 'flex', fontWeight: 900, justifyContent: 'center' }}>{amount}</div>
+        <button aria-label="Submit water" disabled={saving || amount <= 0} onClick={onSubmit} type="button" style={{ ...sendButtonStyle, opacity: amount > 0 ? 1 : 0.45 }}>
+          <Icon name="arrowUp" />
+        </button>
+      </div>
+      {logs.length ? (
+        <div style={{ display: 'grid', gap: 6, paddingLeft: 38 }}>
+          {logs.map((log) => (
+            <div key={log.id} style={{ alignItems: 'center', display: 'grid', gap: 8, gridTemplateColumns: '1fr auto auto' }}>
+              <span className={styles.rowSub}>{log.time}</span>
+              <strong style={{ fontSize: 13 }}>{log.ml} ml</strong>
+              <button aria-label="Delete water" onClick={() => onDelete(log)} type="button" style={{ background: 'transparent', border: 0, color: 'var(--t-3)', padding: 4 }}>
+                <Icon name="x" size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function SleepTask({
+  done,
+  end,
+  onEndChange,
+  onSave,
+  onStartChange,
+  saving,
+  start,
+}: {
+  done: boolean
+  end: string
+  onEndChange: (value: string) => void
+  onSave: () => void
+  onStartChange: (value: string) => void
+  saving: boolean
+  start: string
+}) {
+  return (
+    <>
+      <Habit done={done} label="Sleep" sub={start && end ? `${start} - ${end}` : 'Start sleep - End sleep'} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 44px', gap: 8, padding: '0 0 10px 38px' }}>
+        <input aria-label="Start sleep" onChange={(event) => onStartChange(event.target.value)} style={timeInputStyle} type="time" value={start} />
+        <input aria-label="End sleep" onChange={(event) => onEndChange(event.target.value)} style={timeInputStyle} type="time" value={end} />
+        <button aria-label="Save sleep" disabled={saving} onClick={onSave} type="button" style={sendButtonStyle}>
+          <Icon name="arrowUp" />
+        </button>
+      </div>
+    </>
+  )
+}
+
+const miniActionStyle = {
+  background: 'var(--bg-soft)',
+  border: 0,
+  borderRadius: 'var(--r-md)',
+  color: 'var(--t-1)',
+  fontWeight: 900,
+  padding: '10px 0',
+}
+
+const sendButtonStyle = {
+  alignItems: 'center',
+  background: 'var(--a-grad)',
+  border: 0,
+  borderRadius: 'var(--r-md)',
+  color: '#fff',
+  display: 'flex',
+  justifyContent: 'center',
+}
+
+const timeInputStyle = {
+  background: 'var(--bg-soft)',
+  border: 0,
+  borderRadius: 'var(--r-md)',
+  color: 'var(--t-1)',
+  font: 'inherit',
+  fontWeight: 800,
+  outline: 'none',
+  padding: '10px 8px',
+  width: '100%',
+}
+
+function calculateSleepDuration(start: string, end: string): number {
+  const [startH, startM] = start.split(':').map(Number)
+  const [endH, endM] = end.split(':').map(Number)
+  if ([startH, startM, endH, endM].some((n) => Number.isNaN(n))) return 0
+  let startMinutes = startH * 60 + startM
+  let endMinutes = endH * 60 + endM
+  if (endMinutes <= startMinutes) endMinutes += 24 * 60
+  return endMinutes - startMinutes
 }
 
 function HomeErrorCard({ error }: { error: Error }) {
