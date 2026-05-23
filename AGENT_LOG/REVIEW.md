@@ -32,10 +32,15 @@ test -f .env.local && grep -c "^VITE_FB" .env.local
 Also required: Firebase project must have these enabled in console:
 - Authentication → Google sign-in method enabled
 - Cloud Firestore → created, region `asia-southeast1`
-- Storage → created, same region
+- ~~Storage → created, same region~~ **DEFERRED to v1.1** — Firebase Storage now requires Blaze plan (credit card). Skipping for v1.0.
 - Cloud Messaging → Web Push certificate generated (VAPID key)
 
 Human will have done these before starting Phase 5. If not, ask via STATUS.md.
+
+**Important Phase 5 scope change (2026-05-23):** Storage is DEFERRED. Do NOT
+implement Step 11 (weight photo upload). Skip `src/lib/storage.ts` and
+storage.rules. Skip getStorage() in firebase.ts. LogWeight screen should
+hide/disable the photo upload UI with a TODO comment for v1.1.
 
 ---
 
@@ -48,7 +53,7 @@ sign-in. Data persists across devices and survives offline.
 
 #### Step 1 — Firebase init (30 min)
 
-Create `src/lib/firebase.ts`:
+Create `src/lib/firebase.ts` (NO Storage import — deferred to v1.1):
 
 ```typescript
 import { initializeApp } from 'firebase/app';
@@ -58,7 +63,6 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 
 const app = initializeApp({
   apiKey: import.meta.env.VITE_FB_API_KEY,
@@ -76,7 +80,7 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(),
   }),
 });
-export const storage = getStorage(app);
+// NOTE: Storage deferred to v1.1 (requires Blaze plan). Re-add when needed.
 ```
 
 **Verify:** `import { db } from '@/lib/firebase'` works without runtime error.
@@ -95,17 +99,7 @@ service cloud.firestore {
 }
 ```
 
-Create `storage.rules` (project root):
-```javascript
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
+~~Create `storage.rules`~~ — **DEFERRED to v1.1** (Storage not enabled).
 
 Create `firebase.json` (project root):
 ```json
@@ -113,9 +107,6 @@ Create `firebase.json` (project root):
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "storage.rules"
   }
 }
 ```
@@ -307,15 +298,14 @@ On final onboarding step (Goal screen → "Create plan" button):
 2. Write `users/{uid}` doc with profile + settings
 3. Navigate to `/`
 
-#### Step 11 — Storage for weight photos (defer to last)
+#### Step 11 — ~~Storage for weight photos~~ **SKIPPED in v1.0**
 
-`src/lib/storage.ts`:
-```typescript
-uploadWeightPhoto(uid, date, file): Promise<string>  // returns Storage path
-deleteWeightPhoto(uid, path): Promise<void>
-```
-
-Wire to `LogWeight` screen — optional photo upload before save.
+Deferred to v1.1 (Firebase Storage requires Blaze plan upgrade with credit
+card; user opted to defer). On `LogWeight` screen:
+- Hide or disable the photo upload UI
+- Add comment: `// TODO(v1.1): re-enable when Storage available`
+- Do NOT create `src/lib/storage.ts`
+- Do NOT import `firebase/storage` anywhere
 
 ### Rules
 
