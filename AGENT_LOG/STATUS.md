@@ -42,6 +42,8 @@
   - Removed visible `Data` section from Profile.
   - Normalized settings rows so Theme/Vibrations/Notifications do not overlap and remain tappable.
   - Styled `Sign out` as dark red destructive text.
+- [x] Profile overlap follow-up fixed
+  - Prevented scroll-screen children and settings sections from flex-shrinking, which was compressing Theme/Vibrations/Notifications into each other on mobile viewport.
 
 ---
 
@@ -52,6 +54,7 @@
 - `280e5e6` - `fix(routes): surface query errors via toast on log + progress screens`
 - `9f5b9b4` - `fix(ui): remove mock status bar and restore progress tabs`
 - `de82459` - `fix(profile): simplify settings layout`
+- pending - `fix(profile): prevent settings sections from overlapping`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

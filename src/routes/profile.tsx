@@ -414,10 +414,10 @@ export function ProfileRoute() {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <>
+    <section style={{ flexShrink: 0 }}>
       <div className={styles.sectionLabel}><span className="dq-eyebrow">{title}</span></div>
       <div className={styles.settingList}>{children}</div>
       <div style={{ height: 16 }} />
-    </>
+    </section>
   )
 }

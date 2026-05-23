@@ -106,3 +106,9 @@ Format per entry:
 - Verdict: 
 - Commit: de82459...HEAD
 - Notes: Human QA requested Profile cleanup: replaced text Edit button with in-card pencil icon, removed visible Data section, normalized settings rows to fix Theme/Vibrations layout overlap, and styled Sign out as dark red destructive text.
+
+## Phase 6.2 Follow-up - Profile overlap fix
+- Date: 2026-05-23
+- Verdict: 
+- Commit: pending
+- Notes: Fixed remaining Profile section overlap by preventing scroll-screen children and settings rows from flex-shrinking on the mobile viewport.
