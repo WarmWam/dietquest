@@ -9,7 +9,7 @@ import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
 import { haptic, isHapticsEnabled, setHapticsEnabled } from '@/lib/haptic'
-import { upsertUser, exportUserData } from '@/lib/db'
+import { upsertUser } from '@/lib/db'
 import { calculateBmr } from '@/lib/nutrition'
 import type { Sex } from '@/types/domain'
 
@@ -26,7 +26,6 @@ export function ProfileRoute() {
   const [isEditing, setIsEditing] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [exporting, setExporting] = useState(false)
   const [vibrations, setVibrations] = useState(isHapticsEnabled())
   const [notifications, setNotifications] = useState({
     breakfast: true,
@@ -154,34 +153,6 @@ export function ProfileRoute() {
     }
   }
 
-  async function handleExportData() {
-    if (!user || exporting) return
-    setExporting(true)
-    try {
-      const data = await exportUserData(user.uid)
-      if (!data) throw new Error("No data returned")
-
-      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`
-      const downloadAnchor = document.createElement('a')
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      
-      downloadAnchor.setAttribute('href', jsonString)
-      downloadAnchor.setAttribute('download', `dietquest-export-${dateStr}.json`)
-      document.body.appendChild(downloadAnchor)
-      downloadAnchor.click()
-      downloadAnchor.remove()
-      
-      toast.success("JSON backup downloaded!")
-      haptic(10)
-    } catch (err) {
-      console.error(err)
-      toast.error("Export failed. Tap to retry.")
-      haptic([20, 40, 20])
-    } finally {
-      setExporting(false)
-    }
-  }
-
   function handleSignOut() {
     const ok = window.confirm("Are you sure you want to sign out?")
     if (ok) {
@@ -224,17 +195,17 @@ export function ProfileRoute() {
     <AppScreen activeNav="profile">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
         <h1 className={styles.headerTitle}>Profile</h1>
-        <Card className={styles.habitRow} raised padding={18} style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Card raised padding={18} style={{ marginTop: 14, position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: 44 }}>
             <ImageSlot id="avatar" placeholder={displayName[0] ?? 'D'} shape="circle" style={{ width: 64, height: 64, minHeight: 64 }} />
             <span className={styles.rowText}>
               <strong>{displayName}</strong>
               <span className={styles.rowSub}>{userProfile.age} - {userProfile.height_cm} cm - Firebase sync on</span>
             </span>
           </div>
-          <Button onClick={() => setIsEditing(true)} variant="secondary" style={{ height: 34, padding: '0 14px', fontSize: 13 }}>
-            Edit
-          </Button>
+          <button aria-label="Edit profile" className={styles.iconButton} onClick={() => setIsEditing(true)} type="button" style={{ position: 'absolute', right: 16, top: 16 }}>
+            <Icon name="edit" size={18} />
+          </button>
         </Card>
         <Card padding={16} style={{ margin: '14px 0' }}>
           <p className="dq-eyebrow">Goal</p>
@@ -293,20 +264,7 @@ export function ProfileRoute() {
           <p className={styles.subtitle} style={{ padding: '8px 0 0 0', fontSize: 11 }}>Coming soon — preferences saved for v1.1</p>
         </Section>
 
-        <Section title="Data">
-          <button className={styles.settingRow} onClick={() => void handleExportData()} disabled={exporting} type="button" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', outline: 'none', cursor: 'pointer' }}>
-            <Icon color="var(--a1)" name="download" />
-            <span className={styles.rowText}>{exporting ? "Exporting..." : "Export data"}</span>
-            <span className={styles.rowSub}>JSON</span>
-          </button>
-          <button className={styles.settingRow} onClick={() => setShowAbout(true)} type="button" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', outline: 'none', cursor: 'pointer' }}>
-            <Icon color="var(--a1)" name="info" />
-            <span className={styles.rowText}>About DietQuest</span>
-            <span className={styles.rowSub}>v1.0.1</span>
-          </button>
-        </Section>
-
-        <Button onClick={handleSignOut} variant="ghost">
+        <Button onClick={handleSignOut} variant="ghost" style={{ color: '#991B1B', fontWeight: 800 }}>
           Sign out
         </Button>
       </div>

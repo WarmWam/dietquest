@@ -696,9 +696,17 @@
 .settingRow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  width: 100%;
+  min-height: 54px;
   padding: 13px 16px;
+  border: 0;
   border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--t-1);
+  cursor: pointer;
+  text-align: left;
 }
 
 .settingRow:last-child {
@@ -706,6 +714,7 @@
 }
 
 .switch {
+  flex: 0 0 auto;
   width: 44px;
   height: 26px;
   padding: 3px;
@@ -720,6 +729,7 @@
 }
 
 .switchKnob {
+  display: block;
   width: 20px;
   height: 20px;
   border-radius: 50%;
