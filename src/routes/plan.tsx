@@ -1,88 +1,404 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Card, Icon, Skeleton } from '@/components/primitives'
-import { DEFAULT_SETTINGS, PLAN_SECTIONS } from '@/data/defaults'
+import { Button, Card, Icon, Skeleton, Stepper } from '@/components/primitives'
+import { DEFAULT_SETTINGS } from '@/data/defaults'
+import { useFoods } from '@/hooks/useFoods'
 import { useUser } from '@/hooks/useUser'
 import { toast } from '@/stores/toastStore'
+import { haptic } from '@/lib/haptic'
+import { FOOD_CATEGORIES, type Food, type FoodCategory } from '@/types/domain'
+
+type PlanTab = 'calendar' | 'library'
 
 export function PlanRoute() {
-  const { profile, loading, error } = useUser()
+  const { profile, loading: userLoading, error: userError } = useUser()
   const settings = profile?.settings ?? DEFAULT_SETTINGS
-  const [openSection, setOpenSection] = useState<number | null>(0)
+  const [tab, setTab] = useState<PlanTab>('library')
 
   useEffect(() => {
-    if (error) toast.error("Couldn't load plan settings. Try again.")
-  }, [error])
-
-  if (loading) {
-    return (
-      <AppScreen activeNav="plan">
-        <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
-          <h1 className={styles.headerTitle}>Plan</h1>
-          <Skeleton width={220} height={14} variant="text" style={{ marginTop: 4, marginBottom: 12 }} />
-          <div className={styles.heroPanel} style={{ minHeight: 140 }}>
-            <Skeleton width={80} height={12} variant="text" style={{ background: 'rgba(255,255,255,0.25)' }} />
-            <Skeleton width="70%" height={26} variant="text" style={{ background: 'rgba(255,255,255,0.25)', marginTop: 8 }} />
-            <Skeleton width="90%" height={14} variant="text" style={{ background: 'rgba(255,255,255,0.25)', marginTop: 8 }} />
-          </div>
-          <div className={styles.accordion} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-            {[1, 2, 3].map((i) => (
-              <Card key={i} padding={16} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Skeleton width={32} height={32} variant="circle" />
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <Skeleton width="50%" height={16} variant="text" />
-                  <Skeleton width="30%" height={12} variant="text" />
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </AppScreen>
-    )
-  }
+    if (userError) toast.error("Couldn't load plan settings. Try again.")
+  }, [userError])
 
   return (
     <AppScreen activeNav="plan">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
         <h1 className={styles.headerTitle}>Plan</h1>
-        <p className={styles.subtitle}>Your reference for meals, recipes and routines.</p>
-        <div className={styles.heroPanel}>
-          <p className="dq-eyebrow" style={{ color: 'rgba(255,255,255,.82)' }}>Your plan</p>
-          <h2 style={{ margin: '4px 0' }}>{settings.daily_kcal_target} kcal - {settings.daily_protein_target}g protein</h2>
-          <p>3 meals + 1 snack - 6 days/week walk - 7.5 hr sleep</p>
+        <p className={styles.subtitle}>Calendar your week + manage your food library.</p>
+
+        {userLoading ? (
+          <div className={styles.heroPanel} style={{ minHeight: 110 }}>
+            <Skeleton width={80} height={12} variant="text" style={{ background: 'rgba(255,255,255,0.25)' }} />
+            <Skeleton width="70%" height={26} variant="text" style={{ background: 'rgba(255,255,255,0.25)', marginTop: 8 }} />
+          </div>
+        ) : (
+          <div className={styles.heroPanel}>
+            <p className="dq-eyebrow" style={{ color: 'rgba(255,255,255,.82)' }}>Daily target</p>
+            <h2 style={{ margin: '4px 0' }}>{settings.daily_kcal_target} kcal · {settings.daily_protein_target}g protein</h2>
+            <p>3 meals + 1 snack · walk 6 days/week · 7.5 hr sleep</p>
+          </div>
+        )}
+
+        <div className="dq-seg" style={{ width: '100%', margin: '14px 0 16px' }}>
+          {(['calendar', 'library'] as PlanTab[]).map((id) => (
+            <button
+              className="dq-seg-item"
+              data-active={tab === id}
+              key={id}
+              onClick={() => setTab(id)}
+              type="button"
+              style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
+            >
+              {id}
+            </button>
+          ))}
         </div>
-        <div className={styles.accordion}>
-          {PLAN_SECTIONS.map((section, index) => {
-            const isOpen = openSection === index
-            return (
-              <Card key={section.title} padding={0}>
-                <button
-                  className={styles.habitRow}
-                  onClick={() => setOpenSection(isOpen ? null : index)}
-                  style={{ padding: 16, width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
-                  type="button"
-                >
-                  <span className={styles.mealIcon}>{section.icon}</span>
-                  <span className={styles.rowText}>
-                    <strong>{section.title}</strong>
-                    <span className={styles.rowSub}>{section.items.length} items</span>
-                  </span>
-                  <Icon color="var(--t-3)" name={isOpen ? 'arrowUp' : 'chevron'} />
-                </button>
-                {isOpen ? (
-                  <div style={{ padding: '0 16px 14px' }}>
-                    {section.items.map((item) => (
-                      <div className={styles.habitRow} key={item}>
-                        <span className={styles.rowText}>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </Card>
-            )
-          })}
-        </div>
+
+        {tab === 'calendar' ? <CalendarTab /> : <LibraryTab />}
       </div>
     </AppScreen>
+  )
+}
+
+function CalendarTab() {
+  return (
+    <Card padding={28} style={{ textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+        <Icon color="var(--a1)" name="sparkle" size={42} />
+      </div>
+      <strong style={{ fontSize: 17 }}>Monthly meal calendar</strong>
+      <p className={styles.subtitle} style={{ marginTop: 8 }}>
+        Coming in v1.2.0 — plan every meal of the month from your food library, with workout slots too.
+      </p>
+    </Card>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Library tab
+// ─────────────────────────────────────────────────────────────
+
+type FilterCategory = FoodCategory | 'all'
+
+function LibraryTab() {
+  const { data: foods, loading, error, add, update, remove } = useFoods()
+  const [filter, setFilter] = useState<FilterCategory>('all')
+  const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState<Food | 'new' | null>(null)
+
+  useEffect(() => {
+    if (error) toast.error("Couldn't load food library.")
+  }, [error])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return foods.filter((food) => {
+      if (filter !== 'all' && food.category !== filter) return false
+      if (q && !food.name.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [foods, filter, query])
+
+  async function handleSave(food: Omit<Food, 'id' | 'created_at' | 'updated_at'>, id?: string) {
+    try {
+      if (id) {
+        await update(id, food)
+        toast.success(`Updated ${food.name}`)
+      } else {
+        await add(food)
+        toast.success(`Added ${food.name}`)
+      }
+      haptic(10)
+      setEditing(null)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't save food. Try again.")
+      haptic([20, 40, 20])
+    }
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!window.confirm(`Delete "${name}" from library?`)) return
+    try {
+      await remove(id)
+      toast.success(`Removed ${name}`)
+      haptic(10)
+      setEditing(null)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't delete. Try again.")
+      haptic([20, 40, 20])
+    }
+  }
+
+  return (
+    <>
+      <Card padding={10} style={{ marginBottom: 12 }}>
+        <input
+          type="search"
+          placeholder="Search food by name..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            fontSize: 14,
+            border: 0,
+            background: 'var(--bg-soft)',
+            borderRadius: 'var(--r-md)',
+            outline: 'none',
+            fontFamily: 'inherit',
+            color: 'var(--t-1)',
+          }}
+        />
+      </Card>
+
+      <div className="dq-h-scroll" style={{ margin: '0 -20px 14px 0', paddingRight: 20 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <CategoryChip active={filter === 'all'} label="All" onClick={() => setFilter('all')} />
+          {FOOD_CATEGORIES.map((cat) => (
+            <CategoryChip
+              active={filter === cat.id}
+              key={cat.id}
+              label={cat.label}
+              onClick={() => setFilter(cat.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} padding={12} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Skeleton width={36} height={36} variant="circle" />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Skeleton width="45%" height={16} variant="text" />
+                <Skeleton width="70%" height={12} variant="text" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card padding={22} style={{ textAlign: 'center', borderStyle: 'dashed' }}>
+          <Icon color="var(--t-3)" name="fork" size={28} />
+          <p className={styles.subtitle} style={{ marginTop: 10 }}>
+            {foods.length === 0 ? 'No foods yet — tap + to add your first.' : 'No foods match this filter.'}
+          </p>
+        </Card>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtered.map((food) => (
+            <FoodRow food={food} key={food.id} onClick={() => setEditing(food)} />
+          ))}
+        </div>
+      )}
+
+      <div style={{ height: 14 }} />
+      <Button icon="plus" onClick={() => setEditing('new')} variant="secondary">
+        Add food
+      </Button>
+
+      {editing && (
+        <FoodEditSheet
+          food={editing === 'new' ? null : editing}
+          onCancel={() => setEditing(null)}
+          onDelete={editing !== 'new' ? (id) => void handleDelete(id, editing.name) : undefined}
+          onSave={(food) => void handleSave(food, editing === 'new' ? undefined : editing.id)}
+        />
+      )}
+    </>
+  )
+}
+
+function CategoryChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      className="dq-seg-item"
+      data-active={active}
+      onClick={onClick}
+      type="button"
+      style={{
+        whiteSpace: 'nowrap',
+        border: 0,
+        background: active ? 'var(--a-soft)' : 'var(--bg-soft)',
+        color: active ? 'var(--a1)' : 'var(--t-2)',
+        padding: '6px 14px',
+        borderRadius: 'var(--r-pill)',
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function FoodRow({ food, onClick }: { food: Food; onClick: () => void }) {
+  const catMeta = FOOD_CATEGORIES.find((c) => c.id === food.category)
+  return (
+    <button
+      onClick={onClick}
+      type="button"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 14px',
+        background: 'var(--surface)',
+        border: '1px solid var(--line)',
+        borderRadius: 'var(--r-md)',
+        width: '100%',
+        textAlign: 'left',
+        cursor: 'pointer',
+        outline: 'none',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      <span className={styles.mealIcon} style={{ fontSize: 11, fontWeight: 800 }}>
+        {catMeta?.icon ?? 'OT'}
+      </span>
+      <span className={styles.rowText} style={{ flex: 1 }}>
+        <strong>{food.name}</strong>
+        <span className={styles.rowSub}>
+          {food.kcal_per_portion} kcal · {food.protein_g_per_portion}g P · per {food.portion_unit}
+        </span>
+      </span>
+      <Icon color="var(--t-3)" name="chevron" size={16} />
+    </button>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Food add/edit sheet
+// ─────────────────────────────────────────────────────────────
+
+function FoodEditSheet({
+  food,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  food: Food | null
+  onSave: (food: Omit<Food, 'id' | 'created_at' | 'updated_at'>) => void
+  onDelete?: (id: string) => void
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(food?.name ?? '')
+  const [category, setCategory] = useState<FoodCategory>(food?.category ?? 'protein')
+  const [portionUnit, setPortionUnit] = useState(food?.portion_unit ?? 'serving')
+  const [kcal, setKcal] = useState(food?.kcal_per_portion ?? 100)
+  const [protein, setProtein] = useState(food?.protein_g_per_portion ?? 10)
+
+  const canSave = name.trim().length > 0 && kcal >= 0 && protein >= 0
+
+  function submit() {
+    if (!canSave) {
+      toast.error('Name is required.')
+      return
+    }
+    onSave({
+      name: name.trim(),
+      category,
+      portion_unit: portionUnit.trim() || 'serving',
+      kcal_per_portion: kcal,
+      protein_g_per_portion: protein,
+    })
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(15,23,42,0.4)',
+        zIndex: 100,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+      }}
+    >
+      <div className={styles.sheet} style={{ height: '88%', display: 'flex', flexDirection: 'column' }}>
+        <div className={styles.sheetHandle} />
+        <header className={styles.screenHeader}>
+          <button className={styles.iconButton} onClick={onCancel} type="button">
+            <Icon name="x" />
+          </button>
+          <strong>{food ? 'Edit food' : 'New food'}</strong>
+          <span style={{ width: 40 }} />
+        </header>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
+          <p className={styles.fieldLabel}>Name</p>
+          <input
+            type="text"
+            value={name}
+            placeholder="e.g. Whey BAAM, ไก่อกย่าง, แอปเปิ้ลเขียว"
+            onChange={(e) => setName(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 14px',
+              fontSize: 16,
+              fontWeight: 700,
+              border: 0,
+              background: 'var(--bg-soft)',
+              borderRadius: 'var(--r-md)',
+              outline: 'none',
+              fontFamily: 'inherit',
+              color: 'var(--t-1)',
+              marginBottom: 18,
+            }}
+          />
+
+          <p className={styles.fieldLabel}>Category</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 18 }}>
+            {FOOD_CATEGORIES.map((cat) => (
+              <CategoryChip
+                active={category === cat.id}
+                key={cat.id}
+                label={cat.label}
+                onClick={() => setCategory(cat.id)}
+              />
+            ))}
+          </div>
+
+          <p className={styles.fieldLabel}>Portion unit</p>
+          <input
+            type="text"
+            value={portionUnit}
+            placeholder="scoop, ลูก, ชิ้น, g, ml, cup..."
+            onChange={(e) => setPortionUnit(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 14px',
+              fontSize: 15,
+              border: 0,
+              background: 'var(--bg-soft)',
+              borderRadius: 'var(--r-md)',
+              outline: 'none',
+              fontFamily: 'inherit',
+              color: 'var(--t-1)',
+              marginBottom: 18,
+            }}
+          />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+            <Stepper label="kcal / portion" suffix="kcal" value={kcal} onChange={setKcal} min={0} max={2000} step={5} />
+            <Stepper label="Protein / portion" suffix="g" value={protein} onChange={setProtein} min={0} max={200} step={0.5} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Button disabled={!canSave} onClick={submit}>
+              {food ? 'Save changes' : 'Add to library'}
+            </Button>
+            {food && onDelete ? (
+              <Button onClick={() => onDelete(food.id)} variant="ghost" style={{ color: '#991B1B' }}>
+                Delete food
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

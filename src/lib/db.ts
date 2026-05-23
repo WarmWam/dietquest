@@ -21,7 +21,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { daysAgoKey } from '@/lib/dates'
-import type { DayTotals, MealLog, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog } from '@/types/domain'
+import type { DayTotals, Food, MealLog, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog } from '@/types/domain'
 
 type WatchState<T> = {
   data: T
@@ -355,6 +355,52 @@ export async function markPresetUsed(uid: string, presetId: string): Promise<voi
     use_count: increment(1),
     updated_at: serverTimestamp(),
   })
+}
+
+// ─────────────────────────────────────────────────────────────
+// Foods (Library)
+// ─────────────────────────────────────────────────────────────
+
+function deserializeFood(snap: { id: string; data: () => DocumentData }): Food {
+  const data = snap.data()
+  return {
+    id: snap.id,
+    name: String(data.name ?? ''),
+    category: (data.category as Food['category']) ?? 'other',
+    portion_unit: String(data.portion_unit ?? 'serving'),
+    kcal_per_portion: Number(data.kcal_per_portion ?? 0),
+    protein_g_per_portion: Number(data.protein_g_per_portion ?? 0),
+    created_at: data.created_at?.toDate?.() ?? undefined,
+    updated_at: data.updated_at?.toDate?.() ?? undefined,
+  }
+}
+
+export async function addFood(uid: string, food: Omit<Food, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
+  const docRef = await addDoc(userCollection(uid, 'foods'), {
+    ...food,
+    created_at: serverTimestamp(),
+    updated_at: serverTimestamp(),
+  })
+  return docRef.id
+}
+
+export async function updateFood(uid: string, id: string, partial: Partial<Omit<Food, 'id'>>): Promise<void> {
+  await updateDoc(doc(db, 'users', uid, 'foods', id), {
+    ...partial,
+    updated_at: serverTimestamp(),
+  })
+}
+
+export async function deleteFood(uid: string, id: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'foods', id))
+}
+
+export function watchFoods(uid: string, cb: WatchCallback<Food[]>): Unsubscribe {
+  return onSnapshot(
+    query(userCollection(uid, 'foods'), orderBy('name', 'asc')),
+    (snapshot) => cb({ data: snapshot.docs.map(deserializeFood), error: null }),
+    listenerError(`users/${uid}/foods`, [], cb),
+  )
 }
 
 export async function exportUserData(uid: string): Promise<any> {

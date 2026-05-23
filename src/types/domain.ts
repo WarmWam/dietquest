@@ -123,3 +123,26 @@ export type SleepLog = {
   duration_min: number
   quality_1_5: number
 }
+
+export type FoodCategory = 'protein' | 'carb' | 'fruit' | 'veggie' | 'drink' | 'snack' | 'other'
+
+export type Food = {
+  id: string
+  name: string
+  category: FoodCategory
+  portion_unit: string
+  kcal_per_portion: number
+  protein_g_per_portion: number
+  created_at?: Date
+  updated_at?: Date
+}
+
+export const FOOD_CATEGORIES: { id: FoodCategory; label: string; icon: string }[] = [
+  { id: 'protein', label: 'Protein', icon: 'PR' },
+  { id: 'carb', label: 'Carbs', icon: 'CB' },
+  { id: 'fruit', label: 'Fruit', icon: 'FR' },
+  { id: 'veggie', label: 'Veggie', icon: 'VG' },
+  { id: 'drink', label: 'Drink', icon: 'DK' },
+  { id: 'snack', label: 'Snack', icon: 'SN' },
+  { id: 'other', label: 'Other', icon: 'OT' },
+]
