@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Button, Icon } from '@/components/primitives'
+import { Button, Card, Icon } from '@/components/primitives'
 import { todayKey } from '@/lib/dates'
 import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
@@ -21,7 +21,7 @@ function Header({ title }: { title: string }) {
 }
 
 export function LogWeightRoute() {
-  const { data, add } = useWeights(30)
+  const { data, add, error } = useWeights(30)
   const latest = data[data.length - 1]
   const [value, setValue] = useState(latest?.weight_kg.toFixed(1) ?? '80.0')
   const [saving, setSaving] = useState(false)
@@ -30,6 +30,10 @@ export function LogWeightRoute() {
   useEffect(() => {
     if (latest) setValue(latest.weight_kg.toFixed(1))
   }, [latest])
+
+  useEffect(() => {
+    if (error) toast.error("Couldn't load weight history. Try again.")
+  }, [error])
 
   async function saveWeight() {
     if (saving) return
@@ -52,6 +56,15 @@ export function LogWeightRoute() {
     <AppScreen hideNav>
       <div className={styles.screen}>
         <Header title="Weight" />
+        {error ? (
+          <Card padding={18}>
+            <strong>Couldn't load weight history</strong>
+            <p className={styles.subtitle}>{error.message}</p>
+            <Button onClick={() => window.location.reload()} variant="secondary">
+              Retry
+            </Button>
+          </Card>
+        ) : null}
         <div className={styles.fullCenter}>
           <div>
             <p className="dq-eyebrow">Today</p>

@@ -99,8 +99,12 @@ export function LogWorkoutRoute() {
 export function LogWorkoutActiveRoute() {
   const navigate = useNavigate()
   const draft = useWorkoutDraft()
-  const { profile } = useUser()
+  const { profile, error: userError } = useUser()
   const weightKg = profile?.profile?.weight_start_kg ?? DEFAULT_PROFILE.weight_start_kg
+
+  useEffect(() => {
+    if (userError) toast.error("Couldn't load workout profile. Try again.")
+  }, [userError])
 
   useEffect(() => {
     if (!draft.startedAt || draft.pausedAt) return
@@ -167,8 +171,8 @@ export function LogWorkoutActiveRoute() {
 
 export function LogWorkoutSummaryRoute() {
   const navigate = useNavigate()
-  const { add } = useWorkouts(30)
-  const { profile } = useUser()
+  const { add, error: workoutsError } = useWorkouts(30)
+  const { profile, error: userError } = useUser()
   const draft = useWorkoutDraft()
   const [saving, setSaving] = useState(false)
   const weightKg = profile?.profile?.weight_start_kg ?? DEFAULT_PROFILE.weight_start_kg
@@ -177,6 +181,10 @@ export function LogWorkoutSummaryRoute() {
   const kcalBurned = computeKcal(draft.incline_pct, weightKg, draft.elapsedMs)
   const distance = Number((draft.speed_kmh * (draft.elapsedMs / 3600000)).toFixed(1))
   const overUnder = durationMin - draft.target_duration_min
+
+  useEffect(() => {
+    if (workoutsError || userError) toast.error("Couldn't load workout data. Try again.")
+  }, [workoutsError, userError])
 
   async function saveWorkout() {
     if (saving) return

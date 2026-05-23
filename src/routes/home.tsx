@@ -22,7 +22,7 @@ const mealMeta: Record<MealType, { label: string; icon: string }> = {
 
 export function HomeRoute() {
   const [params] = useSearchParams()
-  const { profile, loading: userLoading } = useUser()
+  const { profile, loading: userLoading, error: userError } = useUser()
   const { data: meals, loading: mealsLoading, error: mealsError } = useMeals()
   const { data: today, loading: todayLoading, error: todayError } = useToday()
   const hasError = mealsError || todayError
@@ -38,6 +38,10 @@ export function HomeRoute() {
   useEffect(() => {
     if (hasError) toast.error("Couldn't load today. Try again.")
   }, [hasError])
+
+  useEffect(() => {
+    if (userError) toast.error("Couldn't load profile. Try again.")
+  }, [userError])
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.currentTarget.scrollTop === 0) {

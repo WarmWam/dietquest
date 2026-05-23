@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
@@ -20,9 +20,13 @@ function Header({ title }: { title: string }) {
 }
 
 export function LogWaterRoute() {
-  const { data, totalMl, add, loading } = useWater()
+  const { data, totalMl, add, loading, error } = useWater()
   const [saving, setSaving] = useState(false)
   const percent = Math.min(totalMl / 3000, 1)
+
+  useEffect(() => {
+    if (error) toast.error("Couldn't load water. Try again.")
+  }, [error])
 
   async function handleAdd(ml: number) {
     if (saving) return
@@ -56,6 +60,15 @@ export function LogWaterRoute() {
     <AppScreen hideNav>
       <div className={styles.screen}>
         <Header title="Water" />
+        {error ? (
+          <Card padding={18}>
+            <strong>Couldn't load water</strong>
+            <p className={styles.subtitle}>{error.message}</p>
+            <Button onClick={() => window.location.reload()} variant="secondary">
+              Retry
+            </Button>
+          </Card>
+        ) : null}
         <div className={styles.waterGlass}>
           <div className={styles.waterLevel} style={{ height: `${percent * 100}%` }} />
           <div className={styles.glassText}>

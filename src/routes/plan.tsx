@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Card, Icon, Skeleton } from '@/components/primitives'
 import { DEFAULT_SETTINGS, PLAN_SECTIONS } from '@/data/defaults'
 import { useUser } from '@/hooks/useUser'
+import { toast } from '@/stores/toastStore'
 
 export function PlanRoute() {
-  const { profile, loading } = useUser()
+  const { profile, loading, error } = useUser()
   const settings = profile?.settings ?? DEFAULT_SETTINGS
   const [openSection, setOpenSection] = useState<number | null>(0)
+
+  useEffect(() => {
+    if (error) toast.error("Couldn't load plan settings. Try again.")
+  }, [error])
 
   if (loading) {
     return (

@@ -18,7 +18,7 @@ export function ProfileRoute() {
   const { mode, setTheme } = useTheme()
   const navigate = useNavigate()
   const { signOut, user } = useAuth()
-  const { profile, loading } = useUser()
+  const { profile, loading, error: userError } = useUser()
   const userProfile = profile?.profile ?? DEFAULT_PROFILE
   const displayName = profile?.display_name ?? user?.displayName ?? 'DietQuest'
 
@@ -37,7 +37,7 @@ export function ProfileRoute() {
   })
 
   // Goal progress
-  const { data: weights } = useWeights(60)
+  const { data: weights, error: weightsError } = useWeights(60)
   const latestWeight = weights[weights.length - 1]
   const totalToLose = userProfile.weight_start_kg - userProfile.weight_target_kg
   const lost = userProfile.weight_start_kg - (latestWeight?.weight_kg ?? userProfile.weight_start_kg)
@@ -50,6 +50,10 @@ export function ProfileRoute() {
   const [weightStart, setWeightStart] = useState(80.0)
   const [weightTarget, setWeightTarget] = useState(65.0)
   const [months, setMonths] = useState(6)
+
+  useEffect(() => {
+    if (userError || weightsError) toast.error("Couldn't load profile data. Try again.")
+  }, [userError, weightsError])
 
   useEffect(() => {
     if (profile?.profile) {

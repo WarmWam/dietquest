@@ -13,7 +13,7 @@ import { haptic } from '@/lib/haptic'
 
 export function LogMealRoute() {
   const navigate = useNavigate()
-  const { data: presets, loading } = usePresets()
+  const { data: presets, loading, error } = usePresets()
   const { mealType, setMealType, setSelectedPreset } = useMealDraft()
 
   useEffect(() => {
@@ -31,6 +31,10 @@ export function LogMealRoute() {
     }
     setMealType(initialType)
   }, [setMealType])
+
+  useEffect(() => {
+    if (error) toast.error("Couldn't load meal presets. Try again.")
+  }, [error])
 
   const filteredPresets = presets.filter((p) => p.meal_type === mealType)
   const displayPresets = filteredPresets.length > 0 ? filteredPresets : presets
@@ -144,13 +148,17 @@ export function LogMealRoute() {
 
 export function LogMealConfirmRoute() {
   const navigate = useNavigate()
-  const { add } = useMeals()
-  const { markUsed } = usePresets()
+  const { add, error: mealsError } = useMeals()
+  const { markUsed, error: presetsError } = usePresets()
   const { mealType, selectedPreset } = useMealDraft()
   const [saving, setSaving] = useState(false)
 
   const preset = selectedPreset ?? DEFAULT_BREAKFAST
   const [portions, setPortions] = useState<number[]>(() => preset.items.map((item) => item.portion))
+
+  useEffect(() => {
+    if (mealsError || presetsError) toast.error("Couldn't load meal data. Try again.")
+  }, [mealsError, presetsError])
 
   function adjustPortion(index: number, delta: number) {
     setPortions((prev) => {

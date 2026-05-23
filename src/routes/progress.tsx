@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Card, Icon, Skeleton } from '@/components/primitives'
@@ -9,6 +10,7 @@ import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
+import { toast } from '@/stores/toastStore'
 
 type ProgressTab = 'weight' | 'kcal' | 'activity'
 
@@ -46,8 +48,8 @@ export function ProgressRoute() {
 }
 
 function WeightTab() {
-  const { profile } = useUser()
-  const { data: weights, loading } = useWeights(60)
+  const { profile, error: userError } = useUser()
+  const { data: weights, loading, error: weightsError } = useWeights(60)
   const userProfile = profile?.profile ?? DEFAULT_PROFILE
   const points = weights.slice(-20)
   const latest = points[points.length - 1]
@@ -66,6 +68,10 @@ function WeightTab() {
     : ''
   const lost = Number((currentWeight - startWeight).toFixed(1))
   const toTarget = Number((currentWeight - userProfile.weight_target_kg).toFixed(1))
+
+  useEffect(() => {
+    if (userError || weightsError) toast.error("Couldn't load weight progress. Try again.")
+  }, [userError, weightsError])
 
   if (loading) {
     return (
@@ -126,9 +132,9 @@ function WeightTab() {
 }
 
 function CaloriesTab() {
-  const { data: today } = useToday()
-  const { data: meals } = useMeals()
-  const { data: weekTotals } = useDayTotals(7)
+  const { data: today, error: todayError } = useToday()
+  const { data: meals, error: mealsError } = useMeals()
+  const { data: weekTotals, error: weekTotalsError } = useDayTotals(7)
 
   // Build 7-day data: oldest to newest
   const days = weekTotals.map((t) => t.totals.kcal)
@@ -139,6 +145,10 @@ function CaloriesTab() {
 
   const todayDate = todayKey()
   const maxKcal = Math.max(...days, 1)
+
+  useEffect(() => {
+    if (todayError || mealsError || weekTotalsError) toast.error("Couldn't load calorie progress. Try again.")
+  }, [todayError, mealsError, weekTotalsError])
 
   return (
     <>
@@ -178,7 +188,7 @@ function CaloriesTab() {
 }
 
 function ActivityTab() {
-  const { data: workouts } = useWorkouts(90)
+  const { data: workouts, error: workoutsError } = useWorkouts(90)
   const totalMinutes = workouts.reduce((sum, workout) => sum + workout.duration_min, 0)
   const burned = workouts.reduce((sum, workout) => sum + workout.kcal_burned, 0)
 
@@ -204,6 +214,10 @@ function ActivityTab() {
   }
 
   const bestWeekMin = computeBestWeek()
+
+  useEffect(() => {
+    if (workoutsError) toast.error("Couldn't load activity progress. Try again.")
+  }, [workoutsError])
 
   return (
     <>

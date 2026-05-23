@@ -36,7 +36,7 @@ function calculateSleepDuration(bed: string, wake: string): number {
 }
 
 export function LogSleepRoute() {
-  const { data, upsert } = useSleep()
+  const { data, upsert, error } = useSleep()
   const [bedtime, setBedtime] = useState('22:30')
   const [wakeTime, setWakeTime] = useState('06:00')
   const [quality, setQuality] = useState(4)
@@ -50,6 +50,10 @@ export function LogSleepRoute() {
       setQuality(data.quality_1_5)
     }
   }, [data])
+
+  useEffect(() => {
+    if (error) toast.error("Couldn't load sleep. Try again.")
+  }, [error])
 
   const durationMin = calculateSleepDuration(bedtime, wakeTime)
   const hours = Math.floor(durationMin / 60)
