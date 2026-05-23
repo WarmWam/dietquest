@@ -28,9 +28,10 @@ const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
 
 export function HomeRoute() {
   const [params] = useSearchParams()
+  const [selectedDate, setSelectedDate] = useState(() => params.get('date') || getTodayKey())
   const { profile, loading: userLoading, error: userError } = useUser()
-  const { data: meals, add: addMeal, remove: removeMeal, loading: mealsLoading, error: mealsError } = useMeals()
-  const { data: today, loading: todayLoading, error: todayError } = useToday()
+  const { data: meals, add: addMeal, remove: removeMeal, loading: mealsLoading, error: mealsError } = useMeals(selectedDate)
+  const { data: today, loading: todayLoading, error: todayError } = useToday(selectedDate)
   const hasError = mealsError || todayError
   const sheet = params.get('sheet') === '1'
   const settings = profile?.settings ?? DEFAULT_SETTINGS
@@ -127,7 +128,7 @@ export function HomeRoute() {
         ) : hasError ? (
           <HomeErrorCard error={hasError} />
         ) : (
-          <HomeFullContent addMeal={addMeal} meals={meals} removeMeal={removeMeal} settings={settings} today={today} />
+          <HomeFullContent addMeal={addMeal} meals={meals} removeMeal={removeMeal} selectedDate={selectedDate} setSelectedDate={setSelectedDate} settings={settings} today={today} />
         )}
       </div>
       {sheet ? <LogSheet /> : null}
@@ -139,21 +140,26 @@ function HomeFullContent({
   addMeal,
   meals,
   removeMeal,
+  selectedDate,
+  setSelectedDate,
   settings,
   today,
 }: {
   addMeal: ReturnType<typeof useMeals>['add']
   meals: MealLog[]
   removeMeal: ReturnType<typeof useMeals>['remove']
+  selectedDate: string
+  setSelectedDate: (date: string) => void
   settings: UserSettings
   today: ReturnType<typeof useToday>['data']
 }) {
   const navigate = useNavigate()
-  const todayKey = getTodayKey()
-  const { data: plan, error: planError } = useMealPlan(todayKey)
-  const { data: workoutPlan, error: workoutPlanError } = useWorkoutPlan(todayKey)
-  const { data: waterLogs, add: addWater, remove: removeWater, totalMl, error: waterError } = useWater(todayKey)
-  const { data: sleep, upsert: upsertSleep, error: sleepError } = useSleep(todayKey)
+  const todayKey = selectedDate
+  const isToday = selectedDate === getTodayKey()
+  const { data: plan, error: planError } = useMealPlan(selectedDate)
+  const { data: workoutPlan, error: workoutPlanError } = useWorkoutPlan(selectedDate)
+  const { data: waterLogs, add: addWater, remove: removeWater, totalMl, error: waterError } = useWater(selectedDate)
+  const { data: sleep, upsert: upsertSleep, error: sleepError } = useSleep(selectedDate)
   const { data: weights, error: weightsError } = useWeights(30)
   const { data: workouts, add: addWorkout, remove: removeWorkout, error: workoutsError } = useWorkouts(1)
   const [savingTask, setSavingTask] = useState<string | null>(null)
@@ -333,9 +339,16 @@ function HomeFullContent({
         <div className={styles.screenHeader}>
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
             <span className="dq-eyebrow">Today</span>
-            <button aria-label="Open calendar" onClick={() => navigate('/plan')} type="button" style={{ background: 'transparent', border: 0, color: 'var(--a1)', cursor: 'pointer', padding: 0 }}>
+            <button aria-label="Pick date" onClick={() => document.getElementById('today-date-picker')?.click()} type="button" style={{ background: 'transparent', border: 0, color: 'var(--a1)', cursor: 'pointer', padding: 0 }}>
               <Icon name="cal" size={17} />
             </button>
+            <input
+              id="today-date-picker"
+              onChange={(event) => setSelectedDate(event.target.value || getTodayKey())}
+              style={{ height: 1, opacity: 0, position: 'absolute', width: 1 }}
+              type="date"
+              value={selectedDate}
+            />
           </span>
           <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
             {Math.max(settings.daily_kcal_target - liveKcal, 0)} kcal left
@@ -343,6 +356,11 @@ function HomeFullContent({
         </div>
         <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} />
       </Card>
+      {!isToday ? (
+        <Button onClick={() => setSelectedDate(getTodayKey())} variant="ghost">
+          Back to today
+        </Button>
+      ) : null}
 
       <div className={styles.topStats}>
         <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(totalMl / 3000, 1)} target="3.0 L" value={(totalMl / 1000).toFixed(1)} />
