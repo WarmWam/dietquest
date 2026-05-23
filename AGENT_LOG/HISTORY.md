@@ -76,3 +76,9 @@ Format per entry:
 - Verdict: SHIPPED
 - Tag: v1.0.1
 - Notes: First production-grade release. All 18 audit findings fixed. Every button functional, every display shows real Firestore data, all user inputs persist. Workout flow: real timer with MET kcal calc + pause/resume + save real values. Plan accordion functional. Profile: editable, theme, haptic, notifications UI, export, About sheet. Lighthouse maintained (98/93/100/100 baseline). v1.0.0 stays in history as initial release that needed audit fixes. Cost: $0/month (Vercel Hobby + Firebase Blaze with free tier usage).
+
+## Phase 6.2 — Error visibility hardening
+- Date: (pending)
+- Verdict: pending
+- Commit: pending
+- Notes: Small post-v1.0.1 fix in response to silent listener failure (firestore composite index missing → meals query failed → Home showed empty state instead of error). Indexes already deployed by Claude (commit ea1a873). Phase 6.2 hardens against future silent failures: console.error in every onSnapshot handler in db.ts, error UI on Home distinct from empty, toast.error on log/progress screen failures. Tag v1.0.2 when done.
