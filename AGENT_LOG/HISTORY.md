@@ -66,7 +66,7 @@ Format per entry:
 - Notes: All 12 Phase 6 features delivered cleanly (skeleton, toast portal, PTR, haptic, editable profile, JSON export, 404, npm audit, Lighthouse maintained, Google Fonts perf, log-health split). Tag v1.0.0 pushed. POST-RELEASE AUDIT: Claude verified every interactive element across 15 routes and found 18 leftover issues from Phase 3 visual placeholders: 1 CRITICAL (workout flow is entirely fake — timer hardcoded, metrics hardcoded, pause/bolt buttons no onClick, saveWorkout writes same values every time), 8 HIGH (fake buttons with no handlers across log-meal/plan/home/profile), 6 MEDIUM (hardcoded display data), 3 LOW. v1.0.0 tag stays in history as "needed fixes"; Phase 6.1 will land CRITICAL+HIGH and tag v1.0.1.
 
 ## Phase 6.1 — Full audit fixes (all 4 severity levels)
-- Date: (pending)
-- Verdict: pending
-- Commit: pending
-- Notes: SCOPE EXPANDED per user request to cover all 18 audit findings. 1 CRITICAL (real workout flow with live timer + MET kcal + editable settings + real save). 8 HIGH (remove or wire fake buttons across log-meal/plan/home/profile). 6 MEDIUM (real 7-day calorie chart, real activity heatmap with dates, computed best week, profile goal progress %, notification prefs UI, home incline reflects real workouts). 3 LOW (meal portion adjust, water + Custom button, sleep target window conditional). Estimated 14-20 hours. Tag v1.0.1 after Claude review.
+- Date: 2026-05-23
+- Verdict: PASS (Awaiting Claude review to tag v1.0.1)
+- Commit: 2a5f3bf...64d45df (12 commits)
+- Notes: SCOPE EXPANDED per user request to cover all 18 audit findings. Successfully delivered: 1 CRITICAL (real workout flow with live timer + MET kcal + editable settings + real save). 8 HIGH (remove or wire fake buttons across log-meal/plan/home/profile). 6 MEDIUM (real 7-day calorie chart, real activity heatmap with dates, computed best week, profile goal progress %, notification prefs UI, home incline reflects real workouts). 3 LOW (meal portion adjust, water + Custom button, sleep target window conditional). Deep Firestore serialization bug fixed (preventing undefined profile property crash during settings updates). Automated Playwright QA extended suite fully PASSES (10/10 test suites, 25/25 checks). Production Vercel app is fully up-to-date and clean. Awaiting approval to tag v1.0.1.
