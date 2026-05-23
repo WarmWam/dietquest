@@ -377,8 +377,16 @@ function deserializeFood(snap: { id: string; data: () => DocumentData }): Food {
   }
 }
 
-export async function addFood(uid: string, food: Omit<Food, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
-  const docRef = await addDoc(userCollection(uid, 'foods'), {
+// ─────────────────────────────────────────────────────────────
+// Shared library catalog (top-level /library_foods)
+// All authenticated users read + write the same catalog.
+// uid param kept for signature compatibility with hooks.
+// ─────────────────────────────────────────────────────────────
+
+const FOOD_COL = 'library_foods'
+
+export async function addFood(_uid: string, food: Omit<Food, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
+  const docRef = await addDoc(collection(db, FOOD_COL), {
     ...food,
     created_at: serverTimestamp(),
     updated_at: serverTimestamp(),
@@ -386,23 +394,53 @@ export async function addFood(uid: string, food: Omit<Food, 'id' | 'created_at' 
   return docRef.id
 }
 
-export async function updateFood(uid: string, id: string, partial: Partial<Omit<Food, 'id'>>): Promise<void> {
-  await updateDoc(doc(db, 'users', uid, 'foods', id), {
+export async function updateFood(_uid: string, id: string, partial: Partial<Omit<Food, 'id'>>): Promise<void> {
+  await updateDoc(doc(db, FOOD_COL, id), {
     ...partial,
     updated_at: serverTimestamp(),
   })
 }
 
-export async function deleteFood(uid: string, id: string): Promise<void> {
-  await deleteDoc(doc(db, 'users', uid, 'foods', id))
+export async function deleteFood(_uid: string, id: string): Promise<void> {
+  await deleteDoc(doc(db, FOOD_COL, id))
 }
 
-export function watchFoods(uid: string, cb: WatchCallback<Food[]>): Unsubscribe {
+export function watchFoods(_uid: string, cb: WatchCallback<Food[]>): Unsubscribe {
   return onSnapshot(
-    query(userCollection(uid, 'foods'), orderBy('name', 'asc')),
+    query(collection(db, FOOD_COL), orderBy('name', 'asc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeFood), error: null }),
-    listenerError(`users/${uid}/foods`, [], cb),
+    listenerError(`${FOOD_COL} (shared catalog)`, [], cb),
   )
+}
+
+export async function bulkAddFoods(foods: Omit<Food, 'id' | 'created_at' | 'updated_at'>[]): Promise<void> {
+  const batch = writeBatch(db)
+  foods.forEach((food) => {
+    const ref = doc(collection(db, FOOD_COL))
+    batch.set(ref, { ...food, created_at: serverTimestamp(), updated_at: serverTimestamp() })
+  })
+  await batch.commit()
+}
+
+export async function getCatalogCount(): Promise<number> {
+  const snap = await getDocs(collection(db, FOOD_COL))
+  return snap.size
+}
+
+// Read a user's legacy per-user foods (pre-v1.4.0). Used once during
+// catalog migration to preserve any customizations they made.
+export async function getLegacyUserFoods(uid: string): Promise<Omit<Food, 'id' | 'created_at' | 'updated_at'>[]> {
+  const snap = await getDocs(userCollection(uid, 'foods'))
+  return snap.docs.map((d) => {
+    const food = deserializeFood(d)
+    return {
+      name: food.name,
+      category: food.category,
+      portion_unit: food.portion_unit,
+      kcal_per_portion: food.kcal_per_portion,
+      protein_g_per_portion: food.protein_g_per_portion,
+    }
+  })
 }
 
 // ─────────────────────────────────────────────────────────────

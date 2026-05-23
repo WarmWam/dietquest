@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom'
 import { DesignSystemRoute } from './routes/_design-system'
 import { AchievementRoute } from './routes/achievement'
@@ -19,6 +19,9 @@ import { useAuth } from './hooks/useAuth'
 import { useUser } from './hooks/useUser'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { listenForForegroundNotifications } from './lib/notifications'
+import { bulkAddFoods, getCatalogCount, getLegacyUserFoods } from './lib/db'
+import { STARTER_FOODS } from './data/starterFoods'
+import { STARTER_COM_FOODS } from './data/starterComFoods'
 
 function App() {
   useEffect(() => {
@@ -40,6 +43,28 @@ function App() {
 
 function AuthGate() {
   const { user, loading } = useAuth()
+  const seedAttempted = useRef(false)
+
+  // One-time auto-seed of shared library catalog on first authenticated load.
+  // If user has legacy per-user foods (pre-v1.4.0), migrate those first to
+  // preserve any customizations. Otherwise fall back to hardcoded starter
+  // pack. Idempotent: short-circuits if catalog already has any food.
+  useEffect(() => {
+    if (!user || seedAttempted.current) return
+    seedAttempted.current = true
+    void (async () => {
+      try {
+        const count = await getCatalogCount()
+        if (count > 0) return
+        const legacy = await getLegacyUserFoods(user.uid)
+        const seed = legacy.length > 0 ? legacy : [...STARTER_FOODS, ...STARTER_COM_FOODS]
+        await bulkAddFoods(seed)
+        console.log(`[catalog] seeded ${seed.length} foods from ${legacy.length > 0 ? 'legacy library' : 'starter pack'}`)
+      } catch (err) {
+        console.error('[catalog] auto-seed failed:', err)
+      }
+    })()
+  }, [user])
 
   if (loading) return <SplashRoute />
   if (!user) return <LoginRoute />
