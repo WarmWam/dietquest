@@ -1,5 +1,6 @@
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import { DesignSystemRoute } from './routes/_design-system'
+import { AchievementRoute } from './routes/achievement'
 import { HomeRoute } from './routes/home'
 import { LogMealConfirmRoute, LogMealRoute, LogMealSavedRoute } from './routes/log-meal'
 import {
@@ -10,6 +11,9 @@ import {
   LogWorkoutRoute,
   LogWorkoutSummaryRoute,
 } from './routes/log-health'
+import { PlanRoute } from './routes/plan'
+import { ProfileRoute } from './routes/profile'
+import { ProgressRoute } from './routes/progress'
 import { LoginRoute } from './routes/login'
 import { OnboardingGoalRoute, OnboardingProfileRoute, OnboardingWelcomeRoute } from './routes/onboarding'
 import { SplashRoute } from './routes/splash'
@@ -34,6 +38,10 @@ function App() {
         <Route element={<LogWorkoutActiveRoute />} path="/log/workout/active" />
         <Route element={<LogWorkoutSummaryRoute />} path="/log/workout/summary" />
         <Route element={<LogSleepRoute />} path="/log/sleep" />
+        <Route element={<ProgressRoute />} path="/progress" />
+        <Route element={<PlanRoute />} path="/plan" />
+        <Route element={<ProfileRoute />} path="/profile" />
+        <Route element={<AchievementRoute />} path="/achievement" />
         <Route element={<Navigate replace to="/login" />} path="*" />
       </Routes>
     </Router>

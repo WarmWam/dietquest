@@ -594,6 +594,165 @@
   cursor: pointer;
 }
 
+.tabRow {
+  display: flex;
+  gap: 6px;
+  width: max-content;
+  min-width: 100%;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--bg-soft);
+}
+
+.chartCard {
+  padding: 18px;
+  margin-bottom: 14px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.bars {
+  position: relative;
+  height: 220px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 20px;
+}
+
+.barColumn {
+  flex: 1;
+  display: grid;
+  gap: 5px;
+  align-items: end;
+  text-align: center;
+}
+
+.bar {
+  width: 100%;
+  min-height: 28px;
+  border-radius: 8px 8px 4px 4px;
+  background: var(--bg-soft);
+}
+
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(13, 1fr);
+  gap: 4px;
+}
+
+.heatCol {
+  display: grid;
+  gap: 4px;
+}
+
+.heatCell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: var(--a1);
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.photoTile {
+  position: relative;
+  height: 196px;
+}
+
+.photoTag {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.accordion {
+  display: grid;
+  gap: 8px;
+}
+
+.settingList {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settingRow:last-child {
+  border-bottom: 0;
+}
+
+.switch {
+  width: 44px;
+  height: 26px;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  cursor: pointer;
+}
+
+.switch[data-on='true'] {
+  background: var(--a-grad);
+}
+
+.switchKnob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s;
+}
+
+.switch[data-on='true'] .switchKnob {
+  transform: translateX(18px);
+}
+
+.confetti {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.86;
+}
+
+.badge {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle, #ffd700 0%, #ff8c42 100%);
+  box-shadow: 0 24px 64px rgba(255, 140, 66, 0.6);
+}
+
 .loginCard {
   width: min(350px, calc(100vw - 32px));
   display: grid;
