@@ -1,120 +1,123 @@
 # STATUS - Codex -> Claude
 
-> **Phase completed:** Phase 4 - PWA + Vercel Deploy
-> **Completion date:** 2026-05-23
-> **Current state:** READY FOR REVIEW
+> **Phase:** Phase 5 - Firebase Wire-up (REVISE → 5.1 active)
+> **Status date:** 2026-05-23
+> **Current state:** Phase 5 REVISE — see AGENT_LOG/REVIEW.md for Phase 5.1 fix list. Next agent must address Fix 1-6 before Phase 6.
 
 ---
 
 ## Completed
 
-- Configured `vite-plugin-pwa` with auto-update, DietQuest manifest, portrait standalone mode, required icons, and Google Fonts runtime caching.
-- Generated PNG app icons in `public/icons/`: `icon-192.png`, `icon-512.png`, `icon-maskable.png`.
-- Added iOS PWA meta tags and `apple-touch-icon` in `index.html`.
-- Added DietQuest README and Vercel SPA rewrite config.
-- Pushed Phase 4 code to GitHub `main`.
-- Human imported the repo into Vercel and verified iPhone Add to Home Screen install.
-- Ran Lighthouse against production URL: `https://dietquest-sigma.vercel.app/`.
-- Verified all deployed routes render expected content with zero captured console warnings/errors.
+Phase 5 was resumed after Firebase CLI login and continued in the required sequence.
 
-## DoD Checklist
-
-- [x] `vite-plugin-pwa` configured in `vite.config.ts`
-- [x] Manifest renders correct values
-  - Verified generated `dist/manifest.webmanifest`: `DietQuest`, `#5B6CFF`, `#F2F4F8`, standalone, portrait, `/`, and all three icon entries.
-- [x] Icons present in `public/icons/` (192 + 512 + maskable)
-- [x] Apple meta tags in `index.html`
-- [x] Offline test: visited route works without network
-  - Local production preview: service worker ready, `/progress?tab=weight` visited, offline reload still rendered.
-- [x] README.md complete
-- [x] Pushed to GitHub
-  - Remote: `https://github.com/WarmWam/dietquest.git`
-  - Branch: `main`
-- [x] Vercel deployment URL documented
-  - `https://dietquest-sigma.vercel.app/`
-- [x] Lighthouse PWA score >= 90
-  - PWA: 100
-- [x] Lighthouse Performance score reported
-  - Performance: 98
-- [x] All previous routes still work on deployed version
-  - Route matrix saved in `AGENT_LOG/phase4-route-check.json`
-
-## Lighthouse Scores
-
-Report files:
-
-- `AGENT_LOG/lighthouse-phase4.report.json`
-- `AGENT_LOG/lighthouse-phase4.report.html`
-
-Scores:
-
-- Performance: 98
-- Accessibility: 93
-- Best Practices: 100
-- PWA: 100
-
-Note: Lighthouse 13 no longer exposes the PWA category, so the production audit was run with Lighthouse 11.7.1 for the required PWA score.
-
-## Deployed Routes Verified
-
-- `/`
-- `/login`
-- `/splash`
-- `/onboarding/welcome`
-- `/onboarding/profile`
-- `/onboarding/goal`
-- `/log/meal`
-- `/log/meal/confirm`
-- `/log/meal/saved`
-- `/log/water`
-- `/log/weight`
-- `/log/workout`
-- `/log/workout/active`
-- `/log/workout/summary`
-- `/log/sleep`
-- `/progress?tab=weight`
-- `/plan`
-- `/profile`
-- `/achievement`
-- `/design`
-
-Console warnings/errors captured during deployed route sweep: 0.
+- Step 2 - Firestore rules deploy
+  - `npx firebase deploy --only firestore:rules --project dietquest-prod` succeeded.
+  - Unauthenticated REST read to `/users/test-user` returns HTTP 403.
+- Step 3 - Auth layer
+  - Added `src/lib/auth.ts`.
+  - Replaced mock persisted auth store with Firebase Auth state, loading, sign-in, sign-out, and error handling.
+  - Added `src/hooks/useAuth.ts`.
+- Step 4 - Auth gate
+  - App now requires Firebase auth before app routes.
+  - Signed-out state renders the Google login screen.
+  - Loading state renders Splash inside Router context.
+- Step 5 - First-time user detection
+  - Added `useUser()` subscription to `users/{uid}`.
+  - Signed-in users without a user document are routed to onboarding.
+  - Existing users are routed away from onboarding to Home.
+- Step 6 - Typed Firestore wrappers
+  - Added `src/lib/db.ts` with typed readers, watchers, writes, transactions, and Timestamp conversion.
+  - Added `src/lib/dates.ts`.
+- Step 7 - Data hooks
+  - Added `useToday`, `useMeals`, `useWeights`, `useWater`, `useWorkouts`, `useSleep`, `usePresets`.
+  - Hooks guard missing auth and clean up `onSnapshot` listeners.
+- Step 8 - Route migration
+  - Routes no longer import from `@/lib/mock`.
+  - Loading/empty states added for migrated screens.
+  - Progress Photos tab removed per Storage/photo scope removal.
+- Step 9 - Denormalized day totals
+  - Meal, water, workout, and sleep writes update relevant day documents through transactions.
+  - Day totals hydrate partial Firestore docs into a complete UI shape.
+- Step 10 - Onboarding writes user doc
+  - Added `src/lib/nutrition.ts`.
+  - Final onboarding step writes `users/{uid}` with profile/settings and computed kcal/protein targets.
+- Error boundary added at app level.
+- Firebase bundle split into its own chunk.
+- Pushed to GitHub `main`; Vercel production picked up the new build.
 
 ## Commit Hash Range
 
-`00241aa...d707731`
+`28eeb29...dbaf106`
 
 Commits:
 
-- `00241aa feat(pwa): configure vite-plugin-pwa manifest`
-- `b437ed8 feat(pwa): add app icons (192/512/maskable)`
-- `cba5dc3 feat(pwa): apple-touch-icon and ios meta tags`
-- `f92cd4b docs: add README`
-- `d707731 chore(deploy): vercel config + first deploy`
+- `28eeb29 chore(firebase): init + env config`
+- `3fe3029 feat(rules): firestore security rules`
+- `415f91c chore(deploy): firestore rules deploy`
+- `f88e558 feat(auth): google sign-in + auth gate`
+- `104a114 feat(auth): first-time user detection`
+- `f1a8fc5 feat(db): typed firestore wrappers`
+- `e8d3c4e feat(hooks): user/today/meals`
+- `993c2d1 feat(hooks): weights/water`
+- `cdee0d5 feat(hooks): workouts/sleep/presets`
+- `35c59a2 refactor(routes): migrate from mock to hooks`
+- `01a237d feat(db): denormalized day totals via transaction`
+- `eaf181a feat(auth): onboarding write`
+- `ea2ca96 feat(auth): app error boundary`
+- `0067a53 chore(build): split firebase bundle`
+- `dbaf106 fix(auth): keep loading route inside router`
 
-## Decisions Made
+## Verification
 
-- None requiring `DECISIONS.md`.
+- `.env.local` exists with 7 `VITE_FB_*` values and is gitignored.
+- `npm run build` succeeds.
+- Production URL deployed: `https://dietquest-sigma.vercel.app/`.
+- Fresh Chrome profile against production renders Google sign-in screen.
+- Local production preview rendered Google sign-in screen with 0 captured console warnings/errors.
+- `rg "from '@/lib/mock'|MOCK_" src/routes src/stores src/hooks` returns no matches.
+- `rg "firebase/storage|storage.rules|photo_paths|Photos" src firebase.json firestore.rules package.json` returns no matches.
+- Firestore rules deployed successfully.
+- Unauthenticated Firestore REST read returns HTTP 403 Forbidden.
 
-## Deferred Items / Things To Flag
+## DoD Checklist
 
-- Firebase remains intentionally untouched until Phase 5.
-- Human confirmed Vercel placeholder env vars were added in Production.
-- Human confirmed iPhone Safari install, icon, fullscreen launch, bottom nav, and routing.
+- [x] `.env.local` exists with 7 VITE_FB_* values (human-provided)
+- [x] `src/lib/firebase.ts` initializes app + auth + db
+- [x] Persistent local cache enabled (Firestore offline)
+- [x] `firestore.rules` + `firebase.json` + `firestore.indexes.json` in repo
+- [x] Rules deployed to Firebase project
+- [x] Auth gate works in signed-out preview: signed out -> see login
+- [ ] Auth gate works after sign-in: sign in -> see onboarding or home
+- [ ] Google sign-in works in production
+- [ ] First-time sign-in routes to onboarding; second time goes to home
+- [ ] Onboarding writes user doc; can verify in Firestore console
+- [x] All data hooks created + typed
+- [x] All routes migrated from `MOCK_*` to hooks
+- [x] Loading + empty states on migrated screens
+- [ ] Logging a meal persists across reload
+- [ ] Logging a meal updates day totals
+- [ ] Open app on 2 devices simultaneously -> see real-time sync
+- [ ] Airplane mode -> log meal -> re-enable network -> meal appears in server
+- [ ] Security test with second Google account
+- [x] `npm run build` clean
+- [x] Deployed to Vercel; production URL serves Phase 5 build
 
-## Screenshots Verified
+## BLOCKED
 
-- `AGENT_LOG/phase4-progress-mobile.png` - local production preview at 390x844, `/progress?tab=weight`.
-- `AGENT_LOG/phase4-deployed-progress.png` - deployed production URL, `/progress?tab=weight`.
+Human account/device QA is required to finish Phase 5 DoD. Please test on production:
 
-## Build Verification
+1. Open `https://dietquest-sigma.vercel.app/` in a fresh/private browser or clear the old PWA cache.
+2. Sign in with Google.
+3. If first-time user: complete onboarding and verify `users/{uid}` appears in Firestore.
+4. Sign out and sign back in; confirm second sign-in routes to Home.
+5. Log a meal; reload; confirm the meal persists and Home totals update.
+6. Open the app on a second device/browser with the same account; confirm the meal appears.
+7. Airplane/offline test: log a meal offline, reconnect, confirm it syncs to Firestore.
+8. Optional security test: use a second Google account and confirm it cannot see the first user's data.
 
-- `npm run build` succeeded after production deploy was unblocked.
-- PWA output generated:
-  - `dist/manifest.webmanifest`
-  - `dist/sw.js`
-  - `dist/workbox-5a02fdce.js`
+After this QA, tell Codex the results. If all pass, Codex should update STATUS/HISTORY for Phase 5 completion and STOP for Claude review. If anything fails, Codex should fix the listed failure before closing Phase 5.
 
-## Blockers
+## Deferred / Flags
 
-None. Phase 4 is ready for Claude review.
+- Storage/photo upload was intentionally removed from v1 scope. No Storage imports, `storage.rules`, or photo UI were added.
+- `firebase-tools` install reported transitive audit warnings: 16 vulnerabilities (15 moderate, 1 high). No `npm audit fix` was run to avoid unrelated dependency churn.

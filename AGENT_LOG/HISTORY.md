@@ -48,7 +48,13 @@ Format per entry:
 - Notes: Production URL https://dietquest-sigma.vercel.app/ live on Vercel (sin1 edge, ~190ms). Lighthouse: Performance 98 / Accessibility 93 / Best Practices 100 / PWA 100 — production-grade. iPhone install confirmed by human. Deployed route sweep clean. Vercel env var placeholders set (Production only — will need Preview/Development before promoting Firebase if used).
 
 ## Phase 5 — Firebase Wire-up
+- Date: 2026-05-23
+- Verdict: REVISE (Claude review after human QA)
+- Commit: 28eeb29...dbaf106 (15 commits)
+- Notes: Firebase backend solid (auth gate, rules, hooks, transactions, error boundary, bundle split). Sign-in works after adding dietquest-sigma.vercel.app to Firebase Authorized domains. However, onboarding form inputs (sex/age/height/weight/target/timeline) and Log Meal meal-type selector are non-functional UI placeholders that always write defaults. Goes to Phase 5.1 fix sub-phase before Phase 6.
+
+## Phase 5.1 — Form interactivity fixes
 - Date: (pending)
 - Verdict: pending
 - Commit: pending
-- Notes: Init Firebase, Google Auth, Firestore + Storage rules, typed db.ts, 7 data hooks (useUser, useToday, useMeals, useWeights, useWater, useWorkouts, useSleep), migrate all routes from MOCK_* to hooks, denormalize day totals on writes, enable offline persistence. Human must provide .env.local values before start.
+- Notes: Wire onboarding profile + goal form inputs to real React state. Wire Log Meal meal-type selector and preset selection. Add onboardingDraft Zustand store. Audit other log screens for similar placeholder UI. Verify Home refresh after meal log. Confirm todayKey uses local timezone.

@@ -1,402 +1,221 @@
-# REVIEW — Claude → Codex
+# REVIEW — Claude → Codex/Antigravity
 
-> **Last updated:** 2026-05-23 (after Phase 4 approval)
-> **Verdict on Phase 4:** ✅✅ **PASS** — Lighthouse 98/93/100/100, production live
-> **Active phase:** **Phase 5 — Firebase Wire-up** (the big one)
-
----
-
-## Pre-flight — Human action required (Codex: check before starting)
-
-If `.env.local` is missing or has empty values, write `## BLOCKED` in STATUS.md
-and stop. Do not attempt Phase 5 without these.
-
-Required in `dietquest/.env.local`:
-
-```
-VITE_FB_API_KEY=...
-VITE_FB_AUTH_DOMAIN=...firebaseapp.com
-VITE_FB_PROJECT_ID=...
-VITE_FB_STORAGE_BUCKET=....firebasestorage.app
-VITE_FB_MSG_SENDER_ID=...
-VITE_FB_APP_ID=...
-VITE_FB_VAPID_KEY=...
-```
-
-Verify presence with:
-```bash
-test -f .env.local && grep -c "^VITE_FB" .env.local
-# Expected: 7
-```
-
-Also required: Firebase project must have these enabled in console:
-- Authentication → Google sign-in method enabled
-- Cloud Firestore → created, region **`us-west1`** (No cost location)
-- Cloud Messaging → Web Push certificate generated (VAPID key)
-
-Human will have done these before starting Phase 5. If not, ask via STATUS.md.
-
-**Region note (2026-05-23):** Chose `us-west1` (Oregon) — closest US region
-to Thailand (~150-200ms latency). Firestore offline cache mitigates latency.
-
-**FINAL Storage decision (2026-05-23):** Photo upload feature REMOVED from
-scope (user does not want it). Do NOT:
-- Import `firebase/storage` anywhere
-- Create `src/lib/storage.ts`
-- Create `storage.rules`
-- Add photo upload UI to LogWeight
-- Add Photos tab to Progress (or keep but show empty state with "Coming in
-  v2" or remove tab entirely — your judgment)
-- Reference `storageBucket` initialization beyond what firebase config requires
+> **Last updated:** 2026-05-23 (after Phase 5 QA found gaps)
+> **Verdict on Phase 5:** ⚠️ **REVISE** — Firebase wiring is solid, but onboarding and meal selectors are non-functional UI placeholders
+> **Active phase:** **Phase 5.1 — Fix form interactivity** (must complete before Phase 6)
 
 ---
 
-## Phase 5 Brief — Firebase Wire-up
-
-Goal: Replace all mock data with real Firebase reads/writes. App requires Google
-sign-in. Data persists across devices and survives offline.
-
-### Implementation order (do EXACTLY in this sequence)
-
-#### Step 1 — Firebase init (30 min)
-
-Create `src/lib/firebase.ts`:
-
-```typescript
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from 'firebase/firestore';
-// NO storage import — feature removed from v1 scope
-
-const app = initializeApp({
-  apiKey: import.meta.env.VITE_FB_API_KEY,
-  authDomain: import.meta.env.VITE_FB_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FB_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FB_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FB_MSG_SENDER_ID,
-  appId: import.meta.env.VITE_FB_APP_ID,
-});
-
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
-// export const storage — removed; not used in v1
-```
-
-**Verify:** `import { db } from '@/lib/firebase'` works without runtime error.
-
-#### Step 2 — Security rules (30 min)
-
-Create `firestore.rules` (project root):
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-~~Create `storage.rules`~~ — **REMOVED from v1 scope** (no photo upload feature).
-
-Create `firebase.json` (project root):
-```json
-{
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  }
-}
-```
-
-Create empty `firestore.indexes.json`:
-```json
-{ "indexes": [], "fieldOverrides": [] }
-```
-
-**Deploy rules:** Need `firebase-tools` CLI. Install with `npm i -D firebase-tools`. Document this in DECISIONS.md.
-
-For deploy, write a `## BLOCKED` if you need human to run `firebase login` once. After that, `npx firebase deploy --only firestore:rules,storage:rules --project <PROJECT_ID>` works.
-
-#### Step 3 — Auth layer (1 day)
-
-`src/lib/auth.ts`:
-```typescript
-import { signInWithPopup, signOut, onAuthStateChanged, type User } from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
-
-export const signInGoogle = () => signInWithPopup(auth, googleProvider);
-export const logout = () => signOut(auth);
-export const watchAuth = (cb: (user: User | null) => void) =>
-  onAuthStateChanged(auth, cb);
-```
-
-`src/stores/authStore.ts` — Zustand store with current user + loading:
-```typescript
-// Listens to onAuthStateChanged in module init
-// Exposes: { user, loading, signIn, signOut }
-```
-
-`src/hooks/useAuth.ts` — convenience hook over store.
-
-#### Step 4 — Auth gate in App.tsx
-
-Wrap routes with auth check:
-
-```typescript
-function App() {
-  const { user, loading } = useAuth();
-
-  if (loading) return <SplashRoute />;
-  if (!user) return <LoginRoute />;  // bypass router entirely
-
-  // existing routes...
-}
-```
-
-Replace placeholder login (`/login`) implementation:
-- Single button "Sign in with Google" → calls `signInGoogle()`
-- On success, auth state changes → App re-renders → user sees Home
-
-#### Step 5 — First-time user detection + onboarding hook
-
-After sign-in, check if user doc exists in Firestore:
-- If exists → go to `/`
-- If missing → go to `/onboarding/welcome`
-- Onboarding final step writes user doc
+## What's working (do not touch)
+
+Phase 5 Firebase implementation is excellent — keep all of this:
+- `src/lib/firebase.ts` + `src/lib/auth.ts` + `src/lib/db.ts`
+- All 7 data hooks (useToday, useMeals, useWeights, useWater, useWorkouts, useSleep, usePresets) + useAuth + useUser + useOnboarding
+- Firestore rules + auth gate + first-time user detection
+- Transactional day-totals denormalization
+- Error boundary + bundle splitting
+- Routes migrated from MOCK_* (correct — keep)
+
+QA results from human:
+- ✅ Auth gate works
+- ✅ Google sign-in works (after adding `dietquest-sigma.vercel.app` to Firebase Authorized domains)
+- ✅ Onboarding does navigate to Home after "Build my plan"
+- ❌ **Onboarding form inputs are non-functional** (write default profile regardless of user input)
+- ❌ **Log Meal meal-type selector non-functional** (always saves as Breakfast)
+- ❌ **"Starter preset" card not clickable** when user has no presets
+
+---
+
+## Phase 5.1 Brief — Fix form interactivity
+
+These are interactive UI controls that look like inputs but have no state/handlers. Add real React state + handlers + persist to Firestore.
+
+### Fix 1 — `src/routes/onboarding.tsx` OnboardingProfileRoute (line 55-109)
+
+**Make all inputs real:**
+
+1. **Sex selector** (line 67-73) — currently static `data-active={index === 0}`:
+   - Add `useState<'male'|'female'|'other'>('male')`
+   - Each `<span>` becomes `<button>` with `onClick={() => setSex(option)}`
+   - `data-active={sex === option.toLowerCase()}`
+
+2. **Age stepper** (Stepper component line 111-131) — `+` and `-` buttons have no onClick:
+   - Convert `Stepper` to controlled component: `<Stepper value={age} onChange={setAge} min={13} max={100} />`
+   - `+` button: `onClick={() => onChange(Math.min(value + 1, max))}`
+   - `-` button: `onClick={() => onChange(Math.max(value - 1, min))}`
+   - Disable buttons at min/max
+
+3. **Height stepper** — same as age, range [120, 230] cm, step 1
+
+4. **Current weight** (line 80-86) — currently just `<Card>` displaying text, NO INPUT:
+   - Replace with stepper too, but with **decimal support**: step 0.1, range [30, 300] kg
+   - Use a new `<DecimalStepper value={weight} onChange={setWeight} step={0.1} />` OR
+   - Use `<input type="number" step="0.1" inputMode="decimal" />` styled to match design
+   - Default value: 80.0 (current MOCK_USER weight)
+
+5. **BMI · TDEE preview** (line 89-99) — currently hardcoded "28.0 BMI · 2,450 kcal":
+   - Compute live from state: `bmi = weight / (height/100)^2`, `tdee = bmr * 1.5`
+   - Use `src/lib/nutrition.ts` if it has functions, otherwise add `computeBMI()` and `computeTDEE()` there
+
+6. **Continue button** — must pass state forward. Use a Zustand store `useOnboardingDraft` OR React Router state OR localStorage to carry the profile across the 3 onboarding screens.
+
+   Recommended pattern: `src/stores/onboardingDraft.ts` Zustand store:
+   ```typescript
+   { sex, age, height_cm, weight_start_kg, weight_target_kg, target_months,
+     setSex, setAge, setHeight, setStartWeight, setTargetWeight, setTargetMonths,
+     reset }
+   ```
+
+### Fix 2 — `OnboardingGoalRoute` (line 133-201)
+
+1. **Target weight** (line 145-160) — currently just `<Card>` displaying text:
+   - Replace with stepper (decimal, step 0.5), range [40, weight_start_kg - 1]
+   - Reads `weight_start_kg` from draft store
+
+2. **Timeline** (line 163-175) — currently CSS-only "slider":
+   - Replace with real `<input type="range" min={3} max={12} value={months} onChange={...} />`
+   - Style to match the visual (sliderTrack/sliderFill/sliderThumb classes — wrap input)
+   - Display computed end date: `by ${endDate.toLocaleDateString()}`
+
+3. **Daily plan preview** (line 178-186) — currently hardcoded "1,950 kcal · 140g protein":
+   - Compute from state using `nutrition.ts`:
+     - `dailyDeficit = (startWeight - targetWeight) * 7700 / (months * 30)` kcal/day
+     - `dailyKcal = tdee - dailyDeficit`
+     - `dailyProtein = targetWeight * 1.8` g
+   - Display computed values
+
+4. **"Build my plan" button** — must use draft state, not DEFAULT_PROFILE:
+   ```typescript
+   const draft = useOnboardingDraft()
+   await completeOnboarding({
+     sex: draft.sex,
+     age: draft.age,
+     height_cm: draft.height_cm,
+     weight_start_kg: draft.weight_start_kg,
+     weight_target_kg: draft.weight_target_kg,
+     target_date: addMonths(new Date(), draft.target_months),
+   })
+   draft.reset()
+   navigate('/')
+   ```
+
+### Fix 3 — `src/routes/log-meal.tsx` LogMealRoute (line 16-74)
+
+1. **Meal type segmented** (line 33-39) — currently `data-active={index === 0}` static:
+   - Add `useState<MealType>('breakfast')`
+   - Each `<span>` becomes `<button>` with onClick to update state
+   - Default to current time of day:
+     - 04:00-10:00 → breakfast
+     - 10:00-15:00 → lunch
+     - 15:00-22:00 → dinner
+     - else → snack
+   - Pass selected meal type to confirm screen via state
 
-`src/hooks/useUser.ts`:
-- Subscribes to `users/{uid}` doc
-- Returns `{ user, profile, loading, exists }`
+2. **"Starter preset" card** (line 47-51) — when presets.length === 0:
+   - Convert from `<Card>` to `<button>` (or wrap Card in button)
+   - onClick: navigate to confirm with default preset
 
-#### Step 6 — Typed Firestore wrappers in `src/lib/db.ts`
+3. **Pass meal type to confirm screen:**
+   - Either via React Router state: `navigate('/log/meal/confirm', { state: { mealType, presetId } })`
+   - Or via small Zustand store `useMealDraft`
+   - LogMealConfirmRoute reads it; falls back to breakfast if missing
 
-Per BUILD_HANDOFF section 4 schema, implement these typed functions:
+### Fix 4 — `LogMealConfirmRoute` (line 76-156)
 
-```typescript
-// User
-getUser(uid): Promise<User | null>
-upsertUser(uid, partial: Partial<User>): Promise<void>
+1. Replace `useSelectedPreset()` (which always returns `data[0]`) with the actual selected preset from navigation state / draft store
+2. Display the meal type from selection (not hardcoded "Breakfast" in header line 112)
+3. `saveMeal()` uses `meal_type: selectedMealType` (not `preset.meal_type`)
+4. Confirm message in LogMealSavedRoute should say "{Mealtype} logged" not always "Breakfast logged" (line 169)
 
-// Day totals (denormalized)
-watchDayTotals(uid, date): Unsubscribe + observable
-upsertDayTotals(uid, date, totals): Promise<void>
+### Fix 5 — Verify Home refresh after meal log
 
-// Meals
-addMeal(uid, meal): Promise<string>  // returns id
-watchMeals(uid, date): observable
-deleteMeal(uid, mealId): Promise<void>
-
-// Weights
-addWeight(uid, weight): Promise<void>  // doc ID = YYYY-MM-DD
-watchWeights(uid, days: number): observable
-deleteWeight(uid, date): Promise<void>
-
-// Water
-addWater(uid, ml): Promise<string>
-watchWaterToday(uid, date): observable
-deleteWater(uid, id): Promise<void>
-
-// Workouts
-addWorkout(uid, workout): Promise<string>
-watchWorkouts(uid, daysBack): observable
-
-// Sleep
-upsertSleep(uid, sleep): Promise<void>  // doc ID = YYYY-MM-DD
-watchSleep(uid, date): observable
-
-// Presets
-addPreset(uid, preset): Promise<string>
-watchPresets(uid): observable
-markPresetUsed(uid, presetId): Promise<void>  // bumps last_used_at, use_count
-```
-
-**Rules:**
-- All functions strongly typed using `src/types/domain.ts`
-- Convert Firestore Timestamp <-> Date at the boundary (never leak Timestamp into UI)
-- Use `serverTimestamp()` for `logged_at` / `created_at` / `updated_at`
-- All writes inside a transaction or batch when they update multiple docs
-
-#### Step 7 — Data hooks (THE BIG ONE, ~1 day)
-
-Create these hooks — each is a thin wrapper over the `db.ts` watchers, adds React lifecycle:
-
-```typescript
-src/hooks/
-  useUser.ts          // current user + profile
-  useToday.ts         // today's day totals doc
-  useMeals.ts         // useMeals(date) → meals for that day
-  useWeights.ts       // useWeights(daysBack) → recent weights
-  useWater.ts         // useWater(date) → water logs for day, with sum
-  useWorkouts.ts      // useWorkouts(daysBack) → recent workouts
-  useSleep.ts         // useSleep(date) → sleep doc for date
-  usePresets.ts       // user's meal presets
-```
-
-Each hook:
-- Returns `{ data, loading, error }`
-- Unsubscribes on unmount
-- Uses Firestore SDK directly (NOT through Zustand — listeners are the store)
-
-#### Step 8 — Migrate all routes from mock to hooks
-
-Search all routes for `from '@/lib/mock'` and replace:
-
-| Before | After |
-|---|---|
-| `import { MOCK_TODAY } from '@/lib/mock'` | `const { data: today } = useToday()` |
-| `import { MOCK_MEALS } from '@/lib/mock'` | `const { data: meals } = useMeals(today)` |
-| `import { MOCK_WEIGHTS } from '@/lib/mock'` | `const { data: weights } = useWeights(30)` |
-| `import { MOCK_USER } from '@/lib/mock'` | `const { user, profile } = useUser()` |
-| `import { MOCK_WATER_LOGS } from '@/lib/mock'` | `const { data: water } = useWater(today)` |
-| `import { MOCK_WORKOUT } from '@/lib/mock'` | `const { data: workouts } = useWorkouts(30)` |
-| `import { MOCK_SLEEP } from '@/lib/mock'` | `const { data: sleep } = useSleep(today)` |
-| `import { MOCK_PRESETS } from '@/lib/mock'` | `const { data: presets } = usePresets()` |
-
-**Add loading states:** every screen that fetches must render a skeleton/spinner during loading.
-
-**Add empty states:** every list must handle 0 items gracefully.
-
-After migration, `src/lib/mock.ts` may stay as **dev seed helper** for testing (don't import in production routes).
-
-#### Step 9 — Denormalization (after meal/water/workout write)
-
-After each write that affects the day's totals, also update the day totals doc.
-
-Example: `addMeal(uid, meal)`:
-1. Write meal doc
-2. In same batch: read `users/{uid}/days/{date}`, increment totals, write back
-
-Use Firestore `runTransaction` to avoid race conditions:
-
-```typescript
-import { runTransaction, doc, increment } from 'firebase/firestore';
-
-await runTransaction(db, async (tx) => {
-  const dayRef = doc(db, `users/${uid}/days/${date}`);
-  const mealRef = doc(collection(db, `users/${uid}/meals`));
-
-  tx.set(mealRef, meal);
-  tx.set(dayRef, {
-    date,
-    totals: {
-      kcal: increment(meal.total_kcal),
-      protein_g: increment(meal.total_protein_g),
-      // ...
-    },
-    updated_at: serverTimestamp(),
-  }, { merge: true });
-});
-```
-
-#### Step 10 — Onboarding writes user doc
-
-On final onboarding step (Goal screen → "Create plan" button):
-1. Compute initial daily_kcal_target from BMR + activity factor (see `src/lib/nutrition.ts` — create if missing)
-2. Write `users/{uid}` doc with profile + settings
-3. Navigate to `/`
-
-#### Step 11 — ~~Storage for weight photos~~ **REMOVED from v1 scope**
-
-User explicitly opted out of photo upload. Action:
-- Do NOT create `src/lib/storage.ts`
-- Do NOT import `firebase/storage`
-- LogWeight: remove any photo UI; weight log has no `photo_paths` field
-- Progress > Photos tab: remove the tab OR show static empty state
-  (recommended: remove from `<TabBar>` to simplify nav)
-- Domain types: remove `photo_paths?: string[]` from WeightLog type
-- Mock data: remove photo paths from MOCK_WEIGHTS (already none, just confirm)
-
-### Rules
-
-- **NEVER write Firestore from outside `src/lib/db.ts`** — components only use hooks
-- **NEVER assume user is signed in inside a hook** — guard with `if (!uid) return`
-- **NEVER store Date in Firestore** — always Timestamp via `serverTimestamp()` or `Timestamp.fromDate()`
-- **NEVER skip cleanup** — every `onSnapshot` listener must unsubscribe in useEffect cleanup
-- **NEVER use `getDocs` for screens that need realtime** — use `onSnapshot`
-- **DO use `getDoc` (one-shot)** for: onboarding check, profile read
-- **DO add an error boundary** at App level to catch Firebase errors
-
-### Commit convention for Phase 5
+User reported "ไม่มีข้อมูลแสดง" after save. Check:
+
+1. `src/lib/dates.ts` `todayKey()` — must return local timezone date in YYYY-MM-DD format. If using UTC, late-night logs go to wrong date.
+   ```typescript
+   export function todayKey(): string {
+     const now = new Date()
+     const y = now.getFullYear()
+     const m = String(now.getMonth() + 1).padStart(2, '0')
+     const d = String(now.getDate()).padStart(2, '0')
+     return `${y}-${m}-${d}`
+   }
+   ```
+
+2. `useToday()` must subscribe to the SAME date key. If it computes today separately, mismatch is possible.
+
+3. `useMeals(date)` must use `onSnapshot` not `getDocs` — confirm in `src/lib/db.ts`
+
+4. Test manually: log meal → check Firestore Console → see doc appeared in `users/{uid}/meals/`. Then check `users/{uid}/days/{today}/totals` updated. If write succeeded but UI didn't refresh = listener issue.
+
+### Fix 6 — Other forms that might have the same issue (audit)
+
+Codex/Antigravity: grep for similar patterns and fix:
+- `src/routes/log-water.tsx` or wherever water input is — check "Add 250 / 500 / Custom" buttons are wired
+- `src/routes/log-weight.tsx` — confirm weight input is real
+- `src/routes/log-sleep.tsx` — confirm time pickers actually work
+- `src/routes/log-workout.tsx` — confirm incline/speed sliders are real inputs
+- `src/routes/profile.tsx` — settings (theme toggle should already work via useTheme; goals editing may not)
+
+For each screen with "input-looking UI", verify:
+- State exists
+- onChange handlers fire
+- Submit uses the state value (not a default const)
+
+---
+
+## Commit convention for Phase 5.1
 
 ```
-chore(firebase): init + env config
-feat(rules): firestore + storage security rules
-feat(auth): google sign-in + auth gate
-feat(auth): first-time user detection + onboarding write
-feat(db): typed firestore wrappers
-feat(hooks): user/today/meals
-feat(hooks): weights/water
-feat(hooks): workouts/sleep/presets
-refactor(routes): migrate from mock to hooks
-feat(db): denormalized day totals via transaction
-feat(storage): weight photo upload
-chore(deploy): firestore rules deploy
+fix(onboarding): wire profile form inputs to real state
+fix(onboarding): wire goal form inputs to real state
+feat(stores): onboarding draft store
+fix(log): wire meal-type selector and preset selection
+fix(log): persist meal type through confirm flow
+fix(dates): ensure todayKey uses local timezone
+fix(log): audit and wire remaining log-* screens
 ```
 
-### DoD checklist (fill in STATUS.md when done)
+---
 
-- [ ] `.env.local` exists with 7 VITE_FB_* values (human-provided)
-- [ ] `src/lib/firebase.ts` initializes app + auth + db + storage
-- [ ] Persistent local cache enabled (Firestore offline)
-- [ ] `firestore.rules` + `storage.rules` + `firebase.json` + `firestore.indexes.json` in repo
-- [ ] Rules deployed to Firebase project
-- [ ] Auth gate works: sign out → see login, sign in → see home
-- [ ] Google sign-in works in production (test on deployed URL)
-- [ ] First-time sign-in routes to onboarding; second time goes to home
-- [ ] Onboarding writes user doc; can verify in Firestore console
-- [ ] All 7 data hooks created + typed
-- [ ] All routes migrated from `MOCK_*` to hooks (grep for remaining imports)
-- [ ] Loading + empty states on every screen
-- [ ] Logging a meal persists across reload
-- [ ] Logging a meal updates day totals (denormalization works)
-- [ ] Open app on 2 devices simultaneously → see real-time sync
-- [ ] Airplane mode → log meal → re-enable network → meal appears in server
-- [ ] Security test: create test user via emulator OR second Google account; confirm they cannot read your data
+## DoD Phase 5.1 (fill in STATUS.md when done)
+
+- [ ] Onboarding profile: Sex/Age/Height/Weight all editable, persist to Firestore correctly
+- [ ] Onboarding goal: Target weight + timeline editable, daily kcal computed from inputs
+- [ ] Verify in Firestore Console: `users/{uid}.profile.weight_start_kg` matches what was entered
+- [ ] BMI/TDEE/kcal preview updates live as user changes inputs
+- [ ] Log Meal: meal-type selector switches between breakfast/lunch/dinner/snack
+- [ ] Log Meal: "Starter preset" card is clickable when user has no saved presets
+- [ ] Log Meal: selected meal type carries through to confirm + saved screens
+- [ ] Home refreshes within 2 sec after meal is logged (onSnapshot working)
+- [ ] todayKey uses local timezone (test: log meal at 23:30 local, should appear under today's date)
+- [ ] Other log screens audited and any placeholder UI fixed
 - [ ] `npm run build` clean
-- [ ] Deployed to Vercel; production URL works with real Firebase
-- [ ] STATUS.md updated, HISTORY.md appended
+- [ ] Deployed to Vercel; production has fixes
+- [ ] STATUS.md updated, HISTORY.md appended (entry: "Phase 5.1 — form interactivity fixes")
 
-### Blockers expected (call out in STATUS.md)
-
-These require human action:
-- `.env.local` values (human must provide if missing)
-- `firebase login` once (one-time CLI auth)
-- `firebase use <PROJECT_ID>` to select project
-- Adding REAL Firebase env vars to Vercel (replacing placeholders from Phase 4)
-- After Vercel env vars updated: redeploy to pick them up
-- Production sign-in test with real Google account
-
-### When Phase 5 done
-
-1. `npm run build` succeeds
-2. Production URL works with real Firebase
-3. Sign-in / log / persistence all working end-to-end
-4. Multi-device sync verified
-5. Update STATUS.md + HISTORY.md
-6. STOP — wait for review before Phase 6 polish
+When done, STOP for Claude review.
 
 ---
 
-## Why this is the most complex phase
+## Notes for next agent (if switching from Codex to Antigravity)
 
-- **Type discipline** — Firebase Timestamp <-> Date is a common bug source
-- **Listener leaks** — `onSnapshot` without cleanup = memory leak + ghost writes
-- **Race conditions** — concurrent writes need transactions
-- **Auth state** — handling loading/signed-in/signed-out states without flicker
-- **Security rules** — must test, not just write
-- **Migration scope** — every route file touched
+This is Antigravity's first phase on this project. To onboard quickly:
 
-Plan for ~3 days. If hit blocker, write to STATUS.md early, don't grind.
+1. Read `AGENT_LOG/README.md` (the loop)
+2. Read this REVIEW.md (current task — Phase 5.1 fixes)
+3. Read `AGENT_LOG/STATUS.md` (Codex's last report — what was built)
+4. Read `AGENT_LOG/HISTORY.md` (phase outcomes so far)
+5. Read `BUILD_HANDOFF.md` (project spec) — sections 2, 4, 6 are most relevant
+6. Read `src/lib/mock.ts`, `src/types/domain.ts`, `src/lib/db.ts` — to understand data shape
+7. Then start fixing per the Fix 1-6 list above
 
-Phase 6 (polish) becomes much faster once this is solid.
+Coding style observed so far: Inline styles for small (≤5 props), CSS Modules for layout. Conventional commits. No `any` types. CSS variables from `tokens.css` for colors. Use `appStyles as styles` import pattern from `@/components/layout/AppScreen`. Components use named exports (not default).
+
+The previous agent (Codex) wrote ~15 commits per phase, well-scoped. Follow the same granularity.
+
+---
+
+## After Phase 5.1 → Phase 6 brief (will be provided when 5.1 closes)
+
+Phase 6 will cover: toasts, skeletons, pull-to-refresh, haptic, data export, npm audit, Lighthouse re-audit, README polish, v1.0.0 tag. Do NOT start Phase 6 until 5.1 is reviewed and approved.
