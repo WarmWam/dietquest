@@ -54,7 +54,7 @@ Format per entry:
 - Notes: Firebase backend solid (auth gate, rules, hooks, transactions, error boundary, bundle split). Sign-in works after adding dietquest-sigma.vercel.app to Firebase Authorized domains. However, onboarding form inputs (sex/age/height/weight/target/timeline) and Log Meal meal-type selector are non-functional UI placeholders that always write defaults. Goes to Phase 5.1 fix sub-phase before Phase 6.
 
 ## Phase 5.1 — Form interactivity fixes
-- Date: (pending)
-- Verdict: pending
-- Commit: pending
-- Notes: Wire onboarding profile + goal form inputs to real React state. Wire Log Meal meal-type selector and preset selection. Add onboardingDraft Zustand store. Audit other log screens for similar placeholder UI. Verify Home refresh after meal log. Confirm todayKey uses local timezone.
+- Date: 2026-05-23
+- Verdict: PASS
+- Commit: 10a8aa5...0f9f494 (5 commits)
+- Notes: Wired onboarding profile and goal form inputs to Zustand store (useOnboardingDraft) with formula-based target calculations. Wired meal-type segmented selector, starter preset card, dynamic eyebrow headers, and saved screens to Zustand store (useMealDraft). Checked todayKey to use local timezone. Audited and wired sleep time pickers and star rating selectors. Clean production build compiles without errors.
