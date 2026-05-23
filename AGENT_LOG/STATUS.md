@@ -88,7 +88,7 @@
 - pending - `style(ui): apply neural expressive visual refresh`
 - pending - `chore(pwa): update health tracking app icon`
 - pending - `chore(brand): align launch screens with health tracking`
-- `58b0ab2` - `fix(plan): make planner sheets fullscreen`
+- `f94d5a1` - `fix(plan): make planner sheets fullscreen`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

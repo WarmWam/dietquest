@@ -146,5 +146,5 @@ Format per entry:
 ## Phase 6.3 Follow-up - Plan fullscreen modals
 - Date: 2026-05-23
 - Verdict: 
-- Commit: 58b0ab2
+- Commit: f94d5a1
 - Notes: Converted Plan day, food, workout, bulk planner, category, and food edit sheets to fullscreen scroll-contained modals with body scroll lock so the background does not show or move.
