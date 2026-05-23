@@ -82,3 +82,9 @@ Format per entry:
 - Verdict: pending
 - Commit: pending
 - Notes: Small post-v1.0.1 fix in response to silent listener failure (firestore composite index missing → meals query failed → Home showed empty state instead of error). Indexes already deployed by Claude (commit ea1a873). Phase 6.2 hardens against future silent failures: console.error in every onSnapshot handler in db.ts, error UI on Home distinct from empty, toast.error on log/progress screen failures. Tag v1.0.2 when done.
+
+## Phase 6.2 - Error visibility + silent-failure hardening
+- Date: 2026-05-23
+- Verdict: 
+- Commit: 56ab8f4...HEAD
+- Notes: Added context-labeled console.error logging to all Firestore snapshot listener error paths, added Home error UI with Retry that wins over the empty state, and surfaced hook failures through toast/error cards across log, progress, plan, and profile screens. Build clean. Manual failure-injection QA deferred to reviewer/human signed-in session.
