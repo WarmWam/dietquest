@@ -15,7 +15,7 @@ import { useWorkoutPlan } from '@/hooks/useWorkoutPlan'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
-import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WaterLog, type WorkoutPlan } from '@/types/domain'
+import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WaterLog, type WorkoutLog, type WorkoutPlan } from '@/types/domain'
 
 type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
 
@@ -155,7 +155,7 @@ function HomeFullContent({
   const { data: waterLogs, add: addWater, remove: removeWater, totalMl, error: waterError } = useWater(todayKey)
   const { data: sleep, upsert: upsertSleep, error: sleepError } = useSleep(todayKey)
   const { data: weights, error: weightsError } = useWeights(30)
-  const { data: workouts, add: addWorkout, error: workoutsError } = useWorkouts(1)
+  const { data: workouts, add: addWorkout, remove: removeWorkout, error: workoutsError } = useWorkouts(1)
   const [savingTask, setSavingTask] = useState<string | null>(null)
   const [waterAmount, setWaterAmount] = useState(0)
   const [sleepStart, setSleepStart] = useState(sleep?.bedtime ?? '')
@@ -287,6 +287,21 @@ function HomeFullContent({
     }
   }
 
+  async function deleteWorkoutLog(log: WorkoutLog) {
+    if (!window.confirm(`Delete ${log.kcal_burned} kcal workout?`)) return
+    setSavingTask(`workout-${log.id}`)
+    try {
+      await removeWorkout(log.id)
+      toast.success('Workout deleted')
+      haptic(5)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't delete workout.")
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
   async function saveSleep() {
     if (savingTask) return
     if (!sleepStart || !sleepEnd) {
@@ -367,10 +382,12 @@ function HomeFullContent({
         <WorkoutPlanTask
           done={todayWorkouts.length > 0}
           onConfirm={() => workoutPlan ? void confirmWorkout(workoutPlan) : navigate('/plan')}
+          onDelete={(log) => void deleteWorkoutLog(log)}
           plan={workoutPlan}
           saving={savingTask === 'workout'}
           setWorkoutKcal={setWorkoutKcal}
           totalWorkoutKcal={totalWorkoutKcal}
+          workouts={todayWorkouts}
           workoutKcal={workoutKcal}
         />
         <div className="dq-divider" />
@@ -489,18 +506,22 @@ function PlanMealCard({
 function WorkoutPlanTask({
   done,
   onConfirm,
+  onDelete,
   plan,
   saving,
   setWorkoutKcal,
   totalWorkoutKcal,
+  workouts,
   workoutKcal,
 }: {
   done: boolean
   onConfirm: () => void
+  onDelete: (log: WorkoutLog) => void
   plan: WorkoutPlan | null
   saving: boolean
   setWorkoutKcal: (value: string) => void
   totalWorkoutKcal: number
+  workouts: WorkoutLog[]
   workoutKcal: string
 }) {
   const meta = plan ? WORKOUT_PLAN_TYPES.find((type) => type.id === plan.type) : null
@@ -538,6 +559,19 @@ function WorkoutPlanTask({
             {plan ? 'Confirm workout' : 'Plan workout'}
           </Button>
         )}
+        {workouts.length ? (
+          <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+            {workouts.map((log) => (
+              <div key={log.id} style={{ alignItems: 'center', display: 'grid', gap: 8, gridTemplateColumns: '1fr auto auto' }}>
+                <span className={styles.rowSub}>{log.type.replace('_', ' ')}</span>
+                <strong style={{ fontSize: 13 }}>{log.kcal_burned} kcal</strong>
+                <button aria-label="Delete workout" onClick={() => onDelete(log)} type="button" style={{ background: 'transparent', border: 0, color: 'var(--t-3)', padding: 4 }}>
+                  <Icon name="x" size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   )

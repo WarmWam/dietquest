@@ -347,6 +347,10 @@ export async function addWorkout(uid: string, workout: Omit<WorkoutLog, 'id'>): 
   return workoutRef.id
 }
 
+export async function deleteWorkout(uid: string, workoutId: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'workouts', workoutId))
+}
+
 export function watchWorkouts(uid: string, daysBack: number, cb: WatchCallback<WorkoutLog[]>): Unsubscribe {
   return onSnapshot(
     query(userCollection(uid, 'workouts'), where('date', '>=', daysAgoKey(daysBack)), orderBy('date', 'desc')),

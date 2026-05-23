@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { addWorkout, watchWorkouts } from '@/lib/db'
+import { addWorkout, deleteWorkout, watchWorkouts } from '@/lib/db'
 import { useAuth } from '@/hooks/useAuth'
 import { useWatch } from '@/hooks/useWatch'
 import type { WorkoutLog } from '@/types/domain'
@@ -16,6 +16,10 @@ export function useWorkouts(daysBack = 30) {
     add: (workout: Omit<WorkoutLog, 'id'>) => {
       if (!user) throw new Error('Sign in required')
       return addWorkout(user.uid, workout)
+    },
+    remove: (workoutId: string) => {
+      if (!user) throw new Error('Sign in required')
+      return deleteWorkout(user.uid, workoutId)
     },
   }
 }
