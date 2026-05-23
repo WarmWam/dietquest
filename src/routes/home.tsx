@@ -9,6 +9,8 @@ import { useMeals } from '@/hooks/useMeals'
 import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
+import { useWorkouts } from '@/hooks/useWorkouts'
+import { todayKey as getTodayKey } from '@/lib/dates'
 import type { MealLog, MealType, UserSettings } from '@/types/domain'
 
 const mealMeta: Record<MealType, { label: string; icon: string }> = {
@@ -130,7 +132,12 @@ export function HomeRoute() {
 function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; settings: UserSettings; today: ReturnType<typeof useToday>['data'] }) {
   const navigate = useNavigate()
   const { data: weights } = useWeights(30)
+  const { data: workouts } = useWorkouts(1)
   const latestWeight = weights[weights.length - 1]
+  const todayWorkouts = workouts.filter((w) => w.date === getTodayKey())
+  const totalWorkoutMin = todayWorkouts.reduce((sum, w) => sum + w.duration_min, 0)
+  const workoutTarget = 60
+  const workoutPct = Math.min(totalWorkoutMin / workoutTarget, 1)
 
   return (
     <>
@@ -146,10 +153,10 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
 
       <div className={styles.topStats}>
         <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(today.totals.water_ml / 3000, 1)} target="3.0 L" value={(today.totals.water_ml / 1000).toFixed(1)} />
-        <MiniStat color="#10B981" icon="walk" label="Incline" pct={today.habits.walk_done ? 0.75 : 0} target="60 min" value={today.habits.walk_done ? '45' : '0'} />
+        <MiniStat color="#10B981" icon="walk" label="Incline" pct={workoutPct} target={`${workoutTarget} min`} value={String(totalWorkoutMin)} />
       </div>
 
-      <SectionLabel action="Edit">Today's meals</SectionLabel>
+      <SectionLabel>Today's meals</SectionLabel>
       <div className={styles.mealList}>
         {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
           const meal = meals.find((item) => item.meal_type === type)
