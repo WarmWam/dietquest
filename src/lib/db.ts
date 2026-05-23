@@ -79,6 +79,7 @@ function deserializeUser(id: string, data: DocumentData): User {
       accent: data.settings?.accent ?? 'aurora',
       daily_kcal_target: Number(data.settings?.daily_kcal_target ?? 0),
       daily_protein_target: Number(data.settings?.daily_protein_target ?? 0),
+      notifications: data.settings?.notifications,
     },
   }
 }

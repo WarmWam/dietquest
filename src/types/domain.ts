@@ -25,6 +25,13 @@ export type UserSettings = {
   accent: AccentName
   daily_kcal_target: number
   daily_protein_target: number
+  notifications?: {
+    breakfast: boolean
+    lunch: boolean
+    water: boolean
+    workout: boolean
+    bedtime: boolean
+  }
 }
 
 export type User = {
