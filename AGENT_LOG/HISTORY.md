@@ -85,6 +85,12 @@ Format per entry:
 
 ## Phase 6.2 - Error visibility + silent-failure hardening
 - Date: 2026-05-23
-- Verdict: 
-- Commit: 56ab8f4...HEAD
-- Notes: Added context-labeled console.error logging to all Firestore snapshot listener error paths, added Home error UI with Retry that wins over the empty state, and surfaced hook failures through toast/error cards across log, progress, plan, and profile screens. Build clean. Manual failure-injection QA deferred to reviewer/human signed-in session.
+- Verdict: PASS (Claude review)
+- Commit: 56ab8f4...efb6c0f (4 commits)
+- Notes: Cleaner than spec — Codex extracted `logFirestoreError` + `listenerError` helpers (DRY) instead of inline copy-paste. All 8 onSnapshot listeners log with contextual labels (user/days/meals/weights/water/workouts/sleep/presets). Home distinguishes error UI (Couldn't load today + Retry) from empty state. Log/progress/plan/profile screens surface hook errors via toast.error. Critical screens (Home/Water/Weight) show error cards too. Bundle delta +1.65 KB raw / +0.32 KB gzip — under budget. Manual failure injection deferred (production-account safety concern).
+
+## v1.0.2 — Tagged Release (error visibility)
+- Date: 2026-05-23
+- Verdict: SHIPPED
+- Tag: v1.0.2
+- Notes: Hardens error visibility — future silent failures will surface in console + UI within seconds instead of taking hours to debug. Sparked by post-v1.0.1 finding that missing Firestore composite indexes for meals/water queries caused Home to render empty state instead of error (index added in commit ea1a873, error visibility shipped in this tag).
