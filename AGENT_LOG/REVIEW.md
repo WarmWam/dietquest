@@ -31,16 +31,19 @@ test -f .env.local && grep -c "^VITE_FB" .env.local
 
 Also required: Firebase project must have these enabled in console:
 - Authentication → Google sign-in method enabled
-- Cloud Firestore → created, region `asia-southeast1`
-- ~~Storage → created, same region~~ **DEFERRED to v1.1** — Firebase Storage now requires Blaze plan (credit card). Skipping for v1.0.
+- Cloud Firestore → created, region **`us-west1`** (No cost location)
+- Storage → created, region **`us-west1`** (No cost location — same as Firestore)
 - Cloud Messaging → Web Push certificate generated (VAPID key)
 
 Human will have done these before starting Phase 5. If not, ask via STATUS.md.
 
-**Important Phase 5 scope change (2026-05-23):** Storage is DEFERRED. Do NOT
-implement Step 11 (weight photo upload). Skip `src/lib/storage.ts` and
-storage.rules. Skip getStorage() in firebase.ts. LogWeight screen should
-hide/disable the photo upload UI with a TODO comment for v1.1.
+**Region note (2026-05-23):** Spark plan free tier requires US no-cost regions.
+Chose `us-west1` (Oregon) for both Firestore and Storage — closest US region
+to Thailand (~150-200ms latency). Firestore offline cache mitigates latency.
+
+**Storage scope (2026-05-23):** Initially deferred due to thought Storage
+required Blaze, but Firebase now offers free US-region Storage. Storage IS
+included in Phase 5 scope. Step 11 (photo upload) remains in this phase.
 
 ---
 
@@ -53,7 +56,7 @@ sign-in. Data persists across devices and survives offline.
 
 #### Step 1 — Firebase init (30 min)
 
-Create `src/lib/firebase.ts` (NO Storage import — deferred to v1.1):
+Create `src/lib/firebase.ts`:
 
 ```typescript
 import { initializeApp } from 'firebase/app';
@@ -63,6 +66,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 const app = initializeApp({
   apiKey: import.meta.env.VITE_FB_API_KEY,
@@ -80,7 +84,7 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(),
   }),
 });
-// NOTE: Storage deferred to v1.1 (requires Blaze plan). Re-add when needed.
+export const storage = getStorage(app);
 ```
 
 **Verify:** `import { db } from '@/lib/firebase'` works without runtime error.
@@ -99,7 +103,17 @@ service cloud.firestore {
 }
 ```
 
-~~Create `storage.rules`~~ — **DEFERRED to v1.1** (Storage not enabled).
+Create `storage.rules` (project root):
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
 
 Create `firebase.json` (project root):
 ```json
@@ -107,6 +121,9 @@ Create `firebase.json` (project root):
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
 ```
@@ -298,14 +315,36 @@ On final onboarding step (Goal screen → "Create plan" button):
 2. Write `users/{uid}` doc with profile + settings
 3. Navigate to `/`
 
-#### Step 11 — ~~Storage for weight photos~~ **SKIPPED in v1.0**
+#### Step 11 — Storage for weight photos
 
-Deferred to v1.1 (Firebase Storage requires Blaze plan upgrade with credit
-card; user opted to defer). On `LogWeight` screen:
-- Hide or disable the photo upload UI
-- Add comment: `// TODO(v1.1): re-enable when Storage available`
-- Do NOT create `src/lib/storage.ts`
-- Do NOT import `firebase/storage` anywhere
+Create `src/lib/storage.ts`:
+```typescript
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from './firebase';
+
+export async function uploadWeightPhoto(uid: string, date: string, file: File): Promise<string> {
+  // Resize/compress to ≤500 KB before upload (use browser canvas)
+  const path = `users/${uid}/weights/${date}/${Date.now()}.jpg`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  return path;
+}
+
+export async function getWeightPhotoUrl(path: string): Promise<string> {
+  return getDownloadURL(ref(storage, path));
+}
+
+export async function deleteWeightPhoto(path: string): Promise<void> {
+  await deleteObject(ref(storage, path));
+}
+```
+
+Wire to `LogWeight` screen:
+- Optional photo upload (camera input on mobile: `<input type="file" accept="image/*" capture="environment">`)
+- Show selected photo preview before save
+- On save: upload photo first, store path in weight doc's `photo_paths` array
+- Limit: 1 photo per weight log for v1.0 (multi-photo in v1.1)
+- Client-side compress to ≤500 KB to stay well under Spark Storage limits
 
 ### Rules
 
