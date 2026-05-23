@@ -6,6 +6,7 @@ import { useFoods } from '@/hooks/useFoods'
 import { useUser } from '@/hooks/useUser'
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
+import { STARTER_FOODS } from '@/data/starterFoods'
 import { FOOD_CATEGORIES, type Food, type FoodCategory } from '@/types/domain'
 
 type PlanTab = 'calendar' | 'library'
@@ -57,10 +58,27 @@ function LibraryTab() {
   const [filter, setFilter] = useState<FilterCategory>('all')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Food | 'new' | null>(null)
+  const [seeding, setSeeding] = useState(false)
 
   useEffect(() => {
     if (error) toast.error("Couldn't load food library.")
   }, [error])
+
+  async function handleSeedStarter() {
+    if (seeding) return
+    setSeeding(true)
+    try {
+      await Promise.all(STARTER_FOODS.map((food) => add(food)))
+      toast.success(`Added ${STARTER_FOODS.length} starter foods`)
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't seed library. Try again.")
+      haptic([20, 40, 20])
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -154,9 +172,14 @@ function LibraryTab() {
       ) : filtered.length === 0 ? (
         <Card padding={22} style={{ textAlign: 'center', borderStyle: 'dashed' }}>
           <Icon color="var(--t-3)" name="fork" size={28} />
-          <p className={styles.subtitle} style={{ marginTop: 10 }}>
-            {foods.length === 0 ? 'No foods yet — tap + to add your first.' : 'No foods match this filter.'}
+          <p className={styles.subtitle} style={{ marginTop: 10, marginBottom: foods.length === 0 ? 14 : 0 }}>
+            {foods.length === 0 ? 'Your library is empty.' : 'No foods match this filter.'}
           </p>
+          {foods.length === 0 ? (
+            <Button disabled={seeding} icon="sparkle" onClick={() => void handleSeedStarter()}>
+              {seeding ? 'Adding...' : `Add ${STARTER_FOODS.length} starter foods`}
+            </Button>
+          ) : null}
         </Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -259,7 +282,7 @@ function FoodEditSheet({
   onCancel: () => void
 }) {
   const [name, setName] = useState(food?.name ?? '')
-  const [category, setCategory] = useState<FoodCategory>(food?.category ?? 'protein')
+  const [category, setCategory] = useState<FoodCategory>(food?.category ?? 'food')
   const [portionUnit, setPortionUnit] = useState(food?.portion_unit ?? 'serving')
   const [kcal, setKcal] = useState(food?.kcal_per_portion ?? 100)
   const [protein, setProtein] = useState(food?.protein_g_per_portion ?? 10)

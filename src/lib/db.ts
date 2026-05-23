@@ -22,7 +22,7 @@ import {
 import { db } from '@/lib/firebase'
 import { daysAgoKey } from '@/lib/dates'
 import type { DayTotals, Food, MealLog, MealPlan, MealPlanItem, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog, WorkoutPlan } from '@/types/domain'
-import { emptyMealPlan } from '@/types/domain'
+import { emptyMealPlan, normalizeFoodCategory } from '@/types/domain'
 
 type WatchState<T> = {
   data: T
@@ -367,7 +367,7 @@ function deserializeFood(snap: { id: string; data: () => DocumentData }): Food {
   return {
     id: snap.id,
     name: String(data.name ?? ''),
-    category: (data.category as Food['category']) ?? 'other',
+    category: normalizeFoodCategory(data.category),
     portion_unit: String(data.portion_unit ?? 'serving'),
     kcal_per_portion: Number(data.kcal_per_portion ?? 0),
     protein_g_per_portion: Number(data.protein_g_per_portion ?? 0),

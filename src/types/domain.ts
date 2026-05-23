@@ -124,7 +124,7 @@ export type SleepLog = {
   quality_1_5: number
 }
 
-export type FoodCategory = 'protein' | 'carb' | 'fruit' | 'veggie' | 'drink' | 'snack' | 'other'
+export type FoodCategory = 'food' | 'fruit' | 'other'
 
 export type Food = {
   id: string
@@ -138,14 +138,25 @@ export type Food = {
 }
 
 export const FOOD_CATEGORIES: { id: FoodCategory; label: string; icon: string }[] = [
-  { id: 'protein', label: 'Protein', icon: 'PR' },
-  { id: 'carb', label: 'Carbs', icon: 'CB' },
+  { id: 'food', label: 'Food', icon: 'FD' },
   { id: 'fruit', label: 'Fruit', icon: 'FR' },
-  { id: 'veggie', label: 'Veggie', icon: 'VG' },
-  { id: 'drink', label: 'Drink', icon: 'DK' },
-  { id: 'snack', label: 'Snack', icon: 'SN' },
   { id: 'other', label: 'Other', icon: 'OT' },
 ]
+
+// Map legacy category values (from earlier v1.1.0) to the simplified set
+const LEGACY_CATEGORY_MAP: Record<string, FoodCategory> = {
+  protein: 'food',
+  carb: 'food',
+  veggie: 'food',
+  drink: 'other',
+  snack: 'other',
+}
+
+export function normalizeFoodCategory(raw: unknown): FoodCategory {
+  if (typeof raw !== 'string') return 'other'
+  if (raw === 'food' || raw === 'fruit' || raw === 'other') return raw
+  return LEGACY_CATEGORY_MAP[raw] ?? 'other'
+}
 
 // ─────────────────────────────────────────────────────────────
 // Meal & Workout planning (Calendar)
