@@ -13,11 +13,13 @@ import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
 import type { MealLog, MealType, UserSettings } from '@/types/domain'
 
-const mealMeta: Record<MealType, { label: string; icon: string }> = {
-  breakfast: { label: 'Breakfast', icon: 'AM' },
-  lunch: { label: 'Lunch', icon: 'NO' },
-  dinner: { label: 'Dinner', icon: 'PM' },
-  snack: { label: 'Snack', icon: 'SN' },
+type SlotIcon = 'sun' | 'moon' | 'sparkle'
+
+const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
+  breakfast: { icon: 'sun', color: '#FB923C' },
+  lunch: { icon: 'sun', color: '#F59E0B' },
+  dinner: { icon: 'moon', color: '#6366F1' },
+  snack: { icon: 'sparkle', color: '#EC4899' },
 }
 
 export function HomeRoute() {
@@ -171,9 +173,9 @@ function HomeFullContent({ meals, settings, today }: { meals: MealLog[]; setting
             <MealRow
               key={type}
               icon={mealMeta[type].icon}
+              color={mealMeta[type].color}
               items={meal?.items.map((item) => item.name).join(', ') ?? 'Tap to log'}
               kcal={meal?.total_kcal}
-              label={mealMeta[type].label}
               onClick={() => navigate('/log/meal')}
             />
           )
@@ -242,9 +244,9 @@ function HomeEmptyContent({ target }: { target: number }) {
       </Card>
       <SectionLabel>Today's meals</SectionLabel>
       <div className={styles.mealList}>
-        <MealRow icon="AM" items="Tap to log" label="Breakfast" onClick={() => navigate('/log/meal')} />
-        <MealRow icon="NO" items="Tap to log" label="Lunch" onClick={() => navigate('/log/meal')} />
-        <MealRow icon="PM" items="Tap to log" label="Dinner" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="sun" color="#FB923C" items="Tap to log" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="sun" color="#F59E0B" items="Tap to log" onClick={() => navigate('/log/meal')} />
+        <MealRow icon="moon" color="#6366F1" items="Tap to log" onClick={() => navigate('/log/meal')} />
       </div>
       <div className={styles.emptyBox}>
         <Icon color="var(--a1)" name="sparkle" />
@@ -329,22 +331,17 @@ function MiniStat({ icon, label, value, target, pct, color }: { icon: IconName; 
   )
 }
 
-function MealRow({ icon, label, items, kcal, onClick }: { icon: string; label: string; items: string; kcal?: number; onClick: () => void }) {
+function MealRow({ icon, color, items, kcal, onClick }: { icon: SlotIcon; color: string; items: string; kcal?: number; onClick: () => void }) {
   return (
-    <button className={styles.mealRow} onClick={onClick} type="button">
-      <span className={styles.mealIcon}>{icon}</span>
-      <span className={styles.rowText}>
-        <span className={styles.rowTitle}>
-          <span>{label}</span>
-          {kcal ? (
-            <span className="dq-num" style={{ color: 'var(--a1)' }}>
-              {kcal} kcal
-            </span>
-          ) : (
-            <span style={{ color: 'var(--t-3)', fontSize: 12 }}>tap to log</span>
-          )}
-        </span>
-        <span className={styles.rowSub}>{items}</span>
+    <button className={styles.mealRow} onClick={onClick} type="button" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>
+      <Icon color={color} name={icon} size={22} />
+      <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, textAlign: 'left' }}>
+        <strong style={{ fontSize: 14, color: 'var(--t-1)' }}>{items}</strong>
+        {kcal ? (
+          <span style={{ fontSize: 12, color: 'var(--a1)', fontWeight: 700 }}>{kcal} kcal</span>
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>tap to log</span>
+        )}
       </span>
       <Icon color="var(--t-3)" name="chevron" size={16} />
     </button>

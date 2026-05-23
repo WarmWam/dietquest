@@ -26,11 +26,13 @@ import {
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
-const MEAL_SLOTS: { id: MealSlot; label: string; tag: string }[] = [
-  { id: 'breakfast', label: 'Breakfast', tag: 'AM' },
-  { id: 'lunch', label: 'Lunch', tag: 'NO' },
-  { id: 'dinner', label: 'Dinner', tag: 'PM' },
-  { id: 'snack', label: 'Snack', tag: 'SN' },
+type SlotIcon = 'sun' | 'moon' | 'sparkle'
+
+const MEAL_SLOTS: { id: MealSlot; icon: SlotIcon; color: string }[] = [
+  { id: 'breakfast', icon: 'sun', color: '#FB923C' },
+  { id: 'lunch', icon: 'sun', color: '#F59E0B' },
+  { id: 'dinner', icon: 'moon', color: '#6366F1' },
+  { id: 'snack', icon: 'sparkle', color: '#EC4899' },
 ]
 
 function pad(n: number): string {
@@ -393,8 +395,8 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
             <MealSlotCard
               key={slot.id}
               items={plan[slot.id]}
-              label={slot.label}
-              tag={slot.tag}
+              icon={slot.icon}
+              color={slot.color}
               onAdd={() => setPicking(slot.id)}
               onRemove={(idx) => void removeFromSlot(slot.id, idx)}
             />
@@ -453,41 +455,41 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
 
 function MealSlotCard({
   items,
-  label,
-  tag,
+  icon,
+  color,
   onAdd,
   onRemove,
 }: {
   items: MealPlanItem[]
-  label: string
-  tag: string
+  icon: SlotIcon
+  color: string
   onAdd: () => void
   onRemove: (index: number) => void
 }) {
   const totalKcal = items.reduce((sum, it) => sum + it.kcal, 0)
   return (
     <Card padding={14} style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: items.length ? 10 : 4 }}>
-        <span className={styles.mealIcon}>{tag}</span>
-        <span className={styles.rowText} style={{ flex: 1 }}>
-          <strong>{label}</strong>
-          <span className={styles.rowSub}>{items.length === 0 ? 'No items' : `${totalKcal} kcal · ${items.length} items`}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: items.length ? 10 : 0 }}>
+        <Icon color={color} name={icon} size={22} />
+        <span style={{ flex: 1, fontSize: 13, color: 'var(--t-2)', fontWeight: 600 }}>
+          {items.length === 0 ? 'No items' : `${totalKcal} kcal`}
         </span>
         <button
-          aria-label={`Add to ${label}`}
-          className={styles.iconButton}
+          aria-label="Add"
           onClick={onAdd}
           type="button"
-          style={{ background: 'var(--a-soft)', color: 'var(--a1)' }}
+          style={{ width: 32, height: 32, borderRadius: '50%', border: 0, background: 'var(--a-soft)', color: 'var(--a1)', cursor: 'pointer', outline: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <Icon name="plus" />
+          <Icon name="plus" size={16} />
         </button>
       </div>
       {items.map((item, idx) => (
-        <div key={`${item.food_id}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderTop: '1px solid var(--line)' }}>
-          <span className={styles.rowText} style={{ flex: 1 }}>
-            <strong style={{ fontSize: 14 }}>{item.food_name}</strong>
-            <span className={styles.rowSub}>{item.portion}× · {item.kcal} kcal · {item.protein_g}g P</span>
+        <div key={`${item.food_id}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <strong style={{ fontSize: 14, color: 'var(--t-1)' }}>{item.food_name}</strong>
+            <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>
+              {item.portion}× · {item.kcal} kcal · {item.protein_g}g
+            </span>
           </span>
           <button
             aria-label="Remove item"
@@ -516,15 +518,10 @@ function WorkoutSlotCard({
   const isRest = plan?.type === 'rest'
   return (
     <Card padding={14} style={isRest ? { opacity: 0.5 } : undefined}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span className={styles.statIcon} style={{ color: isRest ? 'var(--t-3)' : 'var(--success)' }}>
-          <Icon name={(typeMeta?.icon as any) ?? 'walk'} />
-        </span>
-        <span className={styles.rowText} style={{ flex: 1 }}>
-          <strong>Workout</strong>
-          <span className={styles.rowSub}>
-            {plan ? `${typeMeta?.label ?? plan.type} · ${plan.duration_min} min` : 'Not planned'}
-          </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Icon color={isRest ? 'var(--t-3)' : 'var(--success)'} name={(typeMeta?.icon as any) ?? 'walk'} size={22} />
+        <span style={{ flex: 1, fontSize: 14, color: 'var(--t-1)', fontWeight: 600 }}>
+          {plan ? `${typeMeta?.label ?? plan.type}${plan.duration_min ? ` · ${plan.duration_min} min` : ''}` : 'Not planned'}
         </span>
         {plan ? (
           <>
@@ -693,41 +690,37 @@ function FoodPicker({
             </Card>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {filtered.map((food) => {
-                const catMeta = FOOD_CATEGORIES.find((c) => c.id === food.category)
-                return (
-                  <button
-                    key={food.id}
-                    onClick={() => {
-                      setSelected(food)
-                      setPortion(1)
-                    }}
-                    type="button"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      background: 'var(--surface)',
-                      border: '1px solid var(--line)',
-                      borderRadius: 'var(--r-md)',
-                      width: '100%',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      outline: 'none',
-                    }}
-                  >
-                    <span className={styles.mealIcon} style={{ fontSize: 11, fontWeight: 800 }}>
-                      {catMeta?.icon ?? 'OT'}
+              {filtered.map((food) => (
+                <button
+                  key={food.id}
+                  onClick={() => {
+                    setSelected(food)
+                    setPortion(1)
+                  }}
+                  type="button"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 12px',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r-md)',
+                    width: '100%',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <strong style={{ fontSize: 14, color: 'var(--t-1)' }}>{food.name}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>
+                      {food.kcal_per_portion} kcal · {food.protein_g_per_portion}g · per {food.portion_unit}
                     </span>
-                    <span className={styles.rowText} style={{ flex: 1 }}>
-                      <strong style={{ fontSize: 14 }}>{food.name}</strong>
-                      <span className={styles.rowSub}>{food.kcal_per_portion} kcal · {food.protein_g_per_portion}g P / {food.portion_unit}</span>
-                    </span>
-                    <Icon color="var(--t-3)" name="chevron" size={14} />
-                  </button>
-                )
-              })}
+                  </span>
+                  <Icon color="var(--t-3)" name="chevron" size={14} />
+                </button>
+              ))}
             </div>
           )}
         </div>
