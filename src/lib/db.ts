@@ -21,7 +21,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { daysAgoKey } from '@/lib/dates'
-import type { DayTotals, Food, MealLog, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog } from '@/types/domain'
+import type { DayTotals, Food, MealLog, MealPlan, MealPlanItem, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog, WorkoutPlan } from '@/types/domain'
+import { emptyMealPlan } from '@/types/domain'
 
 type WatchState<T> = {
   data: T
@@ -401,6 +402,137 @@ export function watchFoods(uid: string, cb: WatchCallback<Food[]>): Unsubscribe 
     (snapshot) => cb({ data: snapshot.docs.map(deserializeFood), error: null }),
     listenerError(`users/${uid}/foods`, [], cb),
   )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Meal plans (Calendar)
+// ─────────────────────────────────────────────────────────────
+
+function sanitizeMealItems(items: any): MealPlanItem[] {
+  if (!Array.isArray(items)) return []
+  return items.map((it) => ({
+    food_id: String(it.food_id ?? ''),
+    food_name: String(it.food_name ?? ''),
+    portion: Number(it.portion ?? 1),
+    kcal: Number(it.kcal ?? 0),
+    protein_g: Number(it.protein_g ?? 0),
+  }))
+}
+
+function deserializeMealPlan(id: string, data: DocumentData): MealPlan {
+  return {
+    date: id,
+    breakfast: sanitizeMealItems(data.breakfast),
+    lunch: sanitizeMealItems(data.lunch),
+    dinner: sanitizeMealItems(data.dinner),
+    snack: sanitizeMealItems(data.snack),
+    totals: {
+      kcal: Number(data.totals?.kcal ?? 0),
+      protein_g: Number(data.totals?.protein_g ?? 0),
+    },
+    notes: data.notes ? String(data.notes) : undefined,
+    updated_at: data.updated_at?.toDate?.() ?? undefined,
+  }
+}
+
+export function watchMealPlan(uid: string, date: string, cb: WatchCallback<MealPlan>): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'users', uid, 'meal_plans', date),
+    (snapshot) => cb({
+      data: snapshot.exists() ? deserializeMealPlan(snapshot.id, snapshot.data()) : emptyMealPlan(date),
+      error: null,
+    }),
+    listenerError(`users/${uid}/meal_plans/${date}`, emptyMealPlan(date), cb),
+  )
+}
+
+export function watchMonthMealPlans(uid: string, monthKey: string, cb: WatchCallback<MealPlan[]>): Unsubscribe {
+  // monthKey = 'YYYY-MM' — query date prefix
+  return onSnapshot(
+    query(
+      userCollection(uid, 'meal_plans'),
+      where('__name__', '>=', `${monthKey}-01`),
+      where('__name__', '<=', `${monthKey}-31`),
+    ),
+    (snapshot) => cb({ data: snapshot.docs.map((d) => deserializeMealPlan(d.id, d.data())), error: null }),
+    listenerError(`users/${uid}/meal_plans month=${monthKey}`, [], cb),
+  )
+}
+
+export async function upsertMealPlan(uid: string, plan: MealPlan): Promise<void> {
+  // Recompute totals from items
+  const allItems = [...plan.breakfast, ...plan.lunch, ...plan.dinner, ...plan.snack]
+  const totals = {
+    kcal: allItems.reduce((s, it) => s + (it.kcal ?? 0), 0),
+    protein_g: allItems.reduce((s, it) => s + (it.protein_g ?? 0), 0),
+  }
+  await setDoc(
+    doc(db, 'users', uid, 'meal_plans', plan.date),
+    {
+      breakfast: plan.breakfast,
+      lunch: plan.lunch,
+      dinner: plan.dinner,
+      snack: plan.snack,
+      totals,
+      notes: plan.notes ?? null,
+      updated_at: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Workout plans (Calendar)
+// ─────────────────────────────────────────────────────────────
+
+function deserializeWorkoutPlan(id: string, data: DocumentData): WorkoutPlan {
+  return {
+    date: id,
+    type: (data.type as WorkoutPlan['type']) ?? 'rest',
+    duration_min: Number(data.duration_min ?? 0),
+    notes: data.notes ? String(data.notes) : undefined,
+    updated_at: data.updated_at?.toDate?.() ?? undefined,
+  }
+}
+
+export function watchWorkoutPlan(uid: string, date: string, cb: WatchCallback<WorkoutPlan | null>): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'users', uid, 'workout_plans', date),
+    (snapshot) => cb({
+      data: snapshot.exists() ? deserializeWorkoutPlan(snapshot.id, snapshot.data()) : null,
+      error: null,
+    }),
+    listenerError(`users/${uid}/workout_plans/${date}`, null, cb),
+  )
+}
+
+export function watchMonthWorkoutPlans(uid: string, monthKey: string, cb: WatchCallback<WorkoutPlan[]>): Unsubscribe {
+  return onSnapshot(
+    query(
+      userCollection(uid, 'workout_plans'),
+      where('__name__', '>=', `${monthKey}-01`),
+      where('__name__', '<=', `${monthKey}-31`),
+    ),
+    (snapshot) => cb({ data: snapshot.docs.map((d) => deserializeWorkoutPlan(d.id, d.data())), error: null }),
+    listenerError(`users/${uid}/workout_plans month=${monthKey}`, [], cb),
+  )
+}
+
+export async function upsertWorkoutPlan(uid: string, plan: WorkoutPlan): Promise<void> {
+  await setDoc(
+    doc(db, 'users', uid, 'workout_plans', plan.date),
+    {
+      type: plan.type,
+      duration_min: plan.duration_min,
+      notes: plan.notes ?? null,
+      updated_at: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+export async function deleteWorkoutPlan(uid: string, date: string): Promise<void> {
+  await deleteDoc(doc(db, 'users', uid, 'workout_plans', date))
 }
 
 export async function exportUserData(uid: string): Promise<any> {

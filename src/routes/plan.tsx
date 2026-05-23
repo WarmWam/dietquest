@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Skeleton, Stepper } from '@/components/primitives'
+import { CalendarTab } from '@/components/plan/Calendar'
 import { DEFAULT_SETTINGS } from '@/data/defaults'
 import { useFoods } from '@/hooks/useFoods'
 import { useUser } from '@/hooks/useUser'
@@ -13,7 +14,7 @@ type PlanTab = 'calendar' | 'library'
 export function PlanRoute() {
   const { profile, loading: userLoading, error: userError } = useUser()
   const settings = profile?.settings ?? DEFAULT_SETTINGS
-  const [tab, setTab] = useState<PlanTab>('library')
+  const [tab, setTab] = useState<PlanTab>('calendar')
 
   useEffect(() => {
     if (userError) toast.error("Couldn't load plan settings. Try again.")
@@ -59,19 +60,7 @@ export function PlanRoute() {
   )
 }
 
-function CalendarTab() {
-  return (
-    <Card padding={28} style={{ textAlign: 'center' }}>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
-        <Icon color="var(--a1)" name="sparkle" size={42} />
-      </div>
-      <strong style={{ fontSize: 17 }}>Monthly meal calendar</strong>
-      <p className={styles.subtitle} style={{ marginTop: 8 }}>
-        Coming in v1.2.0 — plan every meal of the month from your food library, with workout slots too.
-      </p>
-    </Card>
-  )
-}
+// CalendarTab imported from '@/components/plan/Calendar'
 
 // ─────────────────────────────────────────────────────────────
 // Library tab

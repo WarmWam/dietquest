@@ -146,3 +146,54 @@ export const FOOD_CATEGORIES: { id: FoodCategory; label: string; icon: string }[
   { id: 'snack', label: 'Snack', icon: 'SN' },
   { id: 'other', label: 'Other', icon: 'OT' },
 ]
+
+// ─────────────────────────────────────────────────────────────
+// Meal & Workout planning (Calendar)
+// ─────────────────────────────────────────────────────────────
+
+export type MealPlanItem = {
+  food_id: string
+  food_name: string  // denormalized for display
+  portion: number    // multiplier on food's per-portion values
+  kcal: number       // = food.kcal_per_portion * portion (cached)
+  protein_g: number  // = food.protein_g_per_portion * portion (cached)
+}
+
+export type MealPlan = {
+  date: string  // YYYY-MM-DD (doc ID)
+  breakfast: MealPlanItem[]
+  lunch: MealPlanItem[]
+  dinner: MealPlanItem[]
+  snack: MealPlanItem[]
+  totals: { kcal: number; protein_g: number }
+  notes?: string
+  updated_at?: Date
+}
+
+export type WorkoutPlanType = 'incline_walk' | 'bodyweight' | 'rest' | 'other'
+
+export type WorkoutPlan = {
+  date: string  // YYYY-MM-DD (doc ID)
+  type: WorkoutPlanType
+  duration_min: number
+  notes?: string
+  updated_at?: Date
+}
+
+export const WORKOUT_PLAN_TYPES: { id: WorkoutPlanType; label: string; icon: string }[] = [
+  { id: 'incline_walk', label: 'Incline walk', icon: 'walk' },
+  { id: 'bodyweight', label: 'Bodyweight', icon: 'bolt' },
+  { id: 'rest', label: 'Rest day', icon: 'moon' },
+  { id: 'other', label: 'Other', icon: 'sparkle' },
+]
+
+export function emptyMealPlan(date: string): MealPlan {
+  return {
+    date,
+    breakfast: [],
+    lunch: [],
+    dinner: [],
+    snack: [],
+    totals: { kcal: 0, protein_g: 0 },
+  }
+}
