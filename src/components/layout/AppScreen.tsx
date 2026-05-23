@@ -15,7 +15,6 @@ export function AppScreen({ children, hideNav = false, activeNav = 'home', bg, s
   const navigate = useNavigate()
 
   function onNav(id: NavId) {
-    if (id === 'log') navigate('/?sheet=1')
     if (id === 'home') navigate('/')
     if (id === 'progress') navigate('/progress?tab=weight')
     if (id === 'plan') navigate('/plan')

@@ -1,22 +1,31 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Skeleton } from '@/components/primitives'
 import { DEFAULT_BREAKFAST } from '@/data/defaults'
 import { todayKey } from '@/lib/dates'
+import { useFoods } from '@/hooks/useFoods'
 import { useMeals } from '@/hooks/useMeals'
 import { usePresets } from '@/hooks/usePresets'
 import { useMealDraft } from '@/stores/mealDraft'
-import type { MealType } from '@/types/domain'
+import { FOOD_CATEGORIES, type FoodCategory, type MealPreset, type MealType } from '@/types/domain'
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
 
 export function LogMealRoute() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const lockedMeal = parseMealType(params.get('meal'))
   const { data: presets, loading, error } = usePresets()
+  const { data: foods, loading: foodsLoading, error: foodsError } = useFoods()
   const { mealType, setMealType, setSelectedPreset } = useMealDraft()
+  const [category, setCategory] = useState<FoodCategory>('food')
 
   useEffect(() => {
+    if (lockedMeal) {
+      setMealType(lockedMeal)
+      return
+    }
     const now = new Date()
     const hours = now.getHours()
     let initialType: MealType = 'breakfast'
@@ -30,14 +39,38 @@ export function LogMealRoute() {
       initialType = 'snack'
     }
     setMealType(initialType)
-  }, [setMealType])
+  }, [lockedMeal, setMealType])
 
   useEffect(() => {
-    if (error) toast.error("Couldn't load meal presets. Try again.")
-  }, [error])
+    if (error || foodsError) toast.error("Couldn't load meal options. Try again.")
+  }, [error, foodsError])
 
   const filteredPresets = presets.filter((p) => p.meal_type === mealType)
   const displayPresets = filteredPresets.length > 0 ? filteredPresets : presets
+  const filteredFoods = foods.filter((food) => food.category === category)
+
+  function pickFood(food: { id: string; name: string; kcal_per_portion: number; protein_g_per_portion: number; portion_unit: string }) {
+    const preset: MealPreset = {
+      id: `food-${food.id}`,
+      name: food.name,
+      tag: `${food.kcal_per_portion} kcal per ${food.portion_unit}`,
+      meal_type: mealType,
+      icon: '🍽️',
+      total_kcal: food.kcal_per_portion,
+      total_protein_g: food.protein_g_per_portion,
+      items: [{
+        name: food.name,
+        portion: 1,
+        unit: food.portion_unit,
+        kcal: food.kcal_per_portion,
+        protein_g: food.protein_g_per_portion,
+        carb_g: 0,
+        fat_g: 0,
+      }],
+    }
+    setSelectedPreset(preset)
+    navigate('/log/meal/confirm')
+  }
 
   return (
     <AppScreen hideNav>
@@ -49,23 +82,70 @@ export function LogMealRoute() {
           <strong>Log meal</strong>
           <span style={{ width: 40 }} />
         </header>
-        <p className={styles.fieldLabel}>Which meal?</p>
-        <div className="dq-seg" style={{ width: '100%', marginBottom: 18 }}>
-          {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((item) => {
-            const option = item.toLowerCase() as MealType
-            return (
+        {lockedMeal ? (
+          <Card padding={14} style={{ marginBottom: 18 }}>
+            <p className="dq-eyebrow">Logging for</p>
+            <strong style={{ textTransform: 'capitalize' }}>{mealType}</strong>
+          </Card>
+        ) : (
+          <>
+            <p className={styles.fieldLabel}>Which meal?</p>
+            <div className="dq-seg" style={{ width: '100%', marginBottom: 18 }}>
+              {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((item) => {
+                const option = item.toLowerCase() as MealType
+                return (
+                  <button
+                    className="dq-seg-item"
+                    data-active={mealType === option}
+                    key={item}
+                    onClick={() => setMealType(option)}
+                    type="button"
+                    style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none' }}
+                  >
+                    {item}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        <Section title="Pick category" />
+        <div className="dq-h-scroll" style={{ margin: '0 -20px 14px 0', paddingRight: 20 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {FOOD_CATEGORIES.map((cat) => (
               <button
                 className="dq-seg-item"
-                data-active={mealType === option}
-                key={item}
-                onClick={() => setMealType(option)}
+                data-active={category === cat.id}
+                key={cat.id}
+                onClick={() => setCategory(cat.id)}
                 type="button"
-                style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none' }}
+                style={{ border: 0, flex: '0 0 auto', padding: '8px 14px' }}
               >
-                {item}
+                {cat.label}
               </button>
-            )
-          })}
+            ))}
+          </div>
+        </div>
+        <div className={styles.presetList} style={{ marginBottom: 18 }}>
+          {foodsLoading ? (
+            <p className={styles.subtitle}>Loading foods...</p>
+          ) : filteredFoods.length === 0 ? (
+            <Card padding={14} style={{ borderStyle: 'dashed' }}>
+              <p className={styles.subtitle}>No foods in this category yet.</p>
+            </Card>
+          ) : (
+            filteredFoods.slice(0, 8).map((food) => (
+              <button className={styles.presetRow} key={food.id} onClick={() => pickFood(food)} type="button">
+                <span className={styles.mealIcon}>🍽️</span>
+                <span className={styles.rowText}>
+                  <span className={styles.rowTitle}>{food.name}</span>
+                  <span className={styles.rowSub}>{food.kcal_per_portion} kcal - {food.protein_g_per_portion}g P / {food.portion_unit}</span>
+                </span>
+                <Icon color="var(--t-3)" name="chevron" size={16} />
+              </button>
+            ))
+          )}
         </div>
 
         <Section title={`Suggested for ${mealType}`} />
@@ -144,6 +224,10 @@ export function LogMealRoute() {
       </div>
     </AppScreen>
   )
+}
+
+function parseMealType(value: string | null): MealType | null {
+  return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack' ? value : null
 }
 
 export function LogMealConfirmRoute() {

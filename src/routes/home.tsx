@@ -28,7 +28,7 @@ const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
 export function HomeRoute() {
   const [params] = useSearchParams()
   const { profile, loading: userLoading, error: userError } = useUser()
-  const { data: meals, add: addMeal, loading: mealsLoading, error: mealsError } = useMeals()
+  const { data: meals, add: addMeal, remove: removeMeal, loading: mealsLoading, error: mealsError } = useMeals()
   const { data: today, loading: todayLoading, error: todayError } = useToday()
   const hasError = mealsError || todayError
   const sheet = params.get('sheet') === '1'
@@ -126,7 +126,7 @@ export function HomeRoute() {
         ) : hasError ? (
           <HomeErrorCard error={hasError} />
         ) : (
-          <HomeFullContent addMeal={addMeal} meals={meals} settings={settings} today={today} />
+          <HomeFullContent addMeal={addMeal} meals={meals} removeMeal={removeMeal} settings={settings} today={today} />
         )}
       </div>
       {sheet ? <LogSheet /> : null}
@@ -137,11 +137,13 @@ export function HomeRoute() {
 function HomeFullContent({
   addMeal,
   meals,
+  removeMeal,
   settings,
   today,
 }: {
   addMeal: ReturnType<typeof useMeals>['add']
   meals: MealLog[]
+  removeMeal: ReturnType<typeof useMeals>['remove']
   settings: UserSettings
   today: ReturnType<typeof useToday>['data']
 }) {
@@ -168,8 +170,23 @@ function HomeFullContent({
     if (weightsError || workoutsError || planError || workoutPlanError || waterError) toast.error("Couldn't load home plan. Try again.")
   }, [weightsError, workoutsError, planError, workoutPlanError, waterError])
 
-  async function confirmMeal(mealType: MealType, items: MealPlanItem[]) {
-    if (items.length === 0 || savingTask) return
+  async function confirmMeal(mealType: MealType, items: MealPlanItem[], loggedMeals: MealLog[]) {
+    if (savingTask) return
+    if (loggedMeals.length > 0) {
+      setSavingTask(mealType)
+      try {
+        await Promise.all(loggedMeals.map((meal) => removeMeal(meal.id)))
+        toast.success(`${mealType} unchecked`)
+        haptic(5)
+      } catch (err) {
+        console.error(err)
+        toast.error("Couldn't undo meal.")
+      } finally {
+        setSavingTask(null)
+      }
+      return
+    }
+    if (items.length === 0) return
     setSavingTask(mealType)
     try {
       await addMeal({
@@ -246,7 +263,12 @@ function HomeFullContent({
     <>
       <Card raised padding={18}>
         <div className={styles.screenHeader}>
-          <span className="dq-eyebrow">Today</span>
+          <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
+            <span className="dq-eyebrow">Today</span>
+            <button aria-label="Open calendar" onClick={() => navigate('/plan')} type="button" style={{ background: 'transparent', border: 0, color: 'var(--a1)', cursor: 'pointer', padding: 0 }}>
+              <Icon name="cal" size={17} />
+            </button>
+          </span>
           <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
             {Math.max(settings.daily_kcal_target - liveKcal, 0)} kcal left
           </span>
@@ -260,17 +282,21 @@ function HomeFullContent({
       </div>
 
       <SectionLabel>Today's plan</SectionLabel>
-      {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => (
-        <PlanMealCard
-          done={meals.some((meal) => meal.meal_type === type)}
-          items={plan[type]}
-          key={type}
-          mealType={type}
-          onConfirm={() => void confirmMeal(type, plan[type])}
-          onSwap={() => navigate('/log/meal')}
-          saving={savingTask === type}
-        />
-      ))}
+      {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
+        const loggedMeals = meals.filter((meal) => meal.meal_type === type)
+        return (
+          <PlanMealCard
+            done={loggedMeals.length > 0}
+            items={plan[type]}
+            key={type}
+            loggedMeals={loggedMeals}
+            mealType={type}
+            onConfirm={() => void confirmMeal(type, plan[type], loggedMeals)}
+            onSwap={() => navigate(`/log/meal?meal=${type}`)}
+            saving={savingTask === type}
+          />
+        )
+      })}
 
       <SectionLabel>Daily habits</SectionLabel>
       <div className={styles.habitBox}>
@@ -320,6 +346,7 @@ function HomeFullContent({
 function PlanMealCard({
   done,
   items,
+  loggedMeals,
   mealType,
   onConfirm,
   onSwap,
@@ -327,6 +354,7 @@ function PlanMealCard({
 }: {
   done: boolean
   items: MealPlanItem[]
+  loggedMeals: MealLog[]
   mealType: MealType
   onConfirm: () => void
   onSwap: () => void
@@ -334,14 +362,24 @@ function PlanMealCard({
 }) {
   const kcal = items.reduce((sum, item) => sum + item.kcal, 0)
   const protein = Math.round(items.reduce((sum, item) => sum + item.protein_g, 0) * 10) / 10
+  const actualItems = loggedMeals.flatMap((meal) => meal.items)
+  const actualNames = new Set(actualItems.map((item) => item.name))
+  const ateDifferent = done && items.length > 0 && !items.every((item) => actualNames.has(item.food_name))
 
   return (
-    <Card padding={14} style={{ marginBottom: 10 }}>
+    <Card
+      padding={14}
+      style={{
+        background: done ? 'color-mix(in oklab, #BBF7D0 48%, var(--surface))' : undefined,
+        borderColor: done ? 'rgba(34, 197, 94, 0.36)' : undefined,
+        marginBottom: 10,
+      }}
+    >
       <div className={styles.habitRow}>
         <Icon color={mealMeta[mealType].color} name={mealMeta[mealType].icon} />
         <span className={styles.rowText}>
-          <strong style={{ textTransform: 'capitalize' }}>{mealType}</strong>
-          <span className={styles.rowSub}>{items.length ? `${kcal} kcal - ${protein}g protein` : 'No planned menu'}</span>
+          <strong>{items.length ? `${kcal} kcal` : 'No planned menu'}</strong>
+          <span className={styles.rowSub} style={{ marginTop: 4 }}>{items.length ? `${protein}g protein planned` : 'Use Ate different to log this slot'}</span>
         </span>
         <span className="dq-check" data-on={done}>
           {done ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
@@ -351,15 +389,20 @@ function PlanMealCard({
         <div style={{ display: 'grid', gap: 6, margin: '10px 0 12px 34px' }}>
           {items.map((item) => (
             <div key={`${item.food_id}-${item.food_name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 800 }}>{item.food_name}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, textDecoration: ateDifferent ? 'line-through' : undefined, color: ateDifferent ? 'var(--t-3)' : undefined }}>{item.food_name}</span>
               <span className={styles.rowSub}>{item.portion}x · {item.kcal} kcal</span>
             </div>
           ))}
         </div>
       ) : null}
+      {ateDifferent ? (
+        <p className={styles.subtitle} style={{ margin: '0 0 12px 34px' }}>
+          Actual: {actualItems.map((item) => item.name).join(', ')}
+        </p>
+      ) : null}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <Button disabled={done || items.length === 0 || saving} onClick={onConfirm} variant="secondary">
-          {done ? 'Confirmed' : 'Ate as planned'}
+        <Button disabled={(items.length === 0 && !done) || saving} onClick={onConfirm} variant="secondary">
+          {done ? 'Undo' : 'Ate as planned'}
         </Button>
         <Button onClick={onSwap} variant="ghost">
           Ate different
