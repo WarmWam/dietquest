@@ -260,6 +260,192 @@
   color: #fff;
 }
 
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--a-grad);
+  color: #fff;
+  font-weight: 800;
+}
+
+.topStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+
+.statCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.statIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--a-soft);
+}
+
+.progressBar {
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--bg-soft);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--a-grad);
+}
+
+.sectionLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 4px 10px;
+}
+
+.mealList {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.mealRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--t-1);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mealIcon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-soft);
+  font-size: 22px;
+}
+
+.rowText {
+  min-width: 0;
+  flex: 1;
+}
+
+.rowTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+  font-weight: 800;
+}
+
+.rowSub {
+  overflow: hidden;
+  color: var(--t-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.habitBox {
+  padding: 4px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.habitRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+}
+
+.emptyBox {
+  margin-top: 12px;
+  padding: 24px 16px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-xl);
+  text-align: center;
+}
+
+.sheetBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 21;
+  padding: 14px 20px 28px;
+  border-radius: 28px 28px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.sheetHandle {
+  width: 44px;
+  height: 5px;
+  margin: 0 auto 18px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+}
+
+.sheetItems {
+  display: grid;
+  gap: 8px;
+}
+
+.sheetItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--t-1);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sheetIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--a-soft);
+}
+
 .loginCard {
   width: min(350px, calc(100vw - 32px));
   display: grid;
