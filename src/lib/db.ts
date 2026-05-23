@@ -601,11 +601,12 @@ export async function upsertMealPlan(uid: string, plan: MealPlan): Promise<void>
 // ─────────────────────────────────────────────────────────────
 
 function deserializeWorkoutPlan(id: string, data: DocumentData): WorkoutPlan {
+  const type = (data.type as WorkoutPlan['type']) ?? 'rest'
   return {
     date: id,
-    type: (data.type as WorkoutPlan['type']) ?? 'rest',
+    type,
     duration_min: Number(data.duration_min ?? 0),
-    kcal_target: data.kcal_target == null ? undefined : Number(data.kcal_target),
+    kcal_target: data.kcal_target == null ? (type === 'rest' ? 0 : 200) : Number(data.kcal_target),
     notes: data.notes ? String(data.notes) : undefined,
     updated_at: data.updated_at?.toDate?.() ?? undefined,
   }

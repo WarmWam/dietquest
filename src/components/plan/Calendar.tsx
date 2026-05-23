@@ -292,7 +292,7 @@ function TodayPlanCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
           <Icon color="var(--success)" name={(workoutMeta?.icon as any) ?? 'walk'} size={22} />
           <span style={{ flex: 1, fontSize: 13, color: 'var(--t-1)' }}>
-            {workoutMeta?.label ?? workout.type}{workout.kcal_target ? ` · ${workout.kcal_target} kcal` : workout.duration_min ? ` · ${workout.duration_min} kcal` : ''}
+            {workoutMeta?.label ?? workout.type}{workout.kcal_target ? ` · ${workout.kcal_target} kcal` : ''}
           </span>
         </div>
       ) : null}
@@ -522,7 +522,7 @@ function WorkoutSlotCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Icon color={isRest ? 'var(--t-3)' : 'var(--success)'} name={(typeMeta?.icon as any) ?? 'walk'} size={22} />
         <span style={{ flex: 1, fontSize: 14, color: 'var(--t-1)', fontWeight: 600 }}>
-          {plan ? `${typeMeta?.label ?? plan.type}${plan.kcal_target ? ` · ${plan.kcal_target} kcal` : plan.duration_min ? ` · ${plan.duration_min} kcal` : ''}` : 'Not planned'}
+          {plan ? `${typeMeta?.label ?? plan.type}${plan.kcal_target ? ` · ${plan.kcal_target} kcal` : ''}` : 'Not planned'}
         </span>
         {plan ? (
           <>
@@ -729,7 +729,7 @@ function WorkoutPlanSheet({
   onCancel: () => void
 }) {
   const [type, setType] = useState<WorkoutPlanType>(existing?.type ?? 'incline_walk')
-  const [kcalTarget, setKcalTarget] = useState(existing?.kcal_target ?? existing?.duration_min ?? 200)
+  const [kcalTarget, setKcalTarget] = useState(existing?.kcal_target ?? 200)
   const isRest = type === 'rest'
 
   return (

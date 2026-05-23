@@ -164,7 +164,7 @@ function HomeFullContent({
   const latestWeight = weights[weights.length - 1]
   const todayWorkouts = workouts.filter((w) => w.date === todayKey)
   const totalWorkoutKcal = todayWorkouts.reduce((sum, w) => sum + w.kcal_burned, 0)
-  const workoutTarget = workoutPlan?.kcal_target ?? workoutPlan?.duration_min ?? 0
+  const workoutTarget = workoutPlan?.kcal_target ?? 0
   const workoutPct = Math.min(totalWorkoutKcal / Math.max(workoutTarget || 1, 1), 1)
 
   // Compute totals live from meals[] (source of truth) — denormalized
@@ -505,7 +505,7 @@ function WorkoutPlanTask({
 }) {
   const meta = plan ? WORKOUT_PLAN_TYPES.find((type) => type.id === plan.type) : null
   const label = meta?.label ?? 'No workout planned'
-  const plannedKcal = plan?.kcal_target ?? plan?.duration_min ?? 0
+  const plannedKcal = plan?.kcal_target ?? 0
   const hitTarget = done && totalWorkoutKcal >= plannedKcal
   const sub = done
     ? `${totalWorkoutKcal} / ${plannedKcal} kcal logged`
