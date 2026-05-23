@@ -6,7 +6,19 @@ export function LoginRoute() {
   const { error, signIn } = useAuth()
 
   return (
-    <main className={styles.stage}>
+    <main
+      className={styles.stage}
+      style={{
+        display: 'grid',
+        placeItems: 'center',
+        padding: '24px',
+        background:
+          'radial-gradient(circle at 24% 0%, var(--glow-blue), transparent 28rem),' +
+          'radial-gradient(circle at 76% 8%, var(--glow-violet), transparent 30rem),' +
+          'radial-gradient(circle at 56% 92%, var(--glow-pink), transparent 28rem),' +
+          'var(--bg)',
+      }}
+    >
       <section className={styles.loginCard}>
         <div className={styles.logoMark}>DQ</div>
         <div>

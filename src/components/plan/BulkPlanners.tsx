@@ -100,7 +100,7 @@ function DateRangeRow({ start, end, onChange }: { start: string; end: string; on
 function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <input type="date" value={value} onChange={(e) => onChange(e.target.value)}
-      style={{ padding: '10px 12px', fontSize: 14, fontWeight: 700, border: 0, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', outline: 'none', fontFamily: 'inherit', color: 'var(--t-1)', width: '100%', textAlign: 'center' }} />
+      style={{ padding: '10px 6px', fontSize: 12, fontWeight: 700, border: 0, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', outline: 'none', fontFamily: 'inherit', color: 'var(--t-1)', width: '100%', minWidth: 0, textAlign: 'center', boxSizing: 'border-box' }} />
   )
 }
 
