@@ -64,6 +64,9 @@ export function ProfileRoute() {
       const diff = Math.max(3, (end.getFullYear() - now.getFullYear()) * 12 + end.getMonth() - now.getMonth())
       setMonths(diff)
     }
+    if (profile?.settings?.notifications) {
+      setNotifications(profile.settings.notifications)
+    }
   }, [isEditing, profile])
 
   if (loading) {
@@ -192,6 +195,27 @@ export function ProfileRoute() {
     if (next) haptic(10)
   }
 
+  async function handleToggleNotification(key: string) {
+    if (!user) return
+    const next = {
+      ...notifications,
+      [key]: !notifications[key as keyof typeof notifications],
+    }
+    setNotifications(next)
+    haptic(5)
+    try {
+      await upsertUser(user.uid, {
+        settings: {
+          ...profile?.settings,
+          notifications: next,
+        },
+      })
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't save preference.")
+    }
+  }
+
   return (
     <AppScreen activeNav="profile">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
@@ -255,10 +279,7 @@ export function ProfileRoute() {
               <button
                 className={styles.switch}
                 data-on={notifications[item.key as keyof typeof notifications]}
-                onClick={() => {
-                  setNotifications((prev) => ({ ...prev, [item.key]: !prev[item.key as keyof typeof prev] }))
-                  haptic(5)
-                }}
+                onClick={() => void handleToggleNotification(item.key)}
                 type="button"
               >
                 <span className={styles.switchKnob} />
