@@ -136,3 +136,9 @@ Format per entry:
 - Verdict: 
 - Commit: pending
 - Notes: Replaced DQ-letter PWA icons with custom health-themed PNG artwork (food/leaf/activity/heart) and updated installed app name/title to Health Tracking.
+
+## Phase 6.3 Follow-up - Launch branding alignment
+- Date: 2026-05-23
+- Verdict: 
+- Commit: pending
+- Notes: Replaced in-app DQ text mark on Login/Splash/Error launch surfaces with the new Health Tracking icon and updated first-run labels to Health Tracking.

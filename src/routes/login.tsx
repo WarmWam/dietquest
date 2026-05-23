@@ -1,6 +1,7 @@
 import { Button } from '@/components/primitives'
 import { useAuth } from '@/hooks/useAuth'
 import { appStyles as styles } from '@/components/layout/AppScreen'
+import { BrandMark } from '@/components/BrandMark'
 
 export function LoginRoute() {
   const { error, signIn } = useAuth()
@@ -20,9 +21,9 @@ export function LoginRoute() {
       }}
     >
       <section className={styles.loginCard}>
-        <div className={styles.logoMark}>DQ</div>
+        <BrandMark />
         <div>
-          <p className="dq-eyebrow">DietQuest</p>
+          <p className="dq-eyebrow">Health Tracking</p>
           <h1 className={styles.headerTitle}>Track the cut without the noise.</h1>
           <p className={styles.subtitle}>Sign in with Google to sync meals, weight, water, workouts and sleep.</p>
         </div>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
+import { BrandMark } from '@/components/BrandMark'
 
 export function SplashRoute() {
   const navigate = useNavigate()
@@ -15,9 +16,9 @@ export function SplashRoute() {
       <div className={styles.screen}>
         <div className={styles.splashWrap}>
           <div>
-            <div className={styles.logoMark}>DQ</div>
+            <BrandMark />
             <h1 className={styles.headerTitle} style={{ marginTop: 22 }}>
-              DietQuest
+              Health Tracking
             </h1>
             <p className={styles.subtitle}>Preparing today’s quest</p>
             <div className={styles.spinner} />

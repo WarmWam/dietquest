@@ -64,6 +64,9 @@
   - Replaced DQ-letter PWA icons with custom health icon artwork for 192, 512, and maskable PNGs.
   - Icon uses simple food/leaf/activity/heart cues for nutrition, movement, and health.
   - Updated installed app name/title to `Health Tracking`.
+- [x] In-app launch branding updated
+  - Replaced DQ text logo on Login/Splash/Error screens with the new app icon.
+  - Updated first-run/launch labels from DietQuest to Health Tracking.
 
 ---
 
@@ -79,6 +82,7 @@
 - pending - `fix(profile): simplify notification preferences`
 - pending - `style(ui): apply neural expressive visual refresh`
 - pending - `chore(pwa): update health tracking app icon`
+- pending - `chore(brand): align launch screens with health tracking`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

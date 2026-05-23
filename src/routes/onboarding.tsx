@@ -32,7 +32,7 @@ export function OnboardingWelcomeRoute() {
           <span className={styles.heroNumber}>15</span>
           <span className={styles.heroCaption}>kg to goal</span>
         </div>
-        <p className="dq-eyebrow">DietQuest</p>
+        <p className="dq-eyebrow">Health Tracking</p>
         <h1 className={styles.welcomeTitle}>
           Your journey
           <br />
