@@ -32,10 +32,10 @@ export function ProgressRoute() {
     <AppScreen activeNav="progress">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
         <h1 className={styles.headerTitle}>Progress</h1>
-        <div className="dq-h-scroll" style={{ margin: '14px -20px 18px 0', paddingRight: 20 }}>
+        <div style={{ margin: '14px 0 18px' }}>
           <div className={styles.tabRow}>
             {tabs.map((item) => (
-              <button className="dq-seg-item" data-active={tab === item.id} key={item.id} onClick={() => navigate(`/progress?tab=${item.id}`)} type="button">
+              <button className="dq-seg-item" data-active={tab === item.id} key={item.id} onClick={() => navigate(`/progress?tab=${item.id}`)} type="button" style={{ flex: 1, justifyContent: 'center', border: 0 }}>
                 {item.label}
               </button>
             ))}
