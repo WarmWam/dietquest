@@ -41,6 +41,17 @@ export function LogWaterRoute() {
     }
   }
 
+  function handleCustom() {
+    const input = prompt('How many ml?')
+    if (!input) return
+    const ml = Number(input)
+    if (isNaN(ml) || ml <= 0 || ml > 5000) {
+      toast.error('Enter a valid amount (1-5000 ml)')
+      return
+    }
+    void handleAdd(ml)
+  }
+
   return (
     <AppScreen hideNav>
       <div className={styles.screen}>
@@ -56,9 +67,10 @@ export function LogWaterRoute() {
             </div>
           </div>
         </div>
-        <div className={styles.metricGrid}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           <Button disabled={saving} onClick={() => void handleAdd(250)} variant="secondary">+ 250 ml</Button>
           <Button disabled={saving} onClick={() => void handleAdd(500)} variant="secondary">+ 500 ml</Button>
+          <Button disabled={saving} onClick={handleCustom} variant="secondary">+ Custom</Button>
         </div>
         <Card padding={12}>
           {loading ? (

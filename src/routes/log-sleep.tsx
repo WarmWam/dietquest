@@ -88,7 +88,13 @@ export function LogSleepRoute() {
             <div className="dq-num" style={{ fontSize: 62, fontWeight: 900 }}>
               {hours}h {minutes}m
             </div>
-            <p style={{ color: 'var(--success)', fontWeight: 800 }}>within target window</p>
+            {durationMin >= 7 * 60 && durationMin <= 9 * 60 ? (
+              <p style={{ color: 'var(--success)', fontWeight: 800 }}>within target window</p>
+            ) : durationMin < 7 * 60 ? (
+              <p style={{ color: 'var(--warning)', fontWeight: 800 }}>below 7 hour target</p>
+            ) : (
+              <p style={{ color: 'var(--warning)', fontWeight: 800 }}>more than 9 hours</p>
+            )}
           </div>
         </Card>
         <div className={styles.topStats}>
