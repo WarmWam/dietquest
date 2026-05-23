@@ -43,9 +43,7 @@ export function LogMealRoute() {
             <Icon name="x" />
           </button>
           <strong>Log meal</strong>
-          <button className={styles.iconButton} type="button">
-            <Icon name="search" />
-          </button>
+          <span style={{ width: 40 }} />
         </header>
         <p className={styles.fieldLabel}>Which meal?</p>
         <div className="dq-seg" style={{ width: '100%', marginBottom: 18 }}>
@@ -152,8 +150,32 @@ export function LogMealConfirmRoute() {
   const [saving, setSaving] = useState(false)
 
   const preset = selectedPreset ?? DEFAULT_BREAKFAST
-  const carbs = preset.items.reduce((sum, item) => sum + item.carb_g, 0)
-  const fat = preset.items.reduce((sum, item) => sum + item.fat_g, 0)
+  const [portions, setPortions] = useState<number[]>(() => preset.items.map((item) => item.portion))
+
+  function adjustPortion(index: number, delta: number) {
+    setPortions((prev) => {
+      const next = [...prev]
+      next[index] = Math.max(0.25, Math.min(5, Number((next[index] + delta).toFixed(2))))
+      return next
+    })
+  }
+
+  const adjustedItems = preset.items.map((item, i) => {
+    const scale = portions[i] / item.portion
+    return {
+      ...item,
+      portion: portions[i],
+      kcal: Math.round(item.kcal * scale),
+      protein_g: Math.round(item.protein_g * scale),
+      carb_g: Math.round(item.carb_g * scale),
+      fat_g: Math.round(item.fat_g * scale),
+    }
+  })
+
+  const totalKcal = adjustedItems.reduce((sum, item) => sum + item.kcal, 0)
+  const totalProtein = adjustedItems.reduce((sum, item) => sum + item.protein_g, 0)
+  const totalCarbs = adjustedItems.reduce((sum, item) => sum + item.carb_g, 0)
+  const totalFat = adjustedItems.reduce((sum, item) => sum + item.fat_g, 0)
 
   async function saveMeal() {
     setSaving(true)
@@ -161,16 +183,16 @@ export function LogMealConfirmRoute() {
       await add({
         date: todayKey(),
         meal_type: mealType,
-        items: preset.items,
-        total_kcal: preset.total_kcal,
-        total_protein_g: preset.total_protein_g,
-        total_carb_g: carbs,
-        total_fat_g: fat,
+        items: adjustedItems,
+        total_kcal: totalKcal,
+        total_protein_g: totalProtein,
+        total_carb_g: totalCarbs,
+        total_fat_g: totalFat,
       })
       if (preset.id !== DEFAULT_BREAKFAST.id && preset.id !== 'custom-meal') {
         await markUsed(preset.id)
       }
-      toast.success(`Saved · ${preset.total_kcal} kcal`)
+      toast.success(`Saved · ${totalKcal} kcal`)
       haptic(10)
       navigate('/log/meal/saved')
     } catch (err) {
@@ -195,9 +217,7 @@ export function LogMealConfirmRoute() {
             </p>
             <strong>Confirm meal</strong>
           </div>
-          <button className={styles.iconButton} type="button">
-            <Icon name="edit" />
-          </button>
+          <span style={{ width: 40 }} />
         </header>
 
         <div className={styles.heroPanel}>
@@ -205,24 +225,24 @@ export function LogMealConfirmRoute() {
             Total - meal
           </p>
           <div className={styles.heroKpi}>
-            {preset.total_kcal}
+            {totalKcal}
             <span style={{ fontSize: 14 }}>kcal</span>
           </div>
           <div className={styles.macroGrid}>
-            <span>{preset.total_protein_g}g protein</span>
-            <span>{carbs}g carbs</span>
-            <span>{fat}g fat</span>
+            <span>{totalProtein}g protein</span>
+            <span>{totalCarbs}g carbs</span>
+            <span>{totalFat}g fat</span>
           </div>
         </div>
 
         <Section title="Items" />
         <Card padding={0}>
-          {preset.items.length === 0 ? (
+          {adjustedItems.length === 0 ? (
             <div style={{ padding: 20, textAlign: 'center', color: 'var(--t-3)' }}>
               No items in this meal yet.
             </div>
           ) : (
-            preset.items.map((item) => (
+            adjustedItems.map((item, index) => (
               <div className={styles.habitRow} key={item.name} style={{ padding: 14 }}>
                 <span className={styles.rowText}>
                   <strong>{item.name}</strong>
@@ -230,14 +250,34 @@ export function LogMealConfirmRoute() {
                     {item.kcal} kcal - {item.protein_g}g P - {item.carb_g}g C - {item.fat_g}g F
                   </span>
                 </span>
-                <span className="dq-pill">{item.portion}x</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => adjustPortion(index, -0.5)}
+                    disabled={portions[index] <= 0.25}
+                    style={{ width: 26, height: 26, borderRadius: '50%', border: 0, background: 'var(--bg-soft)', fontWeight: 'bold', cursor: 'pointer', fontSize: 14 }}
+                  >
+                    −
+                  </button>
+                  <span className="dq-num" style={{ fontSize: 14, minWidth: 32, textAlign: 'center' }}>
+                    {portions[index]}x
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => adjustPortion(index, 0.5)}
+                    disabled={portions[index] >= 5}
+                    style={{ width: 26, height: 26, borderRadius: '50%', border: 0, background: 'var(--bg-soft)', fontWeight: 'bold', cursor: 'pointer', fontSize: 14 }}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             ))
           )}
         </Card>
 
         <div className={styles.pageFooter}>
-          <Button onClick={() => void saveMeal()}>{saving ? 'Saving...' : `Save - ${preset.total_kcal} kcal`}</Button>
+          <Button onClick={() => void saveMeal()}>{saving ? 'Saving...' : `Save - ${totalKcal} kcal`}</Button>
         </div>
       </div>
     </AppScreen>
