@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Button, Card, Icon } from '@/components/primitives'
+import { Button, Card, Icon, Stepper } from '@/components/primitives'
 import { todayKey } from '@/lib/dates'
 import { useWorkouts } from '@/hooks/useWorkouts'
+import { useUser } from '@/hooks/useUser'
+import { useWorkoutDraft } from '@/stores/workoutDraft'
+import { DEFAULT_PROFILE } from '@/data/defaults'
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
 
@@ -20,23 +23,71 @@ function Header({ title }: { title: string }) {
   )
 }
 
+const TYPE_LABELS: Record<string, string> = {
+  incline_walk: 'Incline walk',
+  bodyweight: 'Bodyweight',
+  other: 'Other',
+}
+
+function formatTime(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
+}
+
+function computeKcal(inclinePct: number, weightKg: number, elapsedMs: number): number {
+  const mets = 4.0 + inclinePct * 0.5
+  const kcalPerMin = (mets * 3.5 * weightKg) / 200
+  const minutes = elapsedMs / 60000
+  return Math.round(kcalPerMin * minutes)
+}
+
 export function LogWorkoutRoute() {
   const navigate = useNavigate()
+  const draft = useWorkoutDraft()
+
   return (
     <AppScreen hideNav>
-      <div className={styles.screen}>
+      <div className={`${styles.screen} ${styles.scroll}`}>
         <Header title="Workout" />
         <Card raised padding={20}>
           <p className="dq-eyebrow">Template</p>
-          <h1 className={styles.headerTitle}>Incline walk</h1>
-          <p className={styles.subtitle}>45 min - 8% incline - 5.5 km/h</p>
+          <h1 className={styles.headerTitle}>{TYPE_LABELS[draft.type]}</h1>
+          <p className={styles.subtitle}>
+            {draft.target_duration_min} min - {draft.incline_pct}% incline - {draft.speed_kmh} km/h
+          </p>
         </Card>
-        <div className={styles.topStats}>
-          <Metric label="Incline" sub="treadmill" value="8%" />
-          <Metric label="Speed" sub="km/h" value="5.5" />
+
+        <p className={styles.fieldLabel} style={{ marginTop: 18 }}>Type</p>
+        <div className="dq-seg" style={{ width: '100%', marginBottom: 18 }}>
+          {(['incline_walk', 'bodyweight', 'other'] as const).map((t) => (
+            <button
+              className="dq-seg-item"
+              data-active={draft.type === t}
+              key={t}
+              onClick={() => draft.setType(t)}
+              type="button"
+              style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none' }}
+            >
+              {TYPE_LABELS[t]}
+            </button>
+          ))}
         </div>
+
+        {draft.type === 'incline_walk' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <Stepper label="Incline" suffix="%" value={draft.incline_pct} onChange={draft.setIncline} min={0} max={15} step={0.5} />
+            <Stepper label="Speed" suffix="km/h" value={draft.speed_kmh} onChange={draft.setSpeed} min={3} max={7} step={0.1} />
+          </div>
+        ) : null}
+
+        <Stepper label="Duration target" suffix="min" value={draft.target_duration_min} onChange={draft.setTargetDuration} min={10} max={120} step={5} />
+
         <div className={styles.pageFooter}>
-          <Button icon="play" onClick={() => navigate('/log/workout/active')}>
+          <Button icon="play" onClick={() => { draft.start(); navigate('/log/workout/active') }}>
             Start
           </Button>
         </div>
@@ -47,6 +98,15 @@ export function LogWorkoutRoute() {
 
 export function LogWorkoutActiveRoute() {
   const navigate = useNavigate()
+  const draft = useWorkoutDraft()
+  const { profile } = useUser()
+  const weightKg = profile?.profile?.weight_start_kg ?? DEFAULT_PROFILE.weight_start_kg
+
+  useEffect(() => {
+    if (!draft.startedAt || draft.pausedAt) return
+    const id = setInterval(() => draft.tick(), 1000)
+    return () => clearInterval(id)
+  }, [draft.startedAt, draft.pausedAt, draft.tick])
 
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null
@@ -60,30 +120,45 @@ export function LogWorkoutActiveRoute() {
     }
   }, [])
 
+  const liveKcal = computeKcal(draft.incline_pct, weightKg, draft.elapsedMs)
+  const isPaused = draft.pausedAt !== null
+  const targetMs = draft.target_duration_min * 60 * 1000
+
   return (
     <AppScreen bg="linear-gradient(180deg, #5B6CFF 0%, #B17AFF 50%, #FF6B9D 100%)" hideNav statusDark={false}>
       <div className={`${styles.screen} ${styles.activeWorkout}`}>
         <div className={styles.screenHeader}>
-          <span className="dq-pill" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>LIVE - Incline walk</span>
+          <span className="dq-pill" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>
+            {isPaused ? 'PAUSED' : 'LIVE'} - {TYPE_LABELS[draft.type]}
+          </span>
           <Icon color="#fff" name="bell" />
         </div>
         <div className={styles.fullCenter}>
           <div>
             <p style={{ fontWeight: 900, letterSpacing: '.14em' }}>ELAPSED</p>
-            <div className={`dq-num ${styles.timer}`}>27:14</div>
-            <p>of 45 min target</p>
+            <div className={`dq-num ${styles.timer}`}>{formatTime(draft.elapsedMs)}</div>
+            <p>of {draft.target_duration_min} min target</p>
             <div className={styles.metricGrid}>
-              <Metric label="kcal" sub="" value="186" />
-              <Metric label="incline" sub="" value="8%" />
-              <Metric label="speed" sub="" value="5.5" />
-              <Metric label="heart" sub="" value="132" />
+              <Metric label="kcal" sub="" value={String(liveKcal)} />
+              <Metric label="incline" sub="" value={`${draft.incline_pct}%`} />
+              <Metric label="speed" sub="" value={String(draft.speed_kmh)} />
+              <Metric label="progress" sub="" value={`${Math.min(100, Math.round((draft.elapsedMs / targetMs) * 100))}%`} />
             </div>
           </div>
         </div>
         <div className={styles.screenHeader} style={{ justifyContent: 'center' }}>
-          <button className={styles.roundControl} type="button"><Icon color="#fff" name="pause" /></button>
-          <button className={styles.roundControl} onClick={() => navigate('/log/workout/summary')} style={{ background: '#fff' }} type="button"><Icon color="#EF4444" name="stop" /></button>
-          <button className={styles.roundControl} type="button"><Icon color="#fff" name="bolt" /></button>
+          {isPaused ? (
+            <button className={styles.roundControl} onClick={() => draft.resume()} type="button">
+              <Icon color="#fff" name="play" />
+            </button>
+          ) : (
+            <button className={styles.roundControl} onClick={() => draft.pause()} type="button">
+              <Icon color="#fff" name="pause" />
+            </button>
+          )}
+          <button className={styles.roundControl} onClick={() => navigate('/log/workout/summary')} style={{ background: '#fff' }} type="button">
+            <Icon color="#EF4444" name="stop" />
+          </button>
         </div>
       </div>
     </AppScreen>
@@ -93,7 +168,15 @@ export function LogWorkoutActiveRoute() {
 export function LogWorkoutSummaryRoute() {
   const navigate = useNavigate()
   const { add } = useWorkouts(30)
+  const { profile } = useUser()
+  const draft = useWorkoutDraft()
   const [saving, setSaving] = useState(false)
+  const weightKg = profile?.profile?.weight_start_kg ?? DEFAULT_PROFILE.weight_start_kg
+
+  const durationMin = Math.round(draft.elapsedMs / 60000)
+  const kcalBurned = computeKcal(draft.incline_pct, weightKg, draft.elapsedMs)
+  const distance = Number((draft.speed_kmh * (draft.elapsedMs / 3600000)).toFixed(1))
+  const overUnder = durationMin - draft.target_duration_min
 
   async function saveWorkout() {
     if (saving) return
@@ -101,15 +184,16 @@ export function LogWorkoutSummaryRoute() {
     try {
       await add({
         date: todayKey(),
-        type: 'incline_walk',
-        duration_min: 45,
-        incline_pct: 8.2,
-        speed_kmh: 5.5,
-        kcal_burned: 328,
+        type: draft.type,
+        duration_min: durationMin,
+        incline_pct: draft.incline_pct,
+        speed_kmh: draft.speed_kmh,
+        kcal_burned: kcalBurned,
         mood: 'strong',
       })
-      toast.success('45 min · 328 kcal burned')
+      toast.success(`${durationMin} min · ${kcalBurned} kcal burned`)
       haptic(10)
+      draft.reset()
       navigate('/')
     } catch (err) {
       console.error(err)
@@ -126,15 +210,21 @@ export function LogWorkoutSummaryRoute() {
         <Header title="Workout complete" />
         <div className={styles.heroPanel} style={{ textAlign: 'center' }}>
           <Icon color="#fff" name="check" size={34} stroke={3} />
-          <p>Incline walk</p>
-          <div className={styles.heroKpi}>45:22</div>
-          <p>2 sec over target. Nailed it.</p>
+          <p>{TYPE_LABELS[draft.type]}</p>
+          <div className={styles.heroKpi}>{formatTime(draft.elapsedMs)}</div>
+          <p>
+            {overUnder === 0
+              ? 'Right on target!'
+              : overUnder > 0
+                ? `${overUnder} min over target. 💪`
+                : `${Math.abs(overUnder)} min under target.`}
+          </p>
         </div>
         <div className={styles.metricGrid}>
-          <Metric label="Calories" sub="kcal" value="328" />
-          <Metric label="Distance" sub="km" value="3.6" />
-          <Metric label="Avg incline" sub="%" value="8.2" />
-          <Metric label="Avg speed" sub="km/h" value="5.5" />
+          <Metric label="Calories" sub="kcal" value={String(kcalBurned)} />
+          <Metric label="Distance" sub="km" value={String(distance)} />
+          <Metric label="Avg incline" sub="%" value={String(draft.incline_pct)} />
+          <Metric label="Avg speed" sub="km/h" value={String(draft.speed_kmh)} />
         </div>
         <div className={styles.pageFooter}>
           <Button disabled={saving} onClick={() => void saveWorkout()}>{saving ? 'Saving...' : 'Save workout'}</Button>
