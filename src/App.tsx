@@ -4,20 +4,17 @@ import { DesignSystemRoute } from './routes/_design-system'
 import { AchievementRoute } from './routes/achievement'
 import { HomeRoute } from './routes/home'
 import { LogMealConfirmRoute, LogMealRoute, LogMealSavedRoute } from './routes/log-meal'
-import {
-  LogSleepRoute,
-  LogWaterRoute,
-  LogWeightRoute,
-  LogWorkoutActiveRoute,
-  LogWorkoutRoute,
-  LogWorkoutSummaryRoute,
-} from './routes/log-health'
+import { LogSleepRoute } from './routes/log-sleep'
+import { LogWaterRoute } from './routes/log-water'
+import { LogWeightRoute } from './routes/log-weight'
+import { LogWorkoutRoute, LogWorkoutActiveRoute, LogWorkoutSummaryRoute } from './routes/log-workout'
 import { PlanRoute } from './routes/plan'
 import { ProfileRoute } from './routes/profile'
 import { ProgressRoute } from './routes/progress'
 import { LoginRoute } from './routes/login'
 import { OnboardingGoalRoute, OnboardingProfileRoute, OnboardingWelcomeRoute } from './routes/onboarding'
 import { SplashRoute } from './routes/splash'
+import { NotFoundRoute } from './routes/not-found'
 import { useAuth } from './hooks/useAuth'
 import { useUser } from './hooks/useUser'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -61,7 +58,7 @@ function AuthGate() {
         <Route element={<PlanRoute />} path="/plan" />
         <Route element={<ProfileRoute />} path="/profile" />
         <Route element={<AchievementRoute />} path="/achievement" />
-        <Route element={<Navigate replace to="/" />} path="*" />
+        <Route element={<NotFoundRoute />} path="*" />
       </Routes>
     </FirstTimeUserGate>
   )
