@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon } from '@/components/primitives'
@@ -6,16 +6,32 @@ import { DEFAULT_BREAKFAST } from '@/data/defaults'
 import { todayKey } from '@/lib/dates'
 import { useMeals } from '@/hooks/useMeals'
 import { usePresets } from '@/hooks/usePresets'
-import type { MealPreset } from '@/types/domain'
-
-function useSelectedPreset(): MealPreset {
-  const { data } = usePresets()
-  return data[0] ?? DEFAULT_BREAKFAST
-}
+import { useMealDraft } from '@/stores/mealDraft'
+import type { MealType } from '@/types/domain'
 
 export function LogMealRoute() {
   const navigate = useNavigate()
   const { data: presets, loading } = usePresets()
+  const { mealType, setMealType, setSelectedPreset } = useMealDraft()
+
+  useEffect(() => {
+    const now = new Date()
+    const hours = now.getHours()
+    let initialType: MealType = 'breakfast'
+    if (hours >= 4 && hours < 10) {
+      initialType = 'breakfast'
+    } else if (hours >= 10 && hours < 15) {
+      initialType = 'lunch'
+    } else if (hours >= 15 && hours < 22) {
+      initialType = 'dinner'
+    } else {
+      initialType = 'snack'
+    }
+    setMealType(initialType)
+  }, [setMealType])
+
+  const filteredPresets = presets.filter((p) => p.meal_type === mealType)
+  const displayPresets = filteredPresets.length > 0 ? filteredPresets : presets
 
   return (
     <AppScreen hideNav>
@@ -31,28 +47,59 @@ export function LogMealRoute() {
         </header>
         <p className={styles.fieldLabel}>Which meal?</p>
         <div className="dq-seg" style={{ width: '100%', marginBottom: 18 }}>
-          {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((item, index) => (
-            <span className="dq-seg-item" data-active={index === 0} key={item} style={{ flex: 1, justifyContent: 'center' }}>
-              {item}
-            </span>
-          ))}
+          {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((item) => {
+            const option = item.toLowerCase() as MealType
+            return (
+              <button
+                className="dq-seg-item"
+                data-active={mealType === option}
+                key={item}
+                onClick={() => setMealType(option)}
+                type="button"
+                style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none' }}
+              >
+                {item}
+              </button>
+            )
+          })}
         </div>
 
-        <Section title="Suggested for breakfast" />
+        <Section title={`Suggested for ${mealType}`} />
         <div className={styles.presetList}>
           {loading ? (
             <Card padding={16}>
               <p className={styles.subtitle}>Loading presets...</p>
             </Card>
           ) : presets.length === 0 ? (
-            <Card padding={16}>
-              <strong>Starter preset</strong>
-              <p className={styles.subtitle}>No saved presets yet. Use the default breakfast to create your first meal log.</p>
-            </Card>
+            <button
+              className={styles.presetRow}
+              onClick={() => {
+                setSelectedPreset(DEFAULT_BREAKFAST)
+                navigate('/log/meal/confirm')
+              }}
+              type="button"
+              style={{ width: '100%', textAlign: 'left', borderStyle: 'dashed' }}
+            >
+              <span className={styles.mealIcon}>🍽️</span>
+              <span className={styles.rowText}>
+                <span className={styles.rowTitle}>Starter preset</span>
+                <span className={styles.rowSub}>No saved presets yet. Click to log default breakfast.</span>
+              </span>
+              <Icon color="var(--a1)" name="plus" size={16} />
+            </button>
           ) : (
-            presets.slice(0, 4).map((preset, index) => (
-              <button className={styles.presetRow} data-highlight={index === 0} key={preset.id} onClick={() => navigate('/log/meal/confirm')} type="button">
-                <span className={styles.mealIcon}>{preset.icon}</span>
+            displayPresets.slice(0, 4).map((preset, index) => (
+              <button
+                className={styles.presetRow}
+                data-highlight={index === 0}
+                key={preset.id}
+                onClick={() => {
+                  setSelectedPreset(preset)
+                  navigate('/log/meal/confirm')
+                }}
+                type="button"
+              >
+                <span className={styles.mealIcon}>{preset.icon || '🍽️'}</span>
                 <span className={styles.rowText}>
                   <span className={styles.rowTitle}>{preset.name}</span>
                   <span className={styles.rowSub}>
@@ -65,7 +112,20 @@ export function LogMealRoute() {
             ))
           )}
         </div>
-        <Button icon="plus" onClick={() => navigate('/log/meal/confirm')} variant="secondary">
+        <Button
+          icon="plus"
+          onClick={() => {
+            setSelectedPreset({
+              ...DEFAULT_BREAKFAST,
+              id: 'custom-meal',
+              name: 'Custom meal',
+              tag: 'Build your own',
+              meal_type: mealType,
+            })
+            navigate('/log/meal/confirm')
+          }}
+          variant="secondary"
+        >
           Build custom meal
         </Button>
       </div>
@@ -75,10 +135,12 @@ export function LogMealRoute() {
 
 export function LogMealConfirmRoute() {
   const navigate = useNavigate()
-  const preset = useSelectedPreset()
   const { add } = useMeals()
   const { markUsed } = usePresets()
+  const { mealType, selectedPreset } = useMealDraft()
   const [saving, setSaving] = useState(false)
+
+  const preset = selectedPreset ?? DEFAULT_BREAKFAST
   const carbs = preset.items.reduce((sum, item) => sum + item.carb_g, 0)
   const fat = preset.items.reduce((sum, item) => sum + item.fat_g, 0)
 
@@ -87,14 +149,16 @@ export function LogMealConfirmRoute() {
     try {
       await add({
         date: todayKey(),
-        meal_type: preset.meal_type,
+        meal_type: mealType,
         items: preset.items,
         total_kcal: preset.total_kcal,
         total_protein_g: preset.total_protein_g,
         total_carb_g: carbs,
         total_fat_g: fat,
       })
-      if (preset.id !== DEFAULT_BREAKFAST.id) await markUsed(preset.id)
+      if (preset.id !== DEFAULT_BREAKFAST.id && preset.id !== 'custom-meal') {
+        await markUsed(preset.id)
+      }
       navigate('/log/meal/saved')
     } finally {
       setSaving(false)
@@ -109,7 +173,9 @@ export function LogMealConfirmRoute() {
             <Icon name="chevronL" />
           </button>
           <div style={{ textAlign: 'center' }}>
-            <p className="dq-eyebrow">Breakfast</p>
+            <p className="dq-eyebrow" style={{ textTransform: 'capitalize' }}>
+              {mealType}
+            </p>
             <strong>Confirm meal</strong>
           </div>
           <button className={styles.iconButton} type="button">
@@ -134,17 +200,23 @@ export function LogMealConfirmRoute() {
 
         <Section title="Items" />
         <Card padding={0}>
-          {preset.items.map((item) => (
-            <div className={styles.habitRow} key={item.name} style={{ padding: 14 }}>
-              <span className={styles.rowText}>
-                <strong>{item.name}</strong>
-                <span className={styles.rowSub}>
-                  {item.kcal} kcal - {item.protein_g}g P - {item.carb_g}g C - {item.fat_g}g F
-                </span>
-              </span>
-              <span className="dq-pill">{item.portion}x</span>
+          {preset.items.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--t-3)' }}>
+              No items in this meal yet.
             </div>
-          ))}
+          ) : (
+            preset.items.map((item) => (
+              <div className={styles.habitRow} key={item.name} style={{ padding: 14 }}>
+                <span className={styles.rowText}>
+                  <strong>{item.name}</strong>
+                  <span className={styles.rowSub}>
+                    {item.kcal} kcal - {item.protein_g}g P - {item.carb_g}g C - {item.fat_g}g F
+                  </span>
+                </span>
+                <span className="dq-pill">{item.portion}x</span>
+              </div>
+            ))
+          )}
         </Card>
 
         <div className={styles.pageFooter}>
@@ -157,6 +229,8 @@ export function LogMealConfirmRoute() {
 
 export function LogMealSavedRoute() {
   const navigate = useNavigate()
+  const { mealType } = useMealDraft()
+  const displayTitle = `${mealType.charAt(0).toUpperCase() + mealType.slice(1)} logged`
 
   return (
     <AppScreen hideNav>
@@ -166,7 +240,7 @@ export function LogMealSavedRoute() {
             <div className={styles.successMark}>
               <Icon color="#fff" name="check" size={86} stroke={3} />
             </div>
-            <h1 className={styles.headerTitle}>Breakfast logged</h1>
+            <h1 className={styles.headerTitle}>{displayTitle}</h1>
             <p className={styles.subtitle}>Saved to Firebase and synced to today's totals.</p>
             <div style={{ height: 22 }} />
             <span className="dq-pill">
