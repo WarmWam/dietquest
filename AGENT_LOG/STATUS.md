@@ -44,6 +44,11 @@
   - Styled `Sign out` as dark red destructive text.
 - [x] Profile overlap follow-up fixed
   - Prevented scroll-screen children and settings sections from flex-shrinking, which was compressing Theme/Vibrations/Notifications into each other on mobile viewport.
+- [x] Push notification receiver setup added
+  - Build now generates `public/firebase-messaging-sw.js` from Vercel/local Firebase env values.
+  - Profile has a `Push notifications` enable row that requests permission, registers the messaging service worker, creates an FCM web token, and stores it in `users/{uid}/notification_tokens/{token}`.
+  - Foreground messages show as in-app toast.
+  - Important: scheduled reminder sender is still pending; this commit prepares the installed PWA to receive pushes but does not yet run a backend cron/Cloud Function to send breakfast/lunch/water/workout/bedtime reminders.
 
 ---
 
@@ -55,6 +60,7 @@
 - `9f5b9b4` - `fix(ui): remove mock status bar and restore progress tabs`
 - `de82459` - `fix(profile): simplify settings layout`
 - pending - `fix(profile): prevent settings sections from overlapping`
+- pending - `feat(notifications): register push tokens for reminders`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

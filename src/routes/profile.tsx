@@ -10,6 +10,7 @@ import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
 import { haptic, isHapticsEnabled, setHapticsEnabled } from '@/lib/haptic'
 import { upsertUser } from '@/lib/db'
+import { enablePushNotifications, getNotificationPermission } from '@/lib/notifications'
 import { calculateBmr } from '@/lib/nutrition'
 import type { Sex } from '@/types/domain'
 
@@ -26,6 +27,8 @@ export function ProfileRoute() {
   const [isEditing, setIsEditing] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [enablingPush, setEnablingPush] = useState(false)
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission())
   const [vibrations, setVibrations] = useState(isHapticsEnabled())
   const [notifications, setNotifications] = useState({
     breakfast: true,
@@ -191,6 +194,32 @@ export function ProfileRoute() {
     }
   }
 
+  async function handleEnablePush() {
+    if (!user || enablingPush) return
+    setEnablingPush(true)
+    const result = await enablePushNotifications(user.uid)
+    setPushPermission(getNotificationPermission())
+    setEnablingPush(false)
+
+    if (result.ok === true) {
+      toast.success('Notifications enabled for this device.')
+      haptic(10)
+      return
+    }
+
+    toast.error(result.message)
+    haptic([20, 40, 20])
+  }
+
+  const pushStatus =
+    pushPermission === 'granted'
+      ? 'Enabled on this device'
+      : pushPermission === 'denied'
+        ? 'Blocked in iOS Settings'
+        : pushPermission === 'unsupported'
+          ? 'Not supported on this device'
+          : 'Tap Enable after installing the PWA'
+
   return (
     <AppScreen activeNav="profile">
       <div className={`${styles.screen} ${styles.withNav} ${styles.scroll}`}>
@@ -241,6 +270,20 @@ export function ProfileRoute() {
         </Section>
 
         <Section title="Notifications">
+          <div className={styles.settingRow}>
+            <Icon color="var(--a1)" name="bell" />
+            <span className={styles.rowText}>
+              <strong>Push notifications</strong>
+              <span className={styles.rowSub}>{pushStatus}</span>
+            </span>
+            {pushPermission === 'granted' || pushPermission === 'unsupported' ? (
+              <span className={styles.rowSub}>{pushPermission === 'granted' ? 'On' : 'N/A'}</span>
+            ) : (
+              <Button disabled={enablingPush} onClick={() => void handleEnablePush()} variant="secondary" style={{ height: 34, padding: '0 12px', fontSize: 13 }}>
+                {enablingPush ? '...' : 'Enable'}
+              </Button>
+            )}
+          </div>
           {[
             { key: 'breakfast', label: 'Breakfast reminder', icon: 'fork' as const },
             { key: 'lunch', label: 'Lunch reminder', icon: 'fork' as const },

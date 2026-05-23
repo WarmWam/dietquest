@@ -112,3 +112,9 @@ Format per entry:
 - Verdict: 
 - Commit: pending
 - Notes: Fixed remaining Profile section overlap by preventing scroll-screen children and settings rows from flex-shrinking on the mobile viewport.
+
+## Phase 6.2 Follow-up - Push notification receiver setup
+- Date: 2026-05-23
+- Verdict: 
+- Commit: pending
+- Notes: Added FCM web push receiver plumbing for installed PWA: generated messaging service worker from env, Profile permission/token registration row, token persistence under user notification_tokens, and foreground notification toast. Scheduled backend sender remains pending.

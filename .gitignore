@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .env.local
+public/firebase-messaging-sw.js
 
 # Editor directories and files
 .vscode/*
@@ -26,4 +27,3 @@ dist-ssr
 
 # Scratch folder and Playwright sessions/cookies
 scratch/
-

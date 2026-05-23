@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom'
 import { DesignSystemRoute } from './routes/_design-system'
 import { AchievementRoute } from './routes/achievement'
@@ -18,8 +18,17 @@ import { NotFoundRoute } from './routes/not-found'
 import { useAuth } from './hooks/useAuth'
 import { useUser } from './hooks/useUser'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { listenForForegroundNotifications } from './lib/notifications'
 
 function App() {
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+    void listenForForegroundNotifications().then((nextUnsubscribe) => {
+      unsubscribe = nextUnsubscribe
+    })
+    return () => unsubscribe?.()
+  }, [])
+
   return (
     <Router>
       <ErrorBoundary>
