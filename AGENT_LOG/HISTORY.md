@@ -94,3 +94,9 @@ Format per entry:
 - Verdict: SHIPPED
 - Tag: v1.0.2
 - Notes: Hardens error visibility — future silent failures will surface in console + UI within seconds instead of taking hours to debug. Sparked by post-v1.0.1 finding that missing Firestore composite indexes for meals/water queries caused Home to render empty state instead of error (index added in commit ea1a873, error visibility shipped in this tag).
+
+## Phase 6.2 Follow-up - UI regression fix
+- Date: 2026-05-23
+- Verdict: 
+- Commit: 9f5b9b4...HEAD
+- Notes: Human QA found Progress tabs missing/clipped and prototype-only fake iOS status bar still visible. Removed the mock 9:41/battery/signal bar, changed screens to use real safe-area padding, and made Progress tabs full-width so Weight/Calories/Activity remain visible.

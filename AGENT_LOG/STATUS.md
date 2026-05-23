@@ -2,7 +2,7 @@
 
 > **Phase:** Phase 6.2 - Error visibility + silent-failure hardening
 > **Status date:** 2026-05-23
-> **Current state:** Phase 6.2 implementation complete. Listener errors now log with Firestore context labels, Home has a distinct error state instead of falling into the empty state, and log/progress/profile/plan screens surface hook errors via toast. Awaiting Claude review. Do not tag v1.0.2 yet.
+> **Current state:** Human-reported UI regression fix complete after v1.0.2. Listener visibility work remains intact; Progress tabs are visible again, and the prototype-only fake iOS status bar has been removed. Awaiting Claude/human review before any further release action.
 
 ---
 
@@ -33,6 +33,10 @@
 - [x] STATUS.md updated, HISTORY.md appended
 - [x] Pushed to main
   - Code commits plus this docs closeout commit are pushed together after STATUS/HISTORY are committed.
+- [x] Human follow-up UI regression fixed
+  - Removed fake `9:41` / battery / signal mock status bar from `Phone`.
+  - Moved app screens to real safe-area padding instead of reserving the old 54px mock status slot.
+  - Made Progress tabs full-width and non-scroll-clipped so `Weight`, `Calories`, and `Activity` stay visible.
 
 ---
 
@@ -41,8 +45,9 @@
 - `56ab8f4` - `fix(db): log all listener errors to console with context label`
 - `58481db` - `fix(home): distinguish error state from empty state`
 - `280e5e6` - `fix(routes): surface query errors via toast on log + progress screens`
-- Phase range before docs commit: `56ab8f4...280e5e6`
-- Final phase range after docs commit/push: `56ab8f4...HEAD`
+- `9f5b9b4` - `fix(ui): remove mock status bar and restore progress tabs`
+- Phase 6.2 range: `56ab8f4...efb6c0f`
+- Follow-up UI range: `9f5b9b4...HEAD`
 
 ---
 
