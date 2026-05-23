@@ -208,7 +208,7 @@ export function ProfileRoute() {
         ? 'Blocked in iOS Settings'
         : pushPermission === 'unsupported'
           ? 'Not supported on this device'
-          : 'Tap Enable after installing the PWA'
+          : 'Allow browser to send reminders'
 
   return (
     <AppScreen activeNav="profile">
@@ -255,9 +255,11 @@ export function ProfileRoute() {
             )}
           </div>
           {[
+            { key: 'breakfast', label: 'Breakfast reminder (06:30)', icon: 'sun' as const },
+            { key: 'lunch', label: 'Lunch reminder (11:00)', icon: 'fork' as const },
             { key: 'water', label: 'Water (every 2h)', icon: 'drop' as const },
-            { key: 'workout', label: 'Workout reminder', icon: 'walk' as const },
-            { key: 'bedtime', label: 'Bedtime reminder', icon: 'moon' as const },
+            { key: 'workout', label: 'Workout reminder (16:30)', icon: 'walk' as const },
+            { key: 'bedtime', label: 'Bedtime reminder (22:30)', icon: 'moon' as const },
           ].map((item) => (
             <div className={styles.settingRow} key={item.key}>
               <Icon color="var(--a1)" name={item.icon} />
