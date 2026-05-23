@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Stepper } from '@/components/primitives'
 import { BulkMealPlanner, BulkWorkoutPlanner } from '@/components/plan/BulkPlanners'
+import { FullscreenModal } from '@/components/plan/FullscreenModal'
 import { useFoods } from '@/hooks/useFoods'
 import { useMealPlan, useMonthMealPlans } from '@/hooks/useMealPlan'
 import { useMonthWorkoutPlans, useWorkoutPlan } from '@/hooks/useWorkoutPlan'
+import { useScrollLock } from '@/hooks/useScrollLock'
 import { useUser } from '@/hooks/useUser'
 import { DEFAULT_SETTINGS } from '@/data/defaults'
 import { haptic } from '@/lib/haptic'
@@ -345,33 +347,33 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
     }
   }
 
+  useScrollLock()
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(15,23,42,0.5)',
+        background: 'var(--bg)',
         zIndex: 110,
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'flex-end',
+        overflow: 'hidden',
+        overscrollBehavior: 'contain',
       }}
     >
-      <div className={styles.sheet} style={{ height: '92%', display: 'flex', flexDirection: 'column' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onClose} type="button">
-            <Icon name="x" />
-          </button>
-          <div style={{ textAlign: 'center' }}>
-            <p className="dq-eyebrow">Plan</p>
+      <header className={styles.screenHeader} style={{ padding: 'calc(env(safe-area-inset-top, 0px) + 12px) 20px 12px', margin: 0, borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+        <button className={styles.iconButton} onClick={onClose} type="button">
+          <Icon name="x" />
+        </button>
+        <div style={{ textAlign: 'center' }}>
+          <p className="dq-eyebrow">Plan</p>
             <strong>{niceDate}</strong>
           </div>
-          <span style={{ width: 40 }} />
-        </header>
+        <span style={{ width: 40 }} />
+      </header>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
-          {/* Daily totals */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 20px calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}>
+        {/* Daily totals */}
           <Card padding={14} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <div>
@@ -448,7 +450,6 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
             }}
           />
         )}
-      </div>
     </div>
   )
 }
@@ -588,27 +589,8 @@ function FoodPicker({
 
   if (selected) {
     return (
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15,23,42,0.55)',
-          zIndex: 130,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-end',
-        }}
-      >
-        <div className={styles.sheet} style={{ height: 'auto', maxHeight: '50%' }}>
-          <div className={styles.sheetHandle} />
-          <header className={styles.screenHeader}>
-            <button className={styles.iconButton} onClick={() => setSelected(null)} type="button">
-              <Icon name="chevronL" />
-            </button>
-            <strong>{selected.name}</strong>
-            <span style={{ width: 40 }} />
-          </header>
-          <div style={{ padding: '0 20px 24px' }}>
+      <FullscreenModal closeIcon="chevronL" onClose={() => setSelected(null)} title={selected.name} zIndex={130}>
+          <div>
             <p className={styles.subtitle} style={{ marginBottom: 10 }}>
               {selected.kcal_per_portion} kcal · {selected.protein_g_per_portion}g protein per {selected.portion_unit}
             </p>
@@ -620,33 +602,13 @@ function FoodPicker({
             <div style={{ height: 14 }} />
             <Button onClick={() => onPick(selected, portion)}>Add to {slot}</Button>
           </div>
-        </div>
-      </div>
+      </FullscreenModal>
     )
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15,23,42,0.55)',
-        zIndex: 120,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
-    >
-      <div className={styles.sheet} style={{ height: '85%', display: 'flex', flexDirection: 'column' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button">
-            <Icon name="x" />
-          </button>
-          <strong>Pick food for {slot}</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ padding: '0 20px' }}>
+    <FullscreenModal onClose={onCancel} title={`Pick food for ${slot}`} zIndex={120}>
+        <div>
           <input
             type="search"
             placeholder="Search..."
@@ -679,7 +641,7 @@ function FoodPicker({
             </div>
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
+        <div>
           {loading ? (
             <p className={styles.subtitle}>Loading foods...</p>
           ) : filtered.length === 0 ? (
@@ -724,8 +686,7 @@ function FoodPicker({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </FullscreenModal>
   )
 }
 
@@ -772,27 +733,8 @@ function WorkoutPlanSheet({
   const isRest = type === 'rest'
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15,23,42,0.55)',
-        zIndex: 125,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
-    >
-      <div className={styles.sheet} style={{ height: 'auto', maxHeight: '70%' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button">
-            <Icon name="x" />
-          </button>
-          <strong>{existing ? 'Edit workout' : 'Plan workout'}</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ padding: '0 20px 24px' }}>
+    <FullscreenModal onClose={onCancel} title={existing ? 'Edit workout' : 'Plan workout'} zIndex={125}>
+        <div>
           <p className={styles.fieldLabel}>Type</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 18 }}>
             {WORKOUT_PLAN_TYPES.map((t) => (
@@ -832,7 +774,6 @@ function WorkoutPlanSheet({
             {existing ? 'Update workout' : 'Save workout'}
           </Button>
         </div>
-      </div>
-    </div>
+    </FullscreenModal>
   )
 }

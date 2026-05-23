@@ -2,7 +2,7 @@
 
 > **Phase:** Phase 6.2 - Error visibility + silent-failure hardening
 > **Status date:** 2026-05-23
-> **Current state:** Human-reported UI follow-ups complete after v1.0.2. Listener visibility work remains intact; Progress tabs are visible again, the prototype-only fake iOS status bar has been removed, and Profile settings layout has been simplified per QA feedback. Awaiting Claude/human review before any further release action.
+> **Current state:** Human-reported UI follow-ups complete after v1.0.2. Listener visibility work remains intact; Progress tabs are visible again, the prototype-only fake iOS status bar has been removed, Profile settings layout has been simplified, and Plan sheets now open as fullscreen scroll-contained modals. Awaiting Claude/human review before any further release action.
 
 ---
 
@@ -67,6 +67,11 @@
 - [x] In-app launch branding updated
   - Replaced DQ text logo on Login/Splash/Error screens with the new app icon.
   - Updated first-run/launch labels from DietQuest to Health Tracking.
+- [x] Plan fullscreen modal follow-up fixed
+  - Added shared `FullscreenModal` chrome for planner overlays.
+  - Converted day/food/workout/bulk planner sheets away from translucent bottom-sheet chrome.
+  - Added scroll lock + `overscroll-behavior: contain` so the background page cannot move while a planner modal is open.
+  - Build verified with `npm run build`; local mobile `/plan` load was blocked by Google sign-in, but no console errors beyond Vite/React Router dev warnings.
 
 ---
 
@@ -83,6 +88,7 @@
 - pending - `style(ui): apply neural expressive visual refresh`
 - pending - `chore(pwa): update health tracking app icon`
 - pending - `chore(brand): align launch screens with health tracking`
+- `58b0ab2` - `fix(plan): make planner sheets fullscreen`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

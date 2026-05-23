@@ -142,3 +142,9 @@ Format per entry:
 - Verdict: 
 - Commit: pending
 - Notes: Replaced in-app DQ text mark on Login/Splash/Error launch surfaces with the new Health Tracking icon and updated first-run labels to Health Tracking.
+
+## Phase 6.3 Follow-up - Plan fullscreen modals
+- Date: 2026-05-23
+- Verdict: 
+- Commit: 58b0ab2
+- Notes: Converted Plan day, food, workout, bulk planner, category, and food edit sheets to fullscreen scroll-contained modals with body scroll lock so the background does not show or move.

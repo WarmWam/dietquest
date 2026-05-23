@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Skeleton, Stepper } from '@/components/primitives'
 import { CalendarTab } from '@/components/plan/Calendar'
+import { FullscreenModal } from '@/components/plan/FullscreenModal'
 import { useFoods } from '@/hooks/useFoods'
 import { useUser } from '@/hooks/useUser'
 import { toast } from '@/stores/toastStore'
@@ -275,27 +276,8 @@ function FoodEditSheet({
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15,23,42,0.4)',
-        zIndex: 100,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
-    >
-      <div className={styles.sheet} style={{ height: '88%', display: 'flex', flexDirection: 'column' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button">
-            <Icon name="x" />
-          </button>
-          <strong>{food ? 'Edit food' : 'New food'}</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
+    <FullscreenModal onClose={onCancel} title={food ? 'Edit food' : 'New food'} zIndex={100}>
+        <div>
           <p className={styles.fieldLabel}>Name</p>
           <input
             type="text"
@@ -365,7 +347,6 @@ function FoodEditSheet({
             ) : null}
           </div>
         </div>
-      </div>
-    </div>
+    </FullscreenModal>
   )
 }

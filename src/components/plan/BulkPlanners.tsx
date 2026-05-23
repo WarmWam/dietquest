@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Stepper } from '@/components/primitives'
+import { FullscreenModal } from '@/components/plan/FullscreenModal'
 import { useFoods } from '@/hooks/useFoods'
 import { bulkUpsertMealPlans, bulkUpsertWorkoutPlans } from '@/lib/db'
 import { useAuth } from '@/hooks/useAuth'
@@ -66,17 +67,9 @@ function findFoodMatch(foods: Food[], patterns: string[]): Food | null {
 
 function SheetShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 115, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div className={styles.sheet} style={{ height: '95%', display: 'flex', flexDirection: 'column' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onClose} type="button"><Icon name="x" /></button>
-          <strong>{title}</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>{children}</div>
-      </div>
-    </div>
+    <FullscreenModal onClose={onClose} title={title} zIndex={115}>
+      {children}
+    </FullscreenModal>
   )
 }
 
@@ -677,21 +670,13 @@ function PortionMini({ value, unit, onChange }: { value: number; unit: string; o
 
 function AddItemMenu({ slotLabel, onPick, onCancel }: { slotLabel: string; onPick: (mode: 'specific' | 'category' | 'all') => void; onCancel: () => void }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div className={styles.sheet} style={{ height: 'auto', maxHeight: '60%' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
-          <strong>{slotLabel}</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ padding: '0 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ModeButton icon="fork" title="Pick specific food" onClick={() => onPick('specific')} />
-          <ModeButton icon="sparkle" title="Random by category" onClick={() => onPick('category')} />
-          <ModeButton icon="sparkle" title="Random any food" onClick={() => onPick('all')} />
-        </div>
+    <FullscreenModal onClose={onCancel} title={slotLabel} zIndex={130}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ModeButton icon="fork" title="Pick specific food" onClick={() => onPick('specific')} />
+        <ModeButton icon="sparkle" title="Random by category" onClick={() => onPick('category')} />
+        <ModeButton icon="sparkle" title="Random any food" onClick={() => onPick('all')} />
       </div>
-    </div>
+    </FullscreenModal>
   )
 }
 
@@ -722,25 +707,17 @@ function ModeButton({ icon, title, onClick }: { icon: 'fork' | 'sparkle'; title:
 
 function CategoryPicker({ onPick, onCancel }: { onPick: (cat: FoodCategory) => void; onCancel: () => void }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 140, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div className={styles.sheet} style={{ height: 'auto', maxHeight: '50%' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
-          <strong>Pick category</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ padding: '0 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {FOOD_CATEGORIES.map((cat) => (
-            <button key={cat.id} onClick={() => onPick(cat.id)} type="button"
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', textAlign: 'left' }}>
-              <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{cat.label}</span>
-              <Icon color="var(--t-3)" name="chevron" size={14} />
-            </button>
-          ))}
-        </div>
+    <FullscreenModal onClose={onCancel} title="Pick category" zIndex={140}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {FOOD_CATEGORIES.map((cat) => (
+          <button key={cat.id} onClick={() => onPick(cat.id)} type="button"
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', textAlign: 'left' }}>
+            <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{cat.label}</span>
+            <Icon color="var(--t-3)" name="chevron" size={14} />
+          </button>
+        ))}
       </div>
-    </div>
+    </FullscreenModal>
   )
 }
 
@@ -760,15 +737,8 @@ function FoodPickerLite({
   const filtered = foods.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div className={styles.sheet} style={{ height: '70%', display: 'flex', flexDirection: 'column' }}>
-        <div className={styles.sheetHandle} />
-        <header className={styles.screenHeader}>
-          <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
-          <strong>Pick food for {slotLabel}</strong>
-          <span style={{ width: 40 }} />
-        </header>
-        <div style={{ padding: '0 20px' }}>
+    <FullscreenModal onClose={onCancel} title={`Pick food for ${slotLabel}`} zIndex={130}>
+        <div>
           <input
             type="search"
             placeholder="Search foods..."
@@ -777,7 +747,7 @@ function FoodPickerLite({
             style={{ width: '100%', padding: '10px 14px', fontSize: 14, border: 0, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', outline: 'none', fontFamily: 'inherit', color: 'var(--t-1)', marginBottom: 10 }}
           />
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
+        <div>
           {filtered.length === 0 ? (
             <p className={styles.subtitle} style={{ textAlign: 'center', padding: 20 }}>
               {foods.length === 0 ? 'Library empty. Add foods in Library tab.' : 'No matches.'}
@@ -797,8 +767,7 @@ function FoodPickerLite({
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </FullscreenModal>
   )
 }
 
