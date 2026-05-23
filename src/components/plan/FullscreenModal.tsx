@@ -62,7 +62,7 @@ export function FullscreenModal({
           minHeight: 0,
           overflowY: 'auto',
           overscrollBehavior: 'contain',
-          padding: '20px 20px calc(env(safe-area-inset-bottom, 0px) + 24px)',
+          padding: '20px 20px calc(env(safe-area-inset-bottom, 0px) + 132px)',
           WebkitOverflowScrolling: 'touch',
         }}
       >

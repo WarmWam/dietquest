@@ -839,7 +839,7 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
       <Card padding={14} style={{ marginBottom: 14 }}>
         <p className={styles.fieldLabel}>Workout type</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {WORKOUT_PLAN_TYPES.filter((t) => t.id !== 'rest').map((t) => (
+          {WORKOUT_PLAN_TYPES.filter((t) => t.id !== 'rest' && t.id !== 'other').map((t) => (
             <button key={t.id} onClick={() => setType(t.id)} type="button"
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', border: type === t.id ? '2px solid var(--a1)' : '1px solid var(--line)', borderRadius: 'var(--r-md)', background: type === t.id ? 'var(--a-soft)' : 'var(--surface)', cursor: 'pointer', outline: 'none', fontWeight: 700, color: type === t.id ? 'var(--a1)' : 'var(--t-1)', fontSize: 13 }}>
               <Icon name={t.icon as any} size={16} />

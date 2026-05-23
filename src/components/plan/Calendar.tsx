@@ -372,7 +372,7 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
         <span style={{ width: 40 }} />
       </header>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 20px calc(env(safe-area-inset-bottom, 0px) + 24px)', WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '20px 20px calc(env(safe-area-inset-bottom, 0px) + 132px)', WebkitOverflowScrolling: 'touch' }}>
         {/* Daily totals */}
           <Card padding={14} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -737,7 +737,7 @@ function WorkoutPlanSheet({
         <div>
           <p className={styles.fieldLabel}>Type</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 18 }}>
-            {WORKOUT_PLAN_TYPES.map((t) => (
+            {WORKOUT_PLAN_TYPES.filter((t) => t.id !== 'other').map((t) => (
               <button
                 key={t.id}
                 onClick={() => setType(t.id)}
