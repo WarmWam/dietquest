@@ -192,31 +192,31 @@ function CaloriesTab() {
 
 function ActivityTab() {
   const { data: workouts, error: workoutsError } = useWorkouts(90)
-  const totalMinutes = workouts.reduce((sum, workout) => sum + workout.duration_min, 0)
-  const burned = workouts.reduce((sum, workout) => sum + workout.kcal_burned, 0)
+  const activityWorkouts = workouts.filter((workout) => workout.kcal_burned >= 20)
+  const burned = activityWorkouts.reduce((sum, workout) => sum + workout.kcal_burned, 0)
 
   // Build heatmap: 13 weeks × 7 days = 91 cells representing last 91 days
   const today = new Date()
-  const workoutDates = new Set(workouts.map((w) => w.date))
+  const workoutDates = new Set(activityWorkouts.map((w) => w.date))
 
-  // Compute best week (most workout minutes in any 7-day window)
+  // Compute best week (most burned kcal in any 7-day window)
   function computeBestWeek(): number {
-    if (workouts.length === 0) return 0
+    if (activityWorkouts.length === 0) return 0
     let best = 0
     for (let weekStart = 0; weekStart < 13; weekStart++) {
-      let weekMin = 0
+      let weekKcal = 0
       for (let d = 0; d < 7; d++) {
         const dayOffset = weekStart * 7 + d
         const dateKey = daysAgoKey(90 - dayOffset)
-        const dayWorkouts = workouts.filter((w) => w.date === dateKey)
-        weekMin += dayWorkouts.reduce((s, w) => s + w.duration_min, 0)
+        const dayWorkouts = activityWorkouts.filter((w) => w.date === dateKey)
+        weekKcal += dayWorkouts.reduce((s, w) => s + w.kcal_burned, 0)
       }
-      best = Math.max(best, weekMin)
+      best = Math.max(best, weekKcal)
     }
     return best
   }
 
-  const bestWeekMin = computeBestWeek()
+  const bestWeekKcal = computeBestWeek()
 
   useEffect(() => {
     if (workoutsError) toast.error("Couldn't load activity progress. Try again.")
@@ -229,7 +229,7 @@ function ActivityTab() {
           <div>
             <p className="dq-eyebrow">Last 90 days</p>
             <strong className="dq-num" style={{ fontSize: 42 }}>
-              {workouts.length} sessions
+              {activityWorkouts.length} sessions
             </strong>
           </div>
           <Icon color="#F97316" fill="#F97316" name="flame" size={34} />
@@ -250,10 +250,9 @@ function ActivityTab() {
         </div>
       </div>
       <div className={styles.metricGrid}>
-        <Metric label="Walks" value={`${workouts.length}`} />
-        <Metric label="Minutes" value={`${totalMinutes}`} />
-        <Metric label="Burned (90d)" value={`${burned}`} />
-        <Metric label="Best week" value={bestWeekMin ? `${bestWeekMin} min` : '—'} />
+        <Metric label="Walks" value={`${activityWorkouts.length}`} />
+        <Metric label="Burned" value={`${burned}`} />
+        <Metric label="Best week" value={bestWeekKcal ? `${bestWeekKcal} kcal` : '—'} />
       </div>
     </>
   )
