@@ -1,11 +1,12 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Button, Card, Icon, ImageSlot, Skeleton } from '@/components/primitives'
+import { Button, Card, Icon, ImageSlot, Skeleton, Stepper } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
 import { useAuth } from '@/hooks/useAuth'
 import { useTheme, type ThemeMode } from '@/hooks/useTheme'
 import { useUser } from '@/hooks/useUser'
+import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
 import { haptic, isHapticsEnabled, setHapticsEnabled } from '@/lib/haptic'
 import { upsertUser, exportUserData } from '@/lib/db'
@@ -20,13 +21,27 @@ export function ProfileRoute() {
   const { profile, loading } = useUser()
   const userProfile = profile?.profile ?? DEFAULT_PROFILE
   const displayName = profile?.display_name ?? user?.displayName ?? 'DietQuest'
-  const targetSpan = Math.abs(userProfile.weight_start_kg - userProfile.weight_target_kg)
 
   // Edit profile states
   const [isEditing, setIsEditing] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [vibrations, setVibrations] = useState(isHapticsEnabled())
+  const [notifications, setNotifications] = useState({
+    breakfast: true,
+    lunch: true,
+    water: false,
+    workout: true,
+    bedtime: true,
+  })
+
+  // Goal progress
+  const { data: weights } = useWeights(60)
+  const latestWeight = weights[weights.length - 1]
+  const totalToLose = userProfile.weight_start_kg - userProfile.weight_target_kg
+  const lost = userProfile.weight_start_kg - (latestWeight?.weight_kg ?? userProfile.weight_start_kg)
+  const goalPct = totalToLose > 0 ? Math.min(Math.max(lost / totalToLose, 0), 1) : 0
 
   // Edit draft states
   const [sex, setSex] = useState<Sex>('male')
@@ -198,9 +213,11 @@ export function ProfileRoute() {
           <strong className="dq-num" style={{ fontSize: 28 }}>
             {userProfile.weight_target_kg.toFixed(1)} kg
           </strong>
-          <p className={styles.subtitle}>{targetSpan.toFixed(1)} kg target span</p>
+          <p className={styles.subtitle}>
+            {lost.toFixed(1)} kg of {totalToLose.toFixed(1)} kg ({Math.round(goalPct * 100)}%)
+          </p>
           <div className={styles.progressBar} style={{ marginTop: 12 }}>
-            <div className={styles.progressFill} style={{ width: '100%' }} />
+            <div className={styles.progressFill} style={{ width: `${goalPct * 100}%` }} />
           </div>
         </Card>
 
@@ -224,17 +241,44 @@ export function ProfileRoute() {
           </div>
         </Section>
 
+        <Section title="Notifications">
+          {[
+            { key: 'breakfast', label: 'Breakfast reminder', icon: 'fork' as const },
+            { key: 'lunch', label: 'Lunch reminder', icon: 'fork' as const },
+            { key: 'water', label: 'Water (every 2h)', icon: 'drop' as const },
+            { key: 'workout', label: 'Workout reminder', icon: 'walk' as const },
+            { key: 'bedtime', label: 'Bedtime reminder', icon: 'moon' as const },
+          ].map((item) => (
+            <div className={styles.settingRow} key={item.key}>
+              <Icon color="var(--a1)" name={item.icon} />
+              <span className={styles.rowText}>{item.label}</span>
+              <button
+                className={styles.switch}
+                data-on={notifications[item.key as keyof typeof notifications]}
+                onClick={() => {
+                  setNotifications((prev) => ({ ...prev, [item.key]: !prev[item.key as keyof typeof prev] }))
+                  haptic(5)
+                }}
+                type="button"
+              >
+                <span className={styles.switchKnob} />
+              </button>
+            </div>
+          ))}
+          <p className={styles.subtitle} style={{ padding: '8px 0 0 0', fontSize: 11 }}>Coming soon — preferences saved for v1.1</p>
+        </Section>
+
         <Section title="Data">
           <button className={styles.settingRow} onClick={() => void handleExportData()} disabled={exporting} type="button" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', outline: 'none', cursor: 'pointer' }}>
             <Icon color="var(--a1)" name="download" />
             <span className={styles.rowText}>{exporting ? "Exporting..." : "Export data"}</span>
             <span className={styles.rowSub}>JSON</span>
           </button>
-          <div className={styles.settingRow}>
+          <button className={styles.settingRow} onClick={() => setShowAbout(true)} type="button" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', outline: 'none', cursor: 'pointer' }}>
             <Icon color="var(--a1)" name="info" />
             <span className={styles.rowText}>About DietQuest</span>
-            <span className={styles.rowSub}>v1.0.0</span>
-          </div>
+            <span className={styles.rowSub}>v1.0.1</span>
+          </button>
         </Section>
 
         <Button onClick={handleSignOut} variant="ghost">
@@ -324,77 +368,66 @@ export function ProfileRoute() {
           </div>
         </div>
       )}
+
+      {/* About DietQuest sheet */}
+      {showAbout && (
+        <>
+          <button
+            aria-label="Close about sheet"
+            onClick={() => setShowAbout(false)}
+            type="button"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(15,23,42,0.4)',
+              zIndex: 100,
+              border: 0,
+              cursor: 'pointer',
+            }}
+          />
+          <div className={styles.sheet} style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 101,
+          }}>
+            <div className={styles.sheetHandle} />
+            <header className={styles.screenHeader}>
+              <span style={{ width: 40 }} />
+              <strong>About DietQuest</strong>
+              <button className={styles.iconButton} onClick={() => setShowAbout(false)} type="button">
+                <Icon name="x" />
+              </button>
+            </header>
+            <div style={{ padding: '0 20px 32px', display: 'flex', flexDirection: 'column', gap: 16, textAlign: 'center' }}>
+              <div>
+                <strong className="dq-num" style={{ fontSize: 24 }}>DietQuest</strong>
+                <p className={styles.subtitle}>v1.0.1</p>
+              </div>
+              <p className={styles.subtitle}>
+                Built with Vite + React + Firebase
+              </p>
+              <a
+                href="https://github.com/WarmWam/dietquest"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--a1)', fontWeight: 700, fontSize: 13 }}
+              >
+                github.com/WarmWam/dietquest
+              </a>
+              <p className={styles.subtitle} style={{ fontSize: 11 }}>
+                © 2026 DietQuest. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
     </AppScreen>
   )
 }
 
-function Stepper({
-  label,
-  value,
-  suffix,
-  onChange,
-  min,
-  max,
-  step = 1,
-}: {
-  label: string
-  value: number
-  suffix: string
-  onChange: (val: number) => void
-  min: number
-  max: number
-  step?: number
-}) {
-  const formattedValue = step % 1 !== 0 ? value.toFixed(1) : String(value)
-  const isMin = value <= min
-  const isMax = value >= max
 
-  return (
-    <div>
-      <p className={styles.fieldLabel}>{label}</p>
-      <div className={styles.stepper} style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'var(--bg-soft)',
-        borderRadius: 'var(--r-pill)',
-        padding: '6px 12px',
-        height: '46px',
-      }}>
-        <button
-          className={styles.smallRoundButton}
-          type="button"
-          onClick={() => {
-            const nextVal = Number((value - step).toFixed(2))
-            onChange(Math.max(nextVal, min))
-          }}
-          disabled={isMin}
-          style={{ width: 32, height: 32, borderRadius: '50%', border: 0, background: 'var(--surface)', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          -
-        </button>
-        <span>
-          <strong className="dq-num" style={{ fontSize: 18 }}>
-            {formattedValue}
-          </strong>{' '}
-          <span className={styles.subtitle} style={{ fontSize: 12 }}>{suffix}</span>
-        </span>
-        <button
-          className={styles.smallRoundButton}
-          type="button"
-          onClick={() => {
-            const nextVal = Number((value + step).toFixed(2))
-            onChange(Math.min(nextVal, max))
-          }}
-          disabled={isMax}
-          style={{ width: 32, height: 32, borderRadius: '50%', border: 0, background: 'var(--surface)', fontWeight: 'bold', cursor: 'pointer' }}
-        >
-          +
-        </button>
-      </div>
-    </div>
-  )
-}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
