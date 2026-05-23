@@ -66,7 +66,7 @@ function findFoodMatch(foods: Food[], patterns: string[]): Food | null {
 
 function SheetShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 115, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 115, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div className={styles.sheet} style={{ height: '95%', display: 'flex', flexDirection: 'column' }}>
         <div className={styles.sheetHandle} />
         <header className={styles.screenHeader}>
@@ -677,7 +677,7 @@ function PortionMini({ value, unit, onChange }: { value: number; unit: string; o
 
 function AddItemMenu({ slotLabel, onPick, onCancel }: { slotLabel: string; onPick: (mode: 'specific' | 'category' | 'all') => void; onCancel: () => void }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div className={styles.sheet} style={{ height: 'auto', maxHeight: '60%' }}>
         <div className={styles.sheetHandle} />
         <header className={styles.screenHeader}>
@@ -722,7 +722,7 @@ function ModeButton({ icon, title, onClick }: { icon: 'fork' | 'sparkle'; title:
 
 function CategoryPicker({ onPick, onCancel }: { onPick: (cat: FoodCategory) => void; onCancel: () => void }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 140, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 140, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div className={styles.sheet} style={{ height: 'auto', maxHeight: '50%' }}>
         <div className={styles.sheetHandle} />
         <header className={styles.screenHeader}>
@@ -760,7 +760,7 @@ function FoodPickerLite({
   const filtered = foods.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 130, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div className={styles.sheet} style={{ height: '70%', display: 'flex', flexDirection: 'column' }}>
         <div className={styles.sheetHandle} />
         <header className={styles.screenHeader}>

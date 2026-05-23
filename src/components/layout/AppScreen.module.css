@@ -406,14 +406,14 @@
 }
 
 .sheetBackdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 20;
   background: rgba(15, 23, 42, 0.42);
 }
 
 .sheet {
-  position: absolute;
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0;

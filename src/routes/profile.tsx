@@ -291,7 +291,7 @@ export function ProfileRoute() {
       {/* Edit Profile modal sheet overlay */}
       {isEditing && (
         <div style={{
-          position: 'absolute',
+          position: 'fixed',
           inset: 0,
           background: 'rgba(15,23,42,0.4)',
           zIndex: 100,
@@ -379,7 +379,7 @@ export function ProfileRoute() {
             onClick={() => setShowAbout(false)}
             type="button"
             style={{
-              position: 'absolute',
+              position: 'fixed',
               inset: 0,
               background: 'rgba(15,23,42,0.4)',
               zIndex: 100,
@@ -388,7 +388,7 @@ export function ProfileRoute() {
             }}
           />
           <div className={styles.sheet} style={{
-            position: 'absolute',
+            position: 'fixed',
             bottom: 0,
             left: 0,
             right: 0,

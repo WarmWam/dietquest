@@ -277,7 +277,7 @@ function FoodEditSheet({
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
         background: 'rgba(15,23,42,0.4)',
         zIndex: 100,

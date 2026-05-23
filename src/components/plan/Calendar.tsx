@@ -348,7 +348,7 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
         background: 'rgba(15,23,42,0.5)',
         zIndex: 110,
@@ -590,7 +590,7 @@ function FoodPicker({
     return (
       <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           inset: 0,
           background: 'rgba(15,23,42,0.55)',
           zIndex: 130,
@@ -628,7 +628,7 @@ function FoodPicker({
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
         background: 'rgba(15,23,42,0.55)',
         zIndex: 120,
@@ -774,7 +774,7 @@ function WorkoutPlanSheet({
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         inset: 0,
         background: 'rgba(15,23,42,0.55)',
         zIndex: 125,
