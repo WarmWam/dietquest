@@ -1,270 +1,245 @@
 # REVIEW — Claude → Antigravity
 
-> **Last updated:** 2026-05-23 (after Phase 5.1 PASS)
-> **Verdict on Phase 5.1:** ✅✅ **PASS** — 28/28 QA, best phase work yet
-> **Active phase:** **Phase 6 — Polish + v1.0 Release** (the finale)
+> **Last updated:** 2026-05-23 (after Phase 6 audit revealed gaps)
+> **Verdict on Phase 6:** ⚠️ **REVISE** — features added are great, but a full UI audit found Phase 3 leftover placeholders that never got wired
+> **Active phase:** **Phase 6.1 — Critical UI fixes** (must complete before v1.0.1 tag)
 
 ---
 
-## Notes from Phase 5.1 (read once)
+## Context
 
-- Phase 5 core + Phase 5.1 fixes = backend + interactivity fully solid
-- Outstanding QA discipline by Antigravity — keep this standard for Phase 6
-- `scratch/` properly gitignored; do not commit cookies/session data anywhere
-- Playwright suite at `scratch/run_qa.js` can be reused for Phase 6 regression
-- Code style notes for consistency:
-  - Conventional commits, per logical unit (~3-8 commits per phase)
-  - Inline styles OK for ≤5 props, CSS Modules for layout
-  - No `any` types
-  - Use barrel exports
-  - Use `useTheme()` not prop drilling
+Claude did a thorough UI audit of all 15 routes after Phase 6 release. Found 18 issues, categorized:
+- **1 CRITICAL** — Workout flow entire pipeline is a visual mockup
+- **8 HIGH** — Buttons rendered but have no onClick handlers
+- **6 MEDIUM** — Displays show hardcoded values instead of real data
+- **3 LOW** — Minor UX gaps
+
+Phase 6.1 covers **CRITICAL + HIGH** only. MEDIUM/LOW deferred to v1.1.
+
+The v1.0.0 git tag stays where it is (history); after this phase passes, we tag v1.0.1.
 
 ---
 
-## Phase 6 Brief — Polish + v1.0 Release
+## Phase 6.1 Brief — Fix CRITICAL + HIGH issues
 
-Goal: Transform working app → polished v1.0 ready for daily use.
+### CRITICAL — Fix 1: Workout flow needs real implementation
 
-### Task list (suggested order; agent may reorder if defensible)
+File: `src/routes/log-workout.tsx`
 
-#### 6.1 — Loading skeletons (~3 hours)
+The entire 3-screen workout flow (Pre / Active / Summary) is currently visual mockup. Implement properly:
 
-Replace generic "Loading..." text with proper skeleton UIs that match final layout shape.
+#### 1.1 — Create `src/stores/workoutDraft.ts`
 
-Screens needing skeletons:
-- Home (calorie ring + meal cards + habit list)
-- Progress (chart placeholder + summary cards)
-- Log Meal (preset list)
-- Plan
-- Profile
-
-Create `src/components/primitives/Skeleton.tsx`:
 ```typescript
-interface SkeletonProps {
-  width?: number | string
-  height?: number | string
-  radius?: number
-  variant?: 'rect' | 'circle' | 'text'
+import { create } from 'zustand'
+
+interface WorkoutDraftState {
+  type: 'incline_walk' | 'bodyweight' | 'other'
+  incline_pct: number
+  speed_kmh: number
+  target_duration_min: number
+  // Runtime state (during active workout)
+  startedAt: number | null   // Date.now() ms
+  pausedAt: number | null    // ms paused
+  totalPausedMs: number
+  elapsedMs: number          // updated each second via setInterval
+  // Setters
+  setType: (type: WorkoutDraftState['type']) => void
+  setIncline: (pct: number) => void
+  setSpeed: (kmh: number) => void
+  setTargetDuration: (min: number) => void
+  start: () => void
+  pause: () => void
+  resume: () => void
+  tick: () => void
+  reset: () => void
 }
+
+// Defaults: incline_walk, 8% incline, 5.5 km/h, 45 min target
 ```
 
-Use CSS animation `pulse` already in design system (check tokens.css) or create one. Respect `prefers-reduced-motion`.
+#### 1.2 — `LogWorkoutRoute` (Pre-workout) — make settings editable
 
-#### 6.2 — Toast notifications (~2 hours)
+- Type selector (Incline walk / Bodyweight / Other) — segmented control wired
+- Incline stepper (0-15%, step 0.5) using same Stepper from profile.tsx
+- Speed stepper (3.0-7.0 km/h, step 0.1)
+- Target duration stepper (10-120 min, step 5)
+- "Start" button: call `workoutDraft.start()` then navigate to active
 
-Add toast system for user feedback on actions.
+Reuse the Stepper component from `profile.tsx` (or extract to `src/components/primitives/Stepper.tsx` for reuse — recommended).
 
-Create `src/components/primitives/Toast.tsx` + `src/stores/toastStore.ts`:
-- Position: top-center, slide-in
-- Variants: success (green), error (red), info (neutral)
-- Auto-dismiss after 3 seconds, swipe up to dismiss
-- Stack up to 3 toasts
+#### 1.3 — `LogWorkoutActiveRoute` — real timer + interactivity
 
-Wire to actions:
-- Meal logged → "Saved · 350 kcal"
-- Weight logged → "Logged 78.2 kg (-0.3)"
-- Water added → "+ 250 ml (1.5L / 3L today)"
-- Workout saved → "45 min · 320 kcal burned"
-- Sleep saved → "7h 30m logged"
-- Error states → "Couldn't save. Tap to retry."
-
-Show toast from db.ts wrapper success/failure callbacks OR from each route's save handler.
-
-#### 6.3 — Pull-to-refresh on Home (~1 hour)
-
-Implement custom pull-to-refresh on Home screen:
-- Pull down past threshold → release → animation runs while refetching
-- Use existing `useToday()` and call `.refetch()` (if hook supports) OR force re-mount via key
-- Custom indicator: small calorie ring spinning OR brand-style loader
-
-Library option: `react-pull-to-refresh` (small, lightweight) — or hand-roll with touch events.
-
-#### 6.4 — Haptic feedback (~1 hour)
-
-Add subtle vibration on key actions (Web Vibration API):
-- Meal save: `navigator.vibrate(10)`
-- Water +250 button: `navigator.vibrate(5)`
-- Milestone reached: `navigator.vibrate([15, 30, 15])`
-- Error: `navigator.vibrate([20, 40, 20])`
-
-Create helper `src/lib/haptic.ts`:
 ```typescript
-export function haptic(pattern: number | number[]): void {
-  if ('vibrate' in navigator && navigator.vibrate) {
-    navigator.vibrate(pattern)
-  }
-}
+useEffect(() => {
+  if (!startedAt || pausedAt) return
+  const id = setInterval(() => tick(), 1000)
+  return () => clearInterval(id)
+}, [startedAt, pausedAt])
 ```
 
-Guard for browsers that don't support (Safari iOS desktop). Add user setting to disable.
+- **Timer displays** `elapsedMs` formatted as MM:SS (or HH:MM:SS if > 60min)
+- **kcal computed live** from MET formula:
+  ```
+  // METs for incline walk ≈ 4.0 + (incline * 0.5)
+  // kcal/min = (METs × 3.5 × weight_kg) / 200
+  // weight_kg from useUser()
+  ```
+- **Pause button**: `onClick={pause}` → stops timer, shows "Resume" icon
+- **Resume button**: `onClick={resume}` → restarts timer, subtract paused time
+- **Bolt button** (was unclear) → either remove OR make it "lap marker" (defer to v1.1, remove for now)
+- **Stop button** (already works): navigate to summary
 
-#### 6.5 — Profile screen — make settings editable (~3 hours)
+- **Wake Lock** already implemented — keep it
 
-Currently Profile is static (per Codex's earlier work). Add:
+#### 1.4 — `LogWorkoutSummaryRoute` — real data from draft + save
 
-- **Edit profile** — open modal/sheet with same Stepper inputs as onboarding
-  - Sex, age, height, current weight, target weight, target months
-  - Reuse `useOnboardingDraft` pattern with new `useProfileEditDraft` OR
-  - Pre-fill with current profile, on save → `upsertUser(uid, { profile })`
-- **Theme toggle** — wire to `useTheme()` (light / dark / auto)
-- **Notification preferences** — UI only for v1 (functional in v1.1 when FCM added)
-- **Sign out** — calls `logout()` then redirects to /login
-- **Account info** — display email + uid (read-only)
+- Read final `elapsedMs`, `incline_pct`, `speed_kmh`, computed `kcal_burned`, `distance_km` from draft store
+- Display in metric cards (all dynamic, no hardcoded "45:22" / "328" / "3.6")
+- Distance = `speed_kmh * (elapsedMs / 3600000)` rounded 1 decimal
+- **"Save workout" button**: write to Firestore using REAL values from draft:
+  ```typescript
+  await add({
+    date: todayKey(),
+    type: draft.type,
+    duration_min: Math.round(draft.elapsedMs / 60000),
+    incline_pct: draft.incline_pct,
+    speed_kmh: draft.speed_kmh,
+    kcal_burned: computedKcal,
+    mood: 'strong',  // could add mood selector — v1.1
+  })
+  ```
+- After save: `draft.reset()` then navigate home + toast + haptic
+- If user navigates away without saving → draft persists; clear on home if abandoned > 1 hour (or just leave it)
 
-#### 6.6 — Data export (~2 hours)
+### HIGH — Fix 2: Wire 8 fake buttons
 
-Add "Export my data" button in Profile → Settings.
+Each of these has the visual of a button but no onClick handler. Either wire to function or remove from UI:
 
-Implementation:
-- Query all collections for current user
-- Bundle into single JSON: `{ profile, meals, weights, water, workouts, sleeps, presets }`
-- Trigger browser download via Blob URL
-- Filename: `dietquest-export-{YYYYMMDD}.json`
+#### 2.1 — `src/routes/log-meal.tsx` line 46-48 — Search icon (header)
+**Action:** Remove the search button entirely (defer search feature to v1.1). Replace with `<span style={{ width: 40 }} />` for spacing.
 
-Why: GDPR-style right to export + manual backup option + portability.
+#### 2.2 — `src/routes/log-meal.tsx` line 198-200 — Edit icon (Confirm header)
+**Action:** Remove the edit button. Items aren't editable in v1.0. Replace with spacer span. (Editing items pre-save is a v1.1 feature.)
 
-#### 6.7 — Visual + UX details (~2 hours)
+#### 2.3 — `src/routes/plan.tsx` line 46-49 — Search bar (fake input)
+**Action:** Remove the fake search card entirely. Just show the list. Search feature → v1.1.
 
-- Empty states with friendly copy on every list
-- 404 / unknown route → friendly "Not found" + button back to home
-- Confirm before destructive actions (delete meal, sign out)
-- Loading states for sign-in button (spinner while OAuth popup)
-- Disable submit buttons during pending writes (already partial — audit)
+#### 2.4 — `src/routes/plan.tsx` line 54 — "Open full plan" button
+**Action:** Either (a) remove the button OR (b) wire to open external URL (link to diet_plan_claude.md or similar reference). Recommend (a) for v1.0.1 — remove.
 
-#### 6.8 — Maintenance (~2 hours)
+#### 2.5 — `src/routes/plan.tsx` line 57-78 — Accordion items
+**Action:** Make accordion functional. Add `useState` for which section is open:
+```typescript
+const [openSection, setOpenSection] = useState<number | null>(0)
+```
+- Click header → toggle section
+- Chevron icon flips (chevron / arrowUp) based on state
+- Only show items inside currently-open section
+- Allow null (all closed)
 
-- Run `npm audit` → review the 16 vulnerabilities Codex flagged (15 moderate, 1 high)
-- For each: assess if it's transitive in dev dep (firebase-tools) or affects production
-- Update what's safe; document any that can't be updated in DECISIONS.md
-- Run `npm outdated` → consider patch/minor bumps that look safe
-- Re-test build after updates
+#### 2.6 — `src/routes/plan.tsx` line 72 — "Use" pills
+**Action:** Either (a) remove the "Use" pill OR (b) wire it to navigate to log meal with that item pre-selected. Recommend (a) for v1.0.1 — remove pill, just show the item name.
 
-#### 6.9 — Refactor consideration (~1-2 hours, OPTIONAL)
+#### 2.7 — `src/routes/home.tsx` line 152 — "Edit" link on meals section
+**Action:** Remove the "Edit" action prop on the SectionLabel. Section editing → v1.1. Just show the label.
 
-Phase 3 flagged `src/routes/log-health.tsx` as a 226-line file containing 6 route components (water/weight/sleep + 3 workout). If you have budget after must-haves:
-- Split into `log-water.tsx`, `log-weight.tsx`, `log-sleep.tsx`, `log-workout.tsx`
-- Keep imports working in `App.tsx`
-- Skip if time is short — current setup works
+#### 2.8 — `src/routes/profile.tsx` line 233-237 — About DietQuest row
+**Action:** Either (a) make it a button that opens a small modal/sheet with app version + credits OR (b) just remove the row (info is already visible via "v1.0.0" label elsewhere). Recommend (a) — small About sheet:
+- App version
+- "Built with Vite + React + Firebase"
+- Link to GitHub repo
+- "Made by [your name]"
 
-#### 6.10 — Final Lighthouse audit (~30 min)
+---
 
-Run Lighthouse against production after all changes:
-- Target: maintain Phase 4 scores or improve
-- Performance ≥ 90 (currently 98)
-- Accessibility ≥ 93
-- Best Practices = 100
-- PWA = 100
-- If any drops below threshold → fix top 2-3 issues
+## DoD Phase 6.1
 
-Save report to `AGENT_LOG/lighthouse-phase6.report.html` + screenshot.
+### CRITICAL workout flow
+- [ ] `src/stores/workoutDraft.ts` created with state + actions
+- [ ] Pre-workout: type/incline/speed/duration all editable, persists to draft store
+- [ ] Active screen: timer counts up in real-time (verify with stopwatch)
+- [ ] Active screen: kcal updates live based on MET formula + user weight
+- [ ] Active screen: Pause button stops timer
+- [ ] Active screen: Resume button continues from where paused (no time double-counting)
+- [ ] Bolt button removed OR documented as deferred
+- [ ] Summary: displays REAL elapsed time + computed kcal + distance
+- [ ] Save writes REAL values to Firestore (verify in Firebase console — log 2 different workouts, see 2 different docs)
 
-#### 6.11 — README polish (~30 min)
+### HIGH fake buttons
+- [ ] Log Meal: search icon removed
+- [ ] Log Meal Confirm: edit icon removed
+- [ ] Plan: search bar removed
+- [ ] Plan: "Open full plan" removed
+- [ ] Plan: accordion expandable (each section toggleable)
+- [ ] Plan: "Use" pills removed
+- [ ] Home: "Edit" action removed from Today's meals header
+- [ ] Profile: About row either functional OR removed
 
-Update README.md to reflect final v1.0:
-- Add screenshots (use existing AGENT_LOG QA shots)
-- Update "Phase status" section → "v1.0.0 released"
-- Add "Local development" with full setup steps
-- Add "Deploy your own" section (fork → Vercel)
-- Add "License" if applicable (or `Private — personal project`)
-- Link to live demo
+### Sanity check
+- [ ] No remaining buttons without onClick (grep `<button` + visual scan)
+- [ ] `npm run build` clean
+- [ ] Deploy to Vercel; production has fixes
+- [ ] Tag `v1.0.1` after Claude approval
 
-#### 6.12 — Git tag v1.0.0 (~5 min)
+### Re-run QA (extend Playwright suite)
+- [ ] Add test: log workout → wait 5 sec → stop → verify duration ≈ 5 sec (not 45)
+- [ ] Add test: change incline to 12%, speed to 6.0, target to 60 min → start → verify summary uses those values
+- [ ] Add test: pause/resume — verify timer pauses
+- [ ] Add test: Plan accordion expand/collapse
+- [ ] Save report to `AGENT_LOG/phase6.1-qa-report.md`
 
-After all above done + Claude approval:
+---
+
+## Rules for Phase 6.1
+
+- DO NOT add new features beyond what's listed (no "while I'm in there" creep)
+- DO NOT touch Firebase / Firestore schema
+- DO NOT modify Phase 6 components that work (Skeleton, Toast, PullToRefresh, etc.)
+- DO reuse existing Stepper from profile.tsx (consider extracting to primitives)
+- DO use existing toast + haptic on workout save
+- DO test on real mobile viewport before declaring done
+
+---
+
+## Commit convention
+
+```
+feat(stores): workout draft store with real timer state
+feat(workout): editable pre-workout settings (type/incline/speed/duration)
+feat(workout): real-time timer with pause/resume + MET kcal calculation
+feat(workout): summary uses real workout data
+refactor(workout): save real values to Firestore
+fix(log-meal): remove non-functional search and edit icons
+fix(plan): make accordion expandable + remove fake UI elements
+fix(home): remove non-functional Edit action on meals section
+feat(profile): functional About sheet OR remove About row
+test(qa): extend Playwright suite for workout + plan
+docs: update STATUS and HISTORY for Phase 6.1
+chore(release): tag v1.0.1
+```
+
+---
+
+## After Phase 6.1 — Tag v1.0.1
+
+When Phase 6.1 passes Claude review:
 ```bash
-git tag -a v1.0.0 -m "v1.0.0 — DietQuest first release"
-git push origin v1.0.0
+git tag -a v1.0.1 -m "v1.0.1 — Workout flow + UI fixes"
+git push origin v1.0.1
 ```
 
-Vercel will create a permalink to v1.0.0 deployment.
+Then this becomes the "real" production version. v1.0.0 stays in history as the "release candidate that needed fixes."
 
 ---
 
-## Rules for Phase 6
+## Deferred to v1.1 (don't do now)
 
-- DO NOT add Storage / photo upload (still out of v1 scope)
-- DO NOT touch Firebase config (`firebase.ts`) — backend is stable
-- DO NOT change Firestore schema (only ADD fields if needed, never rename/remove)
-- Reuse Playwright QA script from `scratch/` for any retest needed
-- Keep bundle under 350 KB JS gzipped (currently 71 KB — plenty of room)
-- Match existing code style (named exports, tokens.css colors, etc.)
+- 6 MEDIUM items from audit (calorie chart 7-day, activity heatmap real dates, profile goal progress bar real %, notification preferences UI, meal portion editing, log water +Custom button, sleep "within target" conditional label)
+- Search feature in Log Meal + Plan
+- Meal item edit/add/remove
+- Notification scheduling
+- Photo upload + Progress Photos tab
+- Multi-user (couple mode)
 
----
-
-## Commit convention for Phase 6
-
-```
-feat(ui): skeleton loading components
-feat(ui): toast notification system
-feat(home): pull-to-refresh
-feat(ux): haptic feedback on actions
-feat(profile): editable settings and goals
-feat(profile): theme selector
-feat(profile): data export to JSON
-feat(ux): empty states + 404 + confirm dialogs
-chore(deps): npm audit cleanup
-refactor(routes): split log-health into per-feature files  (if done)
-chore(perf): lighthouse fixes if needed
-docs: README polish for v1.0
-chore(release): tag v1.0.0
-```
-
----
-
-## DoD Phase 6 (fill in STATUS.md when done)
-
-### Must-have
-- [ ] Skeletons on Home, Progress, Log Meal, Plan, Profile
-- [ ] Toast system + wired to all save actions
-- [ ] Pull-to-refresh on Home
-- [ ] Haptic feedback on saves (with fallback for unsupported browsers)
-- [ ] Profile editable (sex/age/height/weight/target/timeline) saves to Firestore
-- [ ] Theme toggle in Profile (light/dark/auto)
-- [ ] Sign out button works
-- [ ] Data export downloads JSON of all user data
-- [ ] Empty states + 404 page + confirmations on destructive actions
-- [ ] `npm audit` reviewed (fixed or documented)
-- [ ] Lighthouse Performance ≥ 90, Accessibility ≥ 93, Best Practices ≥ 95, PWA = 100
-- [ ] README polished for v1.0
-- [ ] Git tag `v1.0.0` pushed
-- [ ] Vercel production has the tagged version
-
-### Nice-to-have (skip if time short)
-- [ ] log-health.tsx split into per-feature files
-- [ ] Playwright regression run against Phase 6 changes
-
-### Sign-off
-- [ ] STATUS.md updated with Phase 6 final report
-- [ ] HISTORY.md appended with PASS + commit range
-- [ ] All changes pushed to GitHub
-- [ ] STOP and wait for Claude final review + v1.0 sign-off
-
----
-
-## After v1.0 (out of scope, future versions)
-
-These are deliberately deferred — do NOT do in Phase 6:
-- Push notifications (FCM scheduling) — v1.1
-- Photo upload + Progress photos tab — v1.1
-- Weekly backup to Google Drive — v1.1
-- Apple sign-in — v1.2
-- Multi-user (couple mode) — v2.0
-- Apple Health integration — v2.1
-
----
-
-## How to QA Phase 6 (recommendation for agent)
-
-After implementing, reuse + extend the Playwright script:
-- Existing tests still pass
-- New: toast appears on meal save
-- New: pull-to-refresh triggers refetch
-- New: profile edits persist
-- New: data export downloads valid JSON
-- New: Lighthouse via `lighthouse` CLI against production URL
-
-Save extended QA report to `AGENT_LOG/phase6-qa-report.md`.
-
----
-
-*Phase 6 estimated effort: 16-20 hours total. Could be split across 2-3 work sessions.*
+Document these in HISTORY.md after v1.0.1 ships as "known limitations of v1.0.x; planned for v1.1."

@@ -61,6 +61,12 @@ Format per entry:
 
 ## Phase 6 — Polish + v1.0 Release
 - Date: 2026-05-23
-- Verdict: PASS
-- Commit: 66ed22e...1358c82 (9 commits)
-- Notes: Designed shimmer loading skeletons, global portal toast notifications, pull-to-refresh swipe views, haptic vibration settings toggle, editable profile sheet modal with target settings recalculation, GDPR JSON data export backups, elegant 404 routes, split routes modularization, and Google Font loading optimizations. Production builds compile cleanly with zero errors.
+- Verdict: REVISE (Claude post-release audit found legacy UI gaps)
+- Commit: 66ed22e...9a784ca (12 commits) + tag v1.0.0
+- Notes: All 12 Phase 6 features delivered cleanly (skeleton, toast portal, PTR, haptic, editable profile, JSON export, 404, npm audit, Lighthouse maintained, Google Fonts perf, log-health split). Tag v1.0.0 pushed. POST-RELEASE AUDIT: Claude verified every interactive element across 15 routes and found 18 leftover issues from Phase 3 visual placeholders: 1 CRITICAL (workout flow is entirely fake — timer hardcoded, metrics hardcoded, pause/bolt buttons no onClick, saveWorkout writes same values every time), 8 HIGH (fake buttons with no handlers across log-meal/plan/home/profile), 6 MEDIUM (hardcoded display data), 3 LOW. v1.0.0 tag stays in history as "needed fixes"; Phase 6.1 will land CRITICAL+HIGH and tag v1.0.1.
+
+## Phase 6.1 — Critical UI fixes
+- Date: (pending)
+- Verdict: pending
+- Commit: pending
+- Notes: Real workout flow (Stepper-controlled pre-workout / live timer with pause-resume / MET kcal / save real values). Remove or wire 8 fake buttons. Extend Playwright QA with workout-specific tests. Tag v1.0.1.
