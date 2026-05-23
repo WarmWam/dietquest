@@ -7,6 +7,7 @@ import { useUser } from '@/hooks/useUser'
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
 import { STARTER_FOODS } from '@/data/starterFoods'
+import { STARTER_COM_FOODS } from '@/data/starterComFoods'
 import { FOOD_CATEGORIES, type Food, type FoodCategory } from '@/types/domain'
 
 type PlanTab = 'calendar' | 'library'
@@ -77,6 +78,24 @@ function LibraryTab() {
       setSeeding(false)
     }
   }
+
+  async function handleSeedComFoods() {
+    if (seeding) return
+    setSeeding(true)
+    try {
+      await Promise.all(STARTER_COM_FOODS.map((food) => add(food)))
+      toast.success(`Added ${STARTER_COM_FOODS.length} Com.Food items`)
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't add Com.Food pack.")
+      haptic([20, 40, 20])
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const comFoodCount = foods.filter((f) => f.category === 'com_food').length
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -170,12 +189,16 @@ function LibraryTab() {
       ) : filtered.length === 0 ? (
         <Card padding={22} style={{ textAlign: 'center', borderStyle: 'dashed' }}>
           <Icon color="var(--t-3)" name="fork" size={28} />
-          <p className={styles.subtitle} style={{ marginTop: 10, marginBottom: foods.length === 0 ? 14 : 0 }}>
+          <p className={styles.subtitle} style={{ marginTop: 10, marginBottom: (foods.length === 0 || (filter === 'com_food' && comFoodCount === 0)) ? 14 : 0 }}>
             {foods.length === 0 ? 'Your library is empty.' : 'No foods match this filter.'}
           </p>
           {foods.length === 0 ? (
             <Button disabled={seeding} icon="sparkle" onClick={() => void handleSeedStarter()}>
               {seeding ? 'Adding...' : `Add ${STARTER_FOODS.length} starter foods`}
+            </Button>
+          ) : filter === 'com_food' && comFoodCount === 0 ? (
+            <Button disabled={seeding} icon="sparkle" onClick={() => void handleSeedComFoods()}>
+              {seeding ? 'Adding...' : `Add ${STARTER_COM_FOODS.length} Com.Food items`}
             </Button>
           ) : null}
         </Card>
