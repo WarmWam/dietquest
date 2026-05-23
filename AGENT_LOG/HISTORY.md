@@ -65,8 +65,8 @@ Format per entry:
 - Commit: 66ed22e...9a784ca (12 commits) + tag v1.0.0
 - Notes: All 12 Phase 6 features delivered cleanly (skeleton, toast portal, PTR, haptic, editable profile, JSON export, 404, npm audit, Lighthouse maintained, Google Fonts perf, log-health split). Tag v1.0.0 pushed. POST-RELEASE AUDIT: Claude verified every interactive element across 15 routes and found 18 leftover issues from Phase 3 visual placeholders: 1 CRITICAL (workout flow is entirely fake — timer hardcoded, metrics hardcoded, pause/bolt buttons no onClick, saveWorkout writes same values every time), 8 HIGH (fake buttons with no handlers across log-meal/plan/home/profile), 6 MEDIUM (hardcoded display data), 3 LOW. v1.0.0 tag stays in history as "needed fixes"; Phase 6.1 will land CRITICAL+HIGH and tag v1.0.1.
 
-## Phase 6.1 — Critical UI fixes
+## Phase 6.1 — Full audit fixes (all 4 severity levels)
 - Date: (pending)
 - Verdict: pending
 - Commit: pending
-- Notes: Real workout flow (Stepper-controlled pre-workout / live timer with pause-resume / MET kcal / save real values). Remove or wire 8 fake buttons. Extend Playwright QA with workout-specific tests. Tag v1.0.1.
+- Notes: SCOPE EXPANDED per user request to cover all 18 audit findings. 1 CRITICAL (real workout flow with live timer + MET kcal + editable settings + real save). 8 HIGH (remove or wire fake buttons across log-meal/plan/home/profile). 6 MEDIUM (real 7-day calorie chart, real activity heatmap with dates, computed best week, profile goal progress %, notification prefs UI, home incline reflects real workouts). 3 LOW (meal portion adjust, water + Custom button, sleep target window conditional). Estimated 14-20 hours. Tag v1.0.1 after Claude review.
