@@ -19,7 +19,7 @@ import { useAuth } from './hooks/useAuth'
 import { useUser } from './hooks/useUser'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { listenForForegroundNotifications } from './lib/notifications'
-import { bulkAddFoods, getCatalogCount, getLegacyUserFoods, watchFoods } from './lib/db'
+import { bulkAddFoods, getCatalogCount, getLegacyUserFoods, updateFood, watchFoods } from './lib/db'
 import { STARTER_FOODS } from './data/starterFoods'
 import { STARTER_COM_FOODS } from './data/starterComFoods'
 
@@ -66,18 +66,38 @@ function AuthGate() {
           console.log(`[catalog] seeded ${seed.length} foods from ${legacy.length > 0 ? 'legacy library' : 'starter pack'}`)
         }
 
-        // Pass 2: fill missing starter items (by name)
-        // Read a fresh snapshot of catalog after potential seed
+        // Pass 2 + 3: fill missing starter items + sync categories
+        // (sync runs once per device per category-version)
         await new Promise<void>((resolve) => {
           const unsub = watchFoods('', async ({ data }) => {
             unsub()
-            const existingNames = new Set(data.map((f) => f.name))
             const candidates = [...STARTER_FOODS, ...STARTER_COM_FOODS]
-            const missing = candidates.filter((f) => !existingNames.has(f.name))
+            const byName = new Map(data.map((f) => [f.name, f]))
+
+            // Pass 2: add missing
+            const missing = candidates.filter((c) => !byName.has(c.name))
             if (missing.length > 0) {
               await bulkAddFoods(missing)
-              console.log(`[catalog] filled ${missing.length} missing starter items:`, missing.map((m) => m.name).join(', '))
+              console.log(`[catalog] filled ${missing.length} missing starter items`)
             }
+
+            // Pass 3: one-time category normalization to match starter source
+            const CAT_SYNC_FLAG = 'dq-catalog-category-sync-v1'
+            if (!localStorage.getItem(CAT_SYNC_FLAG)) {
+              const updates: Promise<void>[] = []
+              for (const c of candidates) {
+                const existing = byName.get(c.name)
+                if (existing && existing.category !== c.category) {
+                  updates.push(updateFood('', existing.id, { category: c.category }))
+                }
+              }
+              if (updates.length > 0) {
+                await Promise.all(updates)
+                console.log(`[catalog] re-categorized ${updates.length} starter items`)
+              }
+              localStorage.setItem(CAT_SYNC_FLAG, '1')
+            }
+
             resolve()
           })
         })

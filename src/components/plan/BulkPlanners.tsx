@@ -157,6 +157,7 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
     dinner: { enabled: false, items: [] },
     snack: { enabled: false, items: [] },
   })
+  const [dinnerWheyPortion, setDinnerWheyPortion] = useState(1)
   const [addMenu, setAddMenu] = useState<MealSlot | null>(null)
   const [picking, setPicking] = useState<{ slot: MealSlot; mode: 'specific' | 'category' } | null>(null)
   const [applying, setApplying] = useState(false)
@@ -215,6 +216,12 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
     const cfg = slots[slot]
     if (!cfg.enabled) return []
     const out: MealPlanItem[] = []
+
+    // Dinner gets a fixed whey item up front (user-set portion).
+    if (slot === 'dinner' && whey && dinnerWheyPortion > 0) {
+      out.push(makeMealItem(whey, dinnerWheyPortion))
+    }
+
     const fixedFoods: SlotItem[] = []
     const randomFoodPool: SlotItem[] = []
     const categoryItems: SlotItem[] = []
@@ -303,6 +310,15 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
           onShowAddMenu={() => setAddMenu(slot.id)}
           onRemove={(itemId) => removeItem(slot.id, itemId)}
           onUpdate={(itemId, patch) => updateItem(slot.id, itemId, patch)}
+          extra={
+            slot.id === 'dinner' && slots.dinner.enabled ? (
+              <DinnerWheySlot
+                whey={whey}
+                portion={dinnerWheyPortion}
+                onChange={setDinnerWheyPortion}
+              />
+            ) : null
+          }
         />
       ))}
 
@@ -504,7 +520,7 @@ function PortionStepper({ value, unit, step, min, max, onChange }: { value: numb
 // ─────────────────────────────────────────────────────────────
 
 function GenericSlotCard({
-  slot, slotId, label, foodMap, onToggleEnabled, onShowAddMenu, onRemove, onUpdate,
+  slot, slotId, label, foodMap, onToggleEnabled, onShowAddMenu, onRemove, onUpdate, extra,
 }: {
   slot: GenericSlot
   slotId: MealSlot
@@ -514,6 +530,7 @@ function GenericSlotCard({
   onShowAddMenu: () => void
   onRemove: (itemId: string) => void
   onUpdate: (itemId: string, patch: Partial<SlotItem>) => void
+  extra?: React.ReactNode
 }) {
   void slotId
   return (
@@ -542,6 +559,8 @@ function GenericSlotCard({
         ) : null}
       </div>
 
+      {slot.enabled && extra ? <div style={{ marginTop: 12 }}>{extra}</div> : null}
+
       {slot.enabled && slot.items.length > 0 ? (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {slot.items.map((it) => (
@@ -550,6 +569,24 @@ function GenericSlotCard({
         </div>
       ) : null}
     </Card>
+  )
+}
+
+function DinnerWheySlot({
+  whey, portion, onChange,
+}: {
+  whey: Food | null
+  portion: number
+  onChange: (v: number) => void
+}) {
+  if (!whey) {
+    return <MissingItemNote label="Add a 'Whey' food in Library to enable dinner whey" />
+  }
+  return (
+    <div>
+      <p className={styles.fieldLabel}>Whey (fixed)</p>
+      <PortionStepper value={portion} unit={whey.portion_unit} step={0.5} min={0} max={10} onChange={onChange} />
+    </div>
   )
 }
 
