@@ -1,0 +1,345 @@
+/* DietQuest — design tokens */
+/* Aurora direction (primary), with light + dark mode and swappable accent */
+
+:root, .dq-light {
+  /* surfaces */
+  --bg: #F2F4F8;
+  --bg-soft: #E8EBF1;
+  --surface: #FFFFFF;
+  --surface-2: #F8FAFC;
+  --line: rgba(15, 23, 42, 0.08);
+  --line-strong: rgba(15, 23, 42, 0.14);
+
+  /* text */
+  --t-1: #0F172A;
+  --t-2: #475569;
+  --t-3: #94A3B8;
+  --t-inv: #FFFFFF;
+
+  /* state */
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+
+  /* shadows — refined neumorphic, light */
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.05), 0 1px 3px rgba(15,23,42,0.04);
+  --shadow-md: 0 4px 14px rgba(15,23,42,0.05), 0 8px 24px rgba(15,23,42,0.04);
+  --shadow-lg: 0 12px 32px rgba(15,23,42,0.07), 0 24px 64px rgba(15,23,42,0.06);
+  --shadow-inset: inset 0 1px 2px rgba(15,23,42,0.06), inset 0 -1px 1px rgba(255,255,255,0.6);
+
+  /* radii */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* accent: default Aurora indigo→pink */
+  --a1: #5B6CFF;          /* primary */
+  --a2: #B17AFF;          /* mid */
+  --a3: #FF6B9D;          /* secondary */
+  --a-soft: rgba(91, 108, 255, 0.10);
+  --a-grad: linear-gradient(135deg, var(--a1) 0%, var(--a2) 50%, var(--a3) 100%);
+  --a-ring: conic-gradient(from -90deg, var(--a1), var(--a2), var(--a3), var(--a1));
+
+  /* type */
+  --fs-display: 56px;
+  --fs-h1: 28px;
+  --fs-h2: 22px;
+  --fs-h3: 17px;
+  --fs-body: 15px;
+  --fs-sm: 13px;
+  --fs-xs: 11px;
+}
+
+.dq-dark {
+  --bg: #0B0F14;
+  --bg-soft: #11161D;
+  --surface: #161B23;
+  --surface-2: #1C222B;
+  --line: rgba(255,255,255,0.06);
+  --line-strong: rgba(255,255,255,0.12);
+
+  --t-1: #F1F5F9;
+  --t-2: #94A3B8;
+  --t-3: #64748B;
+  --t-inv: #0F172A;
+
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #F87171;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 14px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.5), 0 24px 64px rgba(0,0,0,0.4);
+  --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.4);
+
+  --a1: #7C8FFF;
+  --a2: #C39BFF;
+  --a3: #FF8AB4;
+  --a-soft: rgba(124, 143, 255, 0.18);
+  --a-grad: linear-gradient(135deg, var(--a1) 0%, var(--a2) 50%, var(--a3) 100%);
+  --a-ring: conic-gradient(from -90deg, var(--a1), var(--a2), var(--a3), var(--a1));
+}
+
+/* === Accent variants — applied via data-accent on <body> so colors cascade
+       through ALL .dq-app instances (canvas artboards + prototype). === */
+
+body[data-accent="ember"] .dq-app {
+  --a1: #F97316; --a2: #FB7185; --a3: #F43F5E;
+  --a-soft: rgba(249, 115, 22, 0.12);
+}
+body[data-accent="ember"] .dq-app.dq-dark {
+  --a1: #FB923C; --a2: #FB7185; --a3: #FB7185;
+  --a-soft: rgba(251, 146, 60, 0.18);
+}
+
+body[data-accent="leaf"] .dq-app {
+  --a1: #059669; --a2: #34D399; --a3: #84CC16;
+  --a-soft: rgba(5, 150, 105, 0.12);
+}
+body[data-accent="leaf"] .dq-app.dq-dark {
+  --a1: #34D399; --a2: #6EE7B7; --a3: #BEF264;
+  --a-soft: rgba(52, 211, 153, 0.18);
+}
+
+body[data-accent="ocean"] .dq-app {
+  --a1: #0EA5E9; --a2: #06B6D4; --a3: #22D3EE;
+  --a-soft: rgba(14, 165, 233, 0.12);
+}
+body[data-accent="ocean"] .dq-app.dq-dark {
+  --a1: #38BDF8; --a2: #67E8F9; --a3: #A5F3FC;
+  --a-soft: rgba(56, 189, 248, 0.20);
+}
+
+body[data-accent="violet"] .dq-app {
+  --a1: #7C3AED; --a2: #A855F7; --a3: #EC4899;
+  --a-soft: rgba(124, 58, 237, 0.12);
+}
+body[data-accent="violet"] .dq-app.dq-dark {
+  --a1: #A78BFA; --a2: #C4B5FD; --a3: #F0ABFC;
+  --a-soft: rgba(167, 139, 250, 0.18);
+}
+
+/* === App-wide base === */
+
+.dq-app {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: var(--t-1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11", "tnum" 0;
+}
+
+/* === Reusable components === */
+
+.dq-card {
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.dq-card-flat {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+}
+
+.dq-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  background: var(--a-soft);
+  color: var(--a1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.dq-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 24px;
+  border-radius: var(--r-pill);
+  border: none;
+  cursor: pointer;
+  font: 600 16px/1 'Plus Jakarta Sans', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  transition: transform .15s, opacity .15s, box-shadow .15s;
+}
+.dq-btn:active { transform: scale(0.98); }
+.dq-btn-primary {
+  background: var(--a-grad);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(91,108,255,0.30), 0 1px 0 rgba(255,255,255,0.18) inset;
+}
+.dq-btn-secondary {
+  background: var(--surface);
+  color: var(--t-1);
+  border: 1px solid var(--line-strong);
+}
+.dq-btn-ghost {
+  background: transparent;
+  color: var(--t-2);
+}
+
+.dq-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+}
+
+/* striped placeholder for image slots */
+.dq-placeholder {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bg-soft),
+    var(--bg-soft) 6px,
+    var(--surface-2) 6px,
+    var(--surface-2) 12px
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--t-3);
+  font: 500 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* image-slot styling overrides */
+image-slot {
+  display: block;
+  background: var(--bg-soft);
+}
+image-slot::part(placeholder) {
+  color: var(--t-3);
+  font: 500 11px/1.2 ui-monospace, "SF Mono", Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* tab indicators */
+.dq-seg {
+  display: inline-flex;
+  background: var(--bg-soft);
+  border-radius: var(--r-pill);
+  padding: 4px;
+  gap: 2px;
+}
+.dq-seg-item {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--t-2);
+  cursor: pointer;
+  transition: all .15s;
+}
+.dq-seg-item[data-active="true"] {
+  background: var(--surface);
+  color: var(--t-1);
+  box-shadow: var(--shadow-sm);
+}
+
+.dq-divider {
+  height: 1px;
+  background: var(--line);
+}
+
+/* tiny caps label */
+.dq-eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t-3);
+}
+
+/* checkbox */
+.dq-check {
+  width: 22px; height: 22px; border-radius: 7px;
+  border: 1.5px solid var(--line-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.dq-check[data-on="true"] {
+  background: var(--a-grad);
+  border-color: transparent;
+}
+
+.dq-row {
+  display: flex; align-items: center; gap: 12px;
+}
+
+/* scroll containers should hide scrollbars on mobile */
+.dq-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.dq-scroll::-webkit-scrollbar { display: none; }
+
+.dq-h-scroll { overflow-x: auto; scrollbar-width: none; }
+.dq-h-scroll::-webkit-scrollbar { display: none; }
+
+/* the bottom nav */
+.dq-nav {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 88px;
+  padding: 6px 18px 28px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  z-index: 5;
+}
+.dq-nav-bg {
+  position: absolute; inset: 0;
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border-top: 0.5px solid var(--line);
+}
+.dq-nav-item {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: var(--t-3);
+  font-size: 10px; font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.dq-nav-item[data-active="true"] {
+  color: var(--a1);
+}
+.dq-nav-fab {
+  position: relative;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--a-grad);
+  display: flex; align-items: center; justify-content: center;
+  margin-top: -22px;
+  box-shadow: 0 8px 22px rgba(91,108,255,0.40), inset 0 1px 0 rgba(255,255,255,0.25);
+  cursor: pointer;
+  transition: transform .15s;
+}
+.dq-nav-fab:active { transform: scale(0.96); }
+
+/* keyframes */
+@keyframes dq-fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.dq-fadein { animation: dq-fadein .35s cubic-bezier(.34, 1.56, .64, 1); }
+
+@keyframes dq-water-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes dq-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
