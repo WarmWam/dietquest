@@ -446,6 +446,154 @@
   background: var(--a-soft);
 }
 
+.pageFooter {
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.presetList {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.presetRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--t-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.presetRow[data-highlight='true'] {
+  border-color: var(--a1);
+}
+
+.heroPanel {
+  padding: 22px;
+  margin-bottom: 16px;
+  border-radius: var(--r-xl);
+  background: var(--a-grad);
+  color: #fff;
+  overflow: hidden;
+}
+
+.heroKpi {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.macroGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.fullCenter {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.successMark {
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--a-grad);
+  box-shadow: 0 24px 64px rgba(91, 108, 255, 0.38);
+}
+
+.waterGlass {
+  position: relative;
+  width: 200px;
+  height: 280px;
+  margin: 0 auto 24px;
+  overflow: hidden;
+  border: 3px solid var(--line-strong);
+  border-radius: 30px 30px 60px 60px;
+  background: var(--bg-soft);
+}
+
+.waterLevel {
+  position: absolute;
+  inset: auto 0 0;
+  height: 50%;
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+  animation: dq-water-bob 3s ease-in-out infinite;
+}
+
+.glassText {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.numberPad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.padButton {
+  height: 58px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--t-1);
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.activeWorkout {
+  color: #fff;
+}
+
+.timer {
+  font-size: 104px;
+  font-weight: 900;
+  letter-spacing: -0.07em;
+  line-height: 1;
+}
+
+.roundControl {
+  width: 76px;
+  height: 76px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+}
+
 .loginCard {
   width: min(350px, calc(100vw - 32px));
   display: grid;

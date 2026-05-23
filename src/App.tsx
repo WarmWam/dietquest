@@ -1,6 +1,15 @@
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import { DesignSystemRoute } from './routes/_design-system'
 import { HomeRoute } from './routes/home'
+import { LogMealConfirmRoute, LogMealRoute, LogMealSavedRoute } from './routes/log-meal'
+import {
+  LogSleepRoute,
+  LogWaterRoute,
+  LogWeightRoute,
+  LogWorkoutActiveRoute,
+  LogWorkoutRoute,
+  LogWorkoutSummaryRoute,
+} from './routes/log-health'
 import { LoginRoute } from './routes/login'
 import { OnboardingGoalRoute, OnboardingProfileRoute, OnboardingWelcomeRoute } from './routes/onboarding'
 import { SplashRoute } from './routes/splash'
@@ -16,6 +25,15 @@ function App() {
         <Route element={<OnboardingProfileRoute />} path="/onboarding/profile" />
         <Route element={<OnboardingGoalRoute />} path="/onboarding/goal" />
         <Route element={<HomeRoute />} path="/" />
+        <Route element={<LogMealRoute />} path="/log/meal" />
+        <Route element={<LogMealConfirmRoute />} path="/log/meal/confirm" />
+        <Route element={<LogMealSavedRoute />} path="/log/meal/saved" />
+        <Route element={<LogWaterRoute />} path="/log/water" />
+        <Route element={<LogWeightRoute />} path="/log/weight" />
+        <Route element={<LogWorkoutRoute />} path="/log/workout" />
+        <Route element={<LogWorkoutActiveRoute />} path="/log/workout/active" />
+        <Route element={<LogWorkoutSummaryRoute />} path="/log/workout/summary" />
+        <Route element={<LogSleepRoute />} path="/log/sleep" />
         <Route element={<Navigate replace to="/login" />} path="*" />
       </Routes>
     </Router>
