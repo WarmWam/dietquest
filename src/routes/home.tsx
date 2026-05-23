@@ -339,16 +339,16 @@ function HomeFullContent({
         <div className={styles.screenHeader}>
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
             <span className="dq-eyebrow">Today</span>
-            <button aria-label="Pick date" onClick={() => document.getElementById('today-date-picker')?.click()} type="button" style={{ background: 'transparent', border: 0, color: 'var(--a1)', cursor: 'pointer', padding: 0 }}>
+            <label aria-label="Pick date" htmlFor="today-date-picker" style={{ color: 'var(--a1)', cursor: 'pointer', display: 'inline-flex', position: 'relative' }}>
               <Icon name="cal" size={17} />
-            </button>
-            <input
-              id="today-date-picker"
-              onChange={(event) => setSelectedDate(event.target.value || getTodayKey())}
-              style={{ height: 1, opacity: 0, position: 'absolute', width: 1 }}
-              type="date"
-              value={selectedDate}
-            />
+              <input
+                id="today-date-picker"
+                onChange={(event) => setSelectedDate(event.target.value || getTodayKey())}
+                style={{ cursor: 'pointer', inset: 0, opacity: 0, position: 'absolute', width: 28 }}
+                type="date"
+                value={selectedDate}
+              />
+            </label>
           </span>
           <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
             {Math.max(settings.daily_kcal_target - liveKcal, 0)} kcal left
