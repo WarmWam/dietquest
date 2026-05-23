@@ -4,11 +4,10 @@ import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, ImageSlot, Skeleton, Stepper } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
 import { useAuth } from '@/hooks/useAuth'
-import { useTheme, type ThemeMode } from '@/hooks/useTheme'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
-import { haptic, isHapticsEnabled, setHapticsEnabled } from '@/lib/haptic'
+import { haptic } from '@/lib/haptic'
 import { upsertUser } from '@/lib/db'
 import { enablePushNotifications, getNotificationPermission } from '@/lib/notifications'
 import { calculateBmr } from '@/lib/nutrition'
@@ -16,7 +15,6 @@ import type { Sex } from '@/types/domain'
 
 
 export function ProfileRoute() {
-  const { mode, setTheme } = useTheme()
   const navigate = useNavigate()
   const { signOut, user } = useAuth()
   const { profile, loading, error: userError } = useUser()
@@ -29,7 +27,6 @@ export function ProfileRoute() {
   const [saving, setSaving] = useState(false)
   const [enablingPush, setEnablingPush] = useState(false)
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission())
-  const [vibrations, setVibrations] = useState(isHapticsEnabled())
   const [notifications, setNotifications] = useState({
     breakfast: true,
     lunch: true,
@@ -166,13 +163,6 @@ export function ProfileRoute() {
     }
   }
 
-  function toggleVibrations() {
-    const next = !vibrations
-    setVibrations(next)
-    setHapticsEnabled(next)
-    if (next) haptic(10)
-  }
-
   async function handleToggleNotification(key: string) {
     if (!user) return
     const next = {
@@ -249,26 +239,6 @@ export function ProfileRoute() {
           </div>
         </Card>
 
-        <Section title="Theme">
-          {(['light', 'dark', 'auto'] as ThemeMode[]).map((theme) => (
-            <button className={styles.settingRow} key={theme} onClick={() => setTheme(theme)} type="button">
-              <Icon color="var(--a1)" name={theme === 'dark' ? 'moon' : theme === 'light' ? 'sun' : 'settings'} />
-              <span className={styles.rowText} style={{ textTransform: 'capitalize' }}>{theme}</span>
-              <span className="dq-check" data-on={mode === theme}>{mode === theme ? <Icon color="#fff" name="check" size={14} /> : null}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section title="Vibrations">
-          <div className={styles.settingRow}>
-            <Icon color="var(--a1)" name="sparkle" />
-            <span className={styles.rowText}>Haptic vibration feedback</span>
-            <button className={styles.switch} data-on={vibrations} onClick={toggleVibrations} type="button">
-              <span className={styles.switchKnob} />
-            </button>
-          </div>
-        </Section>
-
         <Section title="Notifications">
           <div className={styles.settingRow}>
             <Icon color="var(--a1)" name="bell" />
@@ -285,8 +255,6 @@ export function ProfileRoute() {
             )}
           </div>
           {[
-            { key: 'breakfast', label: 'Breakfast reminder', icon: 'fork' as const },
-            { key: 'lunch', label: 'Lunch reminder', icon: 'fork' as const },
             { key: 'water', label: 'Water (every 2h)', icon: 'drop' as const },
             { key: 'workout', label: 'Workout reminder', icon: 'walk' as const },
             { key: 'bedtime', label: 'Bedtime reminder', icon: 'moon' as const },
@@ -304,7 +272,6 @@ export function ProfileRoute() {
               </button>
             </div>
           ))}
-          <p className={styles.subtitle} style={{ padding: '8px 0 0 0', fontSize: 11 }}>Coming soon — preferences saved for v1.1</p>
         </Section>
 
         <Button onClick={handleSignOut} variant="ghost" style={{ color: '#991B1B', fontWeight: 800 }}>

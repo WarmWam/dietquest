@@ -49,6 +49,11 @@
   - Profile has a `Push notifications` enable row that requests permission, registers the messaging service worker, creates an FCM web token, and stores it in `users/{uid}/notification_tokens/{token}`.
   - Foreground messages show as in-app toast.
   - Important: scheduled reminder sender is still pending; this commit prepares the installed PWA to receive pushes but does not yet run a backend cron/Cloud Function to send breakfast/lunch/water/workout/bedtime reminders.
+- [x] Profile notification settings simplified
+  - Removed Theme and Vibrations sections from Profile.
+  - Removed Breakfast and Lunch reminder toggles.
+  - Removed the `Coming soon - preferences saved for v1.1` note.
+  - Kept Push notifications plus Water/Workout/Bedtime reminder preferences.
 
 ---
 
@@ -61,6 +66,7 @@
 - `de82459` - `fix(profile): simplify settings layout`
 - pending - `fix(profile): prevent settings sections from overlapping`
 - pending - `feat(notifications): register push tokens for reminders`
+- pending - `fix(profile): simplify notification preferences`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

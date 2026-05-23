@@ -118,3 +118,9 @@ Format per entry:
 - Verdict: 
 - Commit: pending
 - Notes: Added FCM web push receiver plumbing for installed PWA: generated messaging service worker from env, Profile permission/token registration row, token persistence under user notification_tokens, and foreground notification toast. Scheduled backend sender remains pending.
+
+## Phase 6.2 Follow-up - Profile notification preferences cleanup
+- Date: 2026-05-23
+- Verdict: 
+- Commit: pending
+- Notes: Removed Theme, Vibrations, Breakfast/Lunch reminder toggles, and the coming-soon note from Profile. Kept Push notifications plus water/workout/bedtime reminder preferences.
