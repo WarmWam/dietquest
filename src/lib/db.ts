@@ -49,16 +49,21 @@ function toTimestamp(value: Date) {
 }
 
 function serializeUser(user: Partial<User>): DocumentData {
-  return {
-    ...user,
-    profile: user.profile
-      ? {
-          ...user.profile,
-          target_date: toTimestamp(user.profile.target_date),
-        }
-      : undefined,
+  const result: DocumentData = {
     updated_at: serverTimestamp(),
   }
+  if (user.email !== undefined) result.email = user.email
+  if (user.display_name !== undefined) result.display_name = user.display_name
+  if (user.profile !== undefined) {
+    result.profile = {
+      ...user.profile,
+      target_date: toTimestamp(user.profile.target_date),
+    }
+  }
+  if (user.settings !== undefined) {
+    result.settings = user.settings
+  }
+  return result
 }
 
 function deserializeUser(id: string, data: DocumentData): User {
