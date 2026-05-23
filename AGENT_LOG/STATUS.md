@@ -2,7 +2,7 @@
 
 > **Phase:** Phase 6.2 - Error visibility + silent-failure hardening
 > **Status date:** 2026-05-23
-> **Current state:** Human-reported UI regression fix complete after v1.0.2. Listener visibility work remains intact; Progress tabs are visible again, and the prototype-only fake iOS status bar has been removed. Awaiting Claude/human review before any further release action.
+> **Current state:** Human-reported UI follow-ups complete after v1.0.2. Listener visibility work remains intact; Progress tabs are visible again, the prototype-only fake iOS status bar has been removed, and Profile settings layout has been simplified per QA feedback. Awaiting Claude/human review before any further release action.
 
 ---
 
@@ -37,6 +37,11 @@
   - Removed fake `9:41` / battery / signal mock status bar from `Phone`.
   - Moved app screens to real safe-area padding instead of reserving the old 54px mock status slot.
   - Made Progress tabs full-width and non-scroll-clipped so `Weight`, `Calories`, and `Activity` stay visible.
+- [x] Profile QA feedback fixed
+  - Replaced the text `Edit` button with a small pencil icon inside the top-right of the profile card.
+  - Removed visible `Data` section from Profile.
+  - Normalized settings rows so Theme/Vibrations/Notifications do not overlap and remain tappable.
+  - Styled `Sign out` as dark red destructive text.
 
 ---
 
@@ -46,6 +51,7 @@
 - `58481db` - `fix(home): distinguish error state from empty state`
 - `280e5e6` - `fix(routes): surface query errors via toast on log + progress screens`
 - `9f5b9b4` - `fix(ui): remove mock status bar and restore progress tabs`
+- `de82459` - `fix(profile): simplify settings layout`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

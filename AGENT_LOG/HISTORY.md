@@ -100,3 +100,9 @@ Format per entry:
 - Verdict: 
 - Commit: 9f5b9b4...HEAD
 - Notes: Human QA found Progress tabs missing/clipped and prototype-only fake iOS status bar still visible. Removed the mock 9:41/battery/signal bar, changed screens to use real safe-area padding, and made Progress tabs full-width so Weight/Calories/Activity remain visible.
+
+## Phase 6.2 Follow-up - Profile settings cleanup
+- Date: 2026-05-23
+- Verdict: 
+- Commit: de82459...HEAD
+- Notes: Human QA requested Profile cleanup: replaced text Edit button with in-card pencil icon, removed visible Data section, normalized settings rows to fix Theme/Vibrations layout overlap, and styled Sign out as dark red destructive text.
