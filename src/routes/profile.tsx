@@ -208,7 +208,9 @@ export function ProfileRoute() {
         ? 'Blocked in iOS Settings'
         : pushPermission === 'unsupported'
           ? 'Not supported on this device'
-          : 'Allow browser to send reminders'
+          : ''
+  const pushIsOn = pushPermission === 'granted'
+  const pushDisabled = pushPermission === 'denied' || pushPermission === 'unsupported' || enablingPush
 
   return (
     <AppScreen activeNav="profile">
@@ -244,17 +246,21 @@ export function ProfileRoute() {
             <Icon color="var(--a1)" name="bell" />
             <span className={styles.rowText}>
               <strong>Push notifications</strong>
-              <span className={styles.rowSub}>{pushStatus}</span>
+              {pushStatus ? <span className={styles.rowSub}>{pushStatus}</span> : null}
             </span>
-            {pushPermission === 'granted' || pushPermission === 'unsupported' ? (
-              <span className={styles.rowSub}>{pushPermission === 'granted' ? 'On' : 'N/A'}</span>
-            ) : (
-              <Button disabled={enablingPush} onClick={() => void handleEnablePush()} variant="secondary" style={{ height: 34, padding: '0 12px', fontSize: 13 }}>
-                {enablingPush ? '...' : 'Enable'}
-              </Button>
-            )}
+            <button
+              aria-label="Toggle push notifications"
+              className={styles.switch}
+              data-on={pushIsOn}
+              disabled={pushDisabled}
+              onClick={() => { if (!pushIsOn && !pushDisabled) void handleEnablePush() }}
+              type="button"
+              style={pushDisabled && !pushIsOn ? { opacity: 0.4 } : undefined}
+            >
+              <span className={styles.switchKnob} />
+            </button>
           </div>
-          {[
+          {pushIsOn && [
             { key: 'breakfast', label: 'Breakfast reminder (06:30)', icon: 'sun' as const },
             { key: 'lunch', label: 'Lunch reminder (11:00)', icon: 'fork' as const },
             { key: 'water', label: 'Water (every 2h)', icon: 'drop' as const },
@@ -265,6 +271,7 @@ export function ProfileRoute() {
               <Icon color="var(--a1)" name={item.icon} />
               <span className={styles.rowText}>{item.label}</span>
               <button
+                aria-label={`Toggle ${item.label}`}
                 className={styles.switch}
                 data-on={notifications[item.key as keyof typeof notifications]}
                 onClick={() => void handleToggleNotification(item.key)}
