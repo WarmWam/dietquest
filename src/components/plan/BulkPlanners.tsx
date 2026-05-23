@@ -782,7 +782,7 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
   const [{ start, end }, setRange] = useState(defaultRange())
   const [weekdays, setWeekdays] = useState<boolean[]>([false, true, true, true, true, true, true])
   const [type, setType] = useState<WorkoutPlanType>('incline_walk')
-  const [duration, setDuration] = useState(45)
+  const [kcalTarget, setKcalTarget] = useState(200)
   const [restOnOffDays, setRestOnOffDays] = useState(false)
   const [applying, setApplying] = useState(false)
 
@@ -802,8 +802,8 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
     setApplying(true)
     try {
       const plans: WorkoutPlan[] = []
-      activeDates.forEach((date) => plans.push({ date, type, duration_min: type === 'rest' ? 0 : duration }))
-      restDates.forEach((date) => plans.push({ date, type: 'rest', duration_min: 0 }))
+      activeDates.forEach((date) => plans.push({ date, type, duration_min: type === 'rest' ? 0 : kcalTarget, kcal_target: type === 'rest' ? 0 : kcalTarget }))
+      restDates.forEach((date) => plans.push({ date, type: 'rest', duration_min: 0, kcal_target: 0 }))
       await bulkUpsertWorkoutPlans(user.uid, plans)
       toast.success(`Planned ${plans.length} workout${plans.length === 1 ? '' : 's'}`)
       haptic(10)
@@ -850,7 +850,7 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
       </Card>
 
       <Card padding={14} style={{ marginBottom: 14 }}>
-        <Stepper label="Duration (per day)" suffix="min" value={duration} onChange={setDuration} min={5} max={180} step={5} />
+        <Stepper label="Target burn (per day)" suffix="kcal" value={kcalTarget} onChange={setKcalTarget} min={10} max={2000} step={10} />
       </Card>
 
       <Card padding={14} style={{ marginBottom: 14 }}>

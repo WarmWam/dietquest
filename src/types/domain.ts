@@ -188,6 +188,7 @@ export type WorkoutPlan = {
   date: string  // YYYY-MM-DD (doc ID)
   type: WorkoutPlanType
   duration_min: number
+  kcal_target?: number
   notes?: string
   updated_at?: Date
 }

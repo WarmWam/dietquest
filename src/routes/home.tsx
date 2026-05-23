@@ -163,9 +163,9 @@ function HomeFullContent({
   const [workoutKcal, setWorkoutKcal] = useState('')
   const latestWeight = weights[weights.length - 1]
   const todayWorkouts = workouts.filter((w) => w.date === todayKey)
-  const totalWorkoutMin = todayWorkouts.reduce((sum, w) => sum + w.duration_min, 0)
-  const workoutTarget = workoutPlan?.duration_min || 45
-  const workoutPct = Math.min(totalWorkoutMin / workoutTarget, 1)
+  const totalWorkoutKcal = todayWorkouts.reduce((sum, w) => sum + w.kcal_burned, 0)
+  const workoutTarget = workoutPlan?.kcal_target ?? workoutPlan?.duration_min ?? 0
+  const workoutPct = Math.min(totalWorkoutKcal / Math.max(workoutTarget || 1, 1), 1)
 
   // Compute totals live from meals[] (source of truth) — denormalized
   // today.totals can drift if a meal was deleted without decrementing.
@@ -273,7 +273,7 @@ function HomeFullContent({
       await addWorkout({
         date: todayKey,
         type: planToLog.type === 'rest' ? 'other' : planToLog.type,
-        duration_min: planToLog.duration_min,
+        duration_min: 0,
         kcal_burned: Math.round(kcal),
       })
       setWorkoutKcal('')
@@ -331,7 +331,7 @@ function HomeFullContent({
 
       <div className={styles.topStats}>
         <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(totalMl / 3000, 1)} target="3.0 L" value={(totalMl / 1000).toFixed(1)} />
-        <MiniStat color="#10B981" icon="walk" label="Incline" pct={workoutPct} target={`${workoutTarget} min`} value={String(totalWorkoutMin)} />
+        <MiniStat color="#10B981" icon="walk" label="Incline" pct={workoutPct} target={`${workoutTarget || 0} kcal`} value={String(totalWorkoutKcal)} />
       </div>
 
       <SectionLabel>Today's plan</SectionLabel>
@@ -370,7 +370,7 @@ function HomeFullContent({
           plan={workoutPlan}
           saving={savingTask === 'workout'}
           setWorkoutKcal={setWorkoutKcal}
-          totalWorkoutMin={totalWorkoutMin}
+          totalWorkoutKcal={totalWorkoutKcal}
           workoutKcal={workoutKcal}
         />
         <div className="dq-divider" />
@@ -492,7 +492,7 @@ function WorkoutPlanTask({
   plan,
   saving,
   setWorkoutKcal,
-  totalWorkoutMin,
+  totalWorkoutKcal,
   workoutKcal,
 }: {
   done: boolean
@@ -500,21 +500,23 @@ function WorkoutPlanTask({
   plan: WorkoutPlan | null
   saving: boolean
   setWorkoutKcal: (value: string) => void
-  totalWorkoutMin: number
+  totalWorkoutKcal: number
   workoutKcal: string
 }) {
   const meta = plan ? WORKOUT_PLAN_TYPES.find((type) => type.id === plan.type) : null
   const label = meta?.label ?? 'No workout planned'
+  const plannedKcal = plan?.kcal_target ?? plan?.duration_min ?? 0
+  const hitTarget = done && totalWorkoutKcal >= plannedKcal
   const sub = done
-    ? `${totalWorkoutMin} min logged`
+    ? `${totalWorkoutKcal} / ${plannedKcal} kcal logged`
     : plan
       ? plan.type === 'rest'
         ? 'Rest day'
-        : `${plan.duration_min} min planned`
+        : `${plannedKcal} kcal planned`
       : 'Plan from Calendar'
 
   return (
-    <>
+    <div style={{ background: done ? (hitTarget ? 'color-mix(in oklab, #BBF7D0 42%, transparent)' : 'color-mix(in oklab, #FEF3C7 52%, transparent)') : undefined, borderRadius: 'var(--r-md)', padding: '10px 0' }}>
       <Habit done={done || plan?.type === 'rest'} label={label} sub={sub} />
       <div style={{ padding: '0 0 10px 38px' }}>
         {plan && plan.type !== 'rest' ? (
@@ -537,7 +539,7 @@ function WorkoutPlanTask({
           </Button>
         )}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -608,7 +610,7 @@ function SleepTask({
   return (
     <>
       <Habit done={done} label="Sleep" sub={start && end ? `${start} - ${end}` : 'Start sleep - End sleep'} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 44px', gap: 8, padding: '0 0 10px 38px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 38px', gap: 6, padding: '0 0 10px 34px' }}>
         <input aria-label="Start sleep" onChange={(event) => onStartChange(event.target.value)} style={timeInputStyle} type="time" value={start} />
         <input aria-label="End sleep" onChange={(event) => onEndChange(event.target.value)} style={timeInputStyle} type="time" value={end} />
         <button aria-label="Save sleep" disabled={saving} onClick={onSave} type="button" style={sendButtonStyle}>
@@ -644,9 +646,10 @@ const timeInputStyle = {
   borderRadius: 'var(--r-md)',
   color: 'var(--t-1)',
   font: 'inherit',
+  fontSize: 12,
   fontWeight: 800,
   outline: 'none',
-  padding: '10px 8px',
+  padding: '8px 4px',
   width: '100%',
 }
 

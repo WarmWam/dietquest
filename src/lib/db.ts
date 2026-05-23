@@ -564,6 +564,7 @@ export async function bulkUpsertWorkoutPlans(uid: string, plans: WorkoutPlan[]):
       {
         type: plan.type,
         duration_min: plan.duration_min,
+        kcal_target: plan.kcal_target ?? plan.duration_min,
         notes: plan.notes ?? null,
         updated_at: serverTimestamp(),
       },
@@ -604,6 +605,7 @@ function deserializeWorkoutPlan(id: string, data: DocumentData): WorkoutPlan {
     date: id,
     type: (data.type as WorkoutPlan['type']) ?? 'rest',
     duration_min: Number(data.duration_min ?? 0),
+    kcal_target: data.kcal_target == null ? undefined : Number(data.kcal_target),
     notes: data.notes ? String(data.notes) : undefined,
     updated_at: data.updated_at?.toDate?.() ?? undefined,
   }
@@ -638,6 +640,7 @@ export async function upsertWorkoutPlan(uid: string, plan: WorkoutPlan): Promise
     {
       type: plan.type,
       duration_min: plan.duration_min,
+      kcal_target: plan.kcal_target ?? plan.duration_min,
       notes: plan.notes ?? null,
       updated_at: serverTimestamp(),
     },
