@@ -388,12 +388,7 @@ function BreakfastSection({
         >
           <span className={styles.switchKnob} />
         </button>
-        <span className={styles.rowText} style={{ flex: 1 }}>
-          <strong>Breakfast</strong>
-          <span className={styles.rowSub}>
-            {config.enabled ? 'Whey + Egg fixed · random fruit per day' : 'Off'}
-          </span>
-        </span>
+        <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>Breakfast</span>
       </div>
 
       {config.enabled && (
@@ -533,12 +528,7 @@ function GenericSlotCard({
         >
           <span className={styles.switchKnob} />
         </button>
-        <span className={styles.rowText} style={{ flex: 1 }}>
-          <strong>{label}</strong>
-          {slot.enabled && slot.items.length > 0 ? (
-            <span className={styles.rowSub}>{slot.items.length} item{slot.items.length === 1 ? '' : 's'}</span>
-          ) : null}
-        </span>
+        <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{label}</span>
         {slot.enabled ? (
           <button
             aria-label={`Add to ${label}`}
@@ -659,16 +649,16 @@ function AddItemMenu({ slotLabel, onPick, onCancel }: { slotLabel: string; onPic
           <span style={{ width: 40 }} />
         </header>
         <div style={{ padding: '0 20px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <ModeButton icon="fork" title="Pick specific food" subtitle="Choose from library" onClick={() => onPick('specific')} />
-          <ModeButton icon="sparkle" title="Random by category" subtitle="One picked per day from a category" onClick={() => onPick('category')} />
-          <ModeButton icon="sparkle" title="Random any food" subtitle="One picked per day from all foods" onClick={() => onPick('all')} />
+          <ModeButton icon="fork" title="Pick specific food" onClick={() => onPick('specific')} />
+          <ModeButton icon="sparkle" title="Random by category" onClick={() => onPick('category')} />
+          <ModeButton icon="sparkle" title="Random any food" onClick={() => onPick('all')} />
         </div>
       </div>
     </div>
   )
 }
 
-function ModeButton({ icon, title, subtitle, onClick }: { icon: 'fork' | 'sparkle'; title: string; subtitle: string; onClick: () => void }) {
+function ModeButton({ icon, title, onClick }: { icon: 'fork' | 'sparkle'; title: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -687,10 +677,7 @@ function ModeButton({ icon, title, subtitle, onClick }: { icon: 'fork' | 'sparkl
       <span style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--a-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Icon color="var(--a1)" name={icon} size={18} />
       </span>
-      <span style={{ flex: 1 }}>
-        <strong style={{ display: 'block', fontSize: 14 }}>{title}</strong>
-        <span style={{ fontSize: 12, color: 'var(--t-3)' }}>{subtitle}</span>
-      </span>
+      <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{title}</span>
       <Icon color="var(--t-3)" name="chevron" size={14} />
     </button>
   )
@@ -863,12 +850,7 @@ export function BulkWorkoutPlanner({ onClose }: { onClose: () => void }) {
       <Card padding={14} style={{ marginBottom: 14 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
           <input type="checkbox" checked={restOnOffDays} onChange={(e) => setRestOnOffDays(e.target.checked)} />
-          <span className={styles.rowText}>
-            <strong style={{ fontSize: 14 }}>Mark off-days as Rest</strong>
-            <span className={styles.rowSub}>
-              {restOnOffDays ? `${restDates.length} day${restDates.length === 1 ? '' : 's'} will get a "Rest" plan` : 'Off-days stay blank'}
-            </span>
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Mark off-days as Rest</span>
         </label>
       </Card>
 
