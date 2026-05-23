@@ -4,7 +4,9 @@
   place-items: center;
   padding: 0;
   background:
-    radial-gradient(circle at 50% -10%, color-mix(in oklab, var(--a-soft) 88%, transparent), transparent 34rem),
+    radial-gradient(circle at 24% 0%, var(--glow-blue), transparent 28rem),
+    radial-gradient(circle at 76% 8%, var(--glow-violet), transparent 30rem),
+    radial-gradient(circle at 56% 92%, var(--glow-pink), transparent 28rem),
     var(--bg);
 }
 
@@ -23,6 +25,7 @@
   display: flex;
   flex-direction: column;
   padding: calc(env(safe-area-inset-top, 0px) + 28px) 20px 24px;
+  animation: dq-fadein 0.32s cubic-bezier(.2, .8, .2, 1);
 }
 
 .scroll {
@@ -54,9 +57,10 @@
 .headerTitle {
   margin: 0;
   color: var(--t-1);
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 30px;
+  font-weight: 900;
   line-height: 1.06;
+  letter-spacing: -0.03em;
 }
 
 .subtitle {
@@ -70,13 +74,16 @@
   width: 40px;
   height: 40px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: color-mix(in oklab, var(--surface) 82%, transparent);
   color: var(--t-1);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
 }
 
 .heroOrb {
@@ -288,7 +295,10 @@
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--surface);
+  background: color-mix(in oklab, var(--surface) 84%, transparent);
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
 }
 
 .statIcon {
@@ -301,7 +311,7 @@
 }
 
 .progressBar {
-  height: 5px;
+  height: 6px;
   overflow: hidden;
   border-radius: var(--r-pill);
   background: var(--bg-soft);
@@ -311,6 +321,7 @@
   height: 100%;
   border-radius: inherit;
   background: var(--a-grad);
+  box-shadow: 0 0 16px var(--a-soft);
 }
 
 .sectionLabel {
@@ -338,6 +349,12 @@
   color: var(--t-1);
   cursor: pointer;
   text-align: left;
+  box-shadow: var(--shadow-sm);
+  transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s;
+}
+
+.mealRow:active {
+  transform: scale(0.985);
 }
 
 .mealIcon {
@@ -377,7 +394,8 @@
   padding: 4px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  background: var(--surface);
+  background: color-mix(in oklab, var(--surface) 84%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .habitRow {
@@ -409,9 +427,13 @@
   bottom: 0;
   z-index: 21;
   padding: 14px 20px 28px;
-  border-radius: 28px 28px 0 0;
-  background: var(--surface);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 30px 30px 0 0;
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  box-shadow: 0 -18px 44px rgba(37, 50, 112, 0.14);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
 }
 
 .sheetHandle {
@@ -486,6 +508,16 @@
   background: var(--a-grad);
   color: #fff;
   overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+
+.heroPanel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 12% 0%, rgba(255,255,255,0.38), transparent 34%);
+  pointer-events: none;
 }
 
 .heroKpi {
@@ -611,8 +643,11 @@
   padding: 18px;
   margin-bottom: 14px;
   border-radius: var(--r-xl);
-  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.46);
+  background: color-mix(in oklab, var(--surface) 88%, transparent);
   box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(20px) saturate(155%);
+  backdrop-filter: blur(20px) saturate(155%);
 }
 
 .bars {
@@ -635,7 +670,7 @@
 .bar {
   width: 100%;
   min-height: 28px;
-  border-radius: 8px 8px 4px 4px;
+  border-radius: 999px 999px 8px 8px;
   background: var(--bg-soft);
 }
 
@@ -652,8 +687,9 @@
 
 .heatCell {
   aspect-ratio: 1;
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--a1);
+  box-shadow: 0 0 12px var(--a-soft);
 }
 
 .photoGrid {
@@ -694,8 +730,11 @@
   flex-shrink: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface);
+  border-radius: var(--r-xl);
+  background: color-mix(in oklab, var(--surface) 86%, transparent);
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
 }
 
 .settingRow {
@@ -732,6 +771,7 @@
 
 .switch[data-on='true'] {
   background: var(--a-grad);
+  box-shadow: 0 0 18px var(--a-soft);
 }
 
 .switchKnob {

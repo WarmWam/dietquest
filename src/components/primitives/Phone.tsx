@@ -28,6 +28,7 @@ export function Phone({ children, hideNav = false, activeNav = 'home', onNav, bg
         overflow: 'hidden',
         background: bg || 'var(--bg)',
         color: 'var(--t-1)',
+        isolation: 'isolate',
       }}
     >
       {children}

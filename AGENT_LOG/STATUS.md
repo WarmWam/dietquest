@@ -54,6 +54,12 @@
   - Removed Breakfast and Lunch reminder toggles.
   - Removed the `Coming soon - preferences saved for v1.1` note.
   - Kept Push notifications plus Water/Workout/Bedtime reminder preferences.
+- [x] Neural Expressive visual refresh started
+  - Updated global tokens to soft aurora gradient surfaces with blue/violet/pink glow accents.
+  - Converted cards, chart cards, sheets, settings lists, and nav to glassy translucent surfaces.
+  - Made bottom nav a floating capsule with glow FAB.
+  - Added softer micro-interaction transitions and page fade-in motion.
+  - Kept DietQuest information architecture unchanged; no AI chat added.
 
 ---
 
@@ -67,6 +73,7 @@
 - pending - `fix(profile): prevent settings sections from overlapping`
 - pending - `feat(notifications): register push tokens for reminders`
 - pending - `fix(profile): simplify notification preferences`
+- pending - `style(ui): apply neural expressive visual refresh`
 - Phase 6.2 range: `56ab8f4...efb6c0f`
 - Follow-up UI range: `9f5b9b4...HEAD`
 

@@ -124,3 +124,9 @@ Format per entry:
 - Verdict: 
 - Commit: pending
 - Notes: Removed Theme, Vibrations, Breakfast/Lunch reminder toggles, and the coming-soon note from Profile. Kept Push notifications plus water/workout/bedtime reminder preferences.
+
+## Phase 6.3 - Neural Expressive visual refresh
+- Date: 2026-05-23
+- Verdict: 
+- Commit: pending
+- Notes: Started app-wide DietQuest interpretation of Neural Expressive design language: aurora gradient/glow tokens, glassy translucent cards/sheets/settings, floating capsule bottom nav, glow FAB, softer chart/progress surfaces, and subtle page/micro-interaction motion. No AI chat added.
