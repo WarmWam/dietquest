@@ -5,8 +5,10 @@ import { Button, Card, Icon, Ring, Skeleton, type IconName } from '@/components/
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
 import { DEFAULT_SETTINGS } from '@/data/defaults'
+import { useFoods } from '@/hooks/useFoods'
 import { useMealPlan } from '@/hooks/useMealPlan'
 import { useMeals } from '@/hooks/useMeals'
+import { useScrollLock } from '@/hooks/useScrollLock'
 import { useSleep } from '@/hooks/useSleep'
 import { useToday } from '@/hooks/useToday'
 import { useUser } from '@/hooks/useUser'
@@ -15,7 +17,7 @@ import { useWorkoutPlan } from '@/hooks/useWorkoutPlan'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
-import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WaterLog, type WorkoutLog, type WorkoutPlan } from '@/types/domain'
+import { FOOD_CATEGORIES, WORKOUT_PLAN_TYPES, type Food, type FoodCategory, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WaterLog, type WorkoutLog, type WorkoutPlan } from '@/types/domain'
 
 type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 
@@ -179,6 +181,8 @@ function HomeFullContent({
   const [sleepStart, setSleepStart] = useState(sleep?.bedtime ?? '')
   const [sleepEnd, setSleepEnd] = useState(sleep?.wake_time ?? '')
   const [workoutKcal, setWorkoutKcal] = useState('')
+  const [customizing, setCustomizing] = useState<MealType | null>(null)
+  const { data: foodsCatalog } = useFoods()
   const latestWeight = weights[weights.length - 1]
   const todayWorkouts = workouts.filter((w) => w.date === todayKey)
   const totalWorkoutKcal = todayWorkouts.reduce((sum, w) => sum + w.kcal_burned, 0)
@@ -242,6 +246,34 @@ function HomeFullContent({
     } catch (err) {
       console.error(err)
       toast.error("Couldn't confirm meal.")
+      haptic([20, 40, 20])
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
+  async function saveCustomized(mealType: MealType, items: { name: string; portion: number; unit: string; kcal: number; protein_g: number }[]) {
+    if (savingTask || items.length === 0) return
+    setSavingTask(mealType)
+    try {
+      // Remove any prior log for this meal_type today first (avoid duplicates)
+      const existing = meals.filter((m) => m.meal_type === mealType)
+      await Promise.all(existing.map((m) => removeMeal(m.id)))
+      await addMeal({
+        date: todayKey,
+        meal_type: mealType,
+        items: items.map((it) => ({ ...it, carb_g: 0, fat_g: 0 })),
+        total_kcal: items.reduce((s, it) => s + it.kcal, 0),
+        total_protein_g: Math.round(items.reduce((s, it) => s + it.protein_g, 0) * 10) / 10,
+        total_carb_g: 0,
+        total_fat_g: 0,
+      })
+      toast.success(`${mealType} logged · ${items.length} item${items.length === 1 ? '' : 's'}`)
+      haptic(10)
+      setCustomizing(null)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't save meal.")
       haptic([20, 40, 20])
     } finally {
       setSavingTask(null)
@@ -390,11 +422,33 @@ function HomeFullContent({
             loggedMeals={loggedMeals}
             mealType={type}
             onConfirm={() => void confirmMeal(type, plan[type], loggedMeals)}
-            onSwap={() => navigate(`/log/meal?meal=${type}`)}
+            onSwap={() => setCustomizing(type)}
             saving={savingTask === type}
           />
         )
       })}
+
+      {customizing && (
+        <CustomizeMealSheet
+          existingItems={meals
+            .filter((m) => m.meal_type === customizing)
+            .flatMap((m) =>
+              m.items.map((it) => ({
+                name: it.name,
+                portion: it.portion,
+                unit: it.unit ?? 'serving',
+                kcal: it.kcal,
+                protein_g: it.protein_g,
+              })),
+            )}
+          foods={foodsCatalog}
+          mealType={customizing}
+          onCancel={() => setCustomizing(null)}
+          onSave={(items) => void saveCustomized(customizing, items)}
+          plannedItems={plan[customizing]}
+          saving={savingTask === customizing}
+        />
+      )}
 
       <SectionLabel>Daily habits</SectionLabel>
       <div className={styles.habitBox}>
@@ -526,7 +580,7 @@ function PlanMealCard({
           {done ? 'Undo' : 'Ate as planned'}
         </Button>
         <Button onClick={onSwap} variant="ghost">
-          Ate different
+          {done ? 'Edit' : 'Customize'}
         </Button>
       </div>
     </Card>
@@ -869,5 +923,291 @@ function LogSheet() {
         </div>
       </div>
     </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// Customize meal sheet — handles all 4 plan-vs-actual cases:
+//  1) Ate exactly as planned       → leave defaults, Save
+//  2) Ate partial plan + extras    → uncheck some + add extras
+//  3) Ate plan fully + extras      → leave all checked + add extras
+//  4) Ate completely off-plan      → uncheck all + add extras
+// ─────────────────────────────────────────────────────────────
+
+type CustomItem = {
+  name: string
+  portion: number
+  unit: string
+  kcalPer: number   // kcal at portion=1
+  proteinPer: number
+  source: 'plan' | 'extra'
+}
+
+function CustomizeMealSheet({
+  mealType,
+  plannedItems,
+  existingItems,
+  foods,
+  saving,
+  onSave,
+  onCancel,
+}: {
+  mealType: MealType
+  plannedItems: MealPlanItem[]
+  existingItems: { name: string; portion: number; unit: string; kcal: number; protein_g: number }[]
+  foods: Food[]
+  saving: boolean
+  onSave: (items: { name: string; portion: number; unit: string; kcal: number; protein_g: number }[]) => void
+  onCancel: () => void
+}) {
+  useScrollLock()
+  // Initial state: if there's an existing log, edit it. Otherwise, pre-check all planned items.
+  const [items, setItems] = useState<CustomItem[]>(() => {
+    if (existingItems.length > 0) {
+      return existingItems.map((it) => ({
+        name: it.name,
+        portion: it.portion,
+        unit: it.unit,
+        kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
+        proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
+        source: 'extra', // can't easily tell which was from plan, treat all as flexible
+      }))
+    }
+    return plannedItems.map((it) => ({
+      name: it.food_name,
+      portion: it.portion,
+      unit: 'serving',
+      kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
+      proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
+      source: 'plan',
+    }))
+  })
+  const [includedPlanIds, setIncludedPlanIds] = useState<Set<string>>(
+    () => new Set(plannedItems.map((it) => it.food_name)),
+  )
+  const [category, setCategory] = useState<FoodCategory>('food')
+
+  const filteredFoods = foods.filter((f) => f.category === category)
+
+  // Build the actual list of items considering plan inclusions + extras
+  const activeItems: CustomItem[] = items.filter((it) => it.source !== 'plan' || includedPlanIds.has(it.name))
+  const totalKcal = activeItems.reduce((s, it) => s + Math.round(it.kcalPer * it.portion), 0)
+
+  function togglePlan(name: string) {
+    setIncludedPlanIds((cur) => {
+      const next = new Set(cur)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+    haptic(5)
+  }
+
+  function addFromLibrary(food: Food) {
+    setItems((cur) => {
+      if (cur.some((it) => it.name === food.name && it.source === 'extra')) return cur
+      return [
+        ...cur,
+        {
+          name: food.name,
+          portion: 1,
+          unit: food.portion_unit,
+          kcalPer: food.kcal_per_portion,
+          proteinPer: food.protein_g_per_portion,
+          source: 'extra',
+        },
+      ]
+    })
+    haptic(5)
+  }
+
+  function changePortion(name: string, delta: number) {
+    setItems((cur) =>
+      cur.map((it) =>
+        it.name === name ? { ...it, portion: Math.max(0.25, Number((it.portion + delta).toFixed(2))) } : it,
+      ),
+    )
+  }
+
+  function removeExtra(name: string) {
+    setItems((cur) => cur.filter((it) => !(it.name === name && it.source === 'extra')))
+  }
+
+  function handleSave() {
+    if (activeItems.length === 0) {
+      toast.error('Pick at least one item.')
+      return
+    }
+    const finalItems = activeItems.map((it) => ({
+      name: it.name,
+      portion: it.portion,
+      unit: it.unit,
+      kcal: Math.round(it.kcalPer * it.portion),
+      protein_g: Math.round(it.proteinPer * it.portion * 10) / 10,
+    }))
+    onSave(finalItems)
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--bg)',
+        zIndex: 120,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        overscrollBehavior: 'contain',
+      }}
+    >
+      <header className={styles.screenHeader} style={{ padding: 'calc(env(safe-area-inset-top, 0px) + 12px) 20px 12px', margin: 0, borderBottom: '1px solid var(--line)', flexShrink: 0 }}>
+        <button className={styles.iconButton} onClick={onCancel} type="button"><Icon name="x" /></button>
+        <strong style={{ textTransform: 'capitalize' }}>{mealType}</strong>
+        <span style={{ width: 40 }} />
+      </header>
+
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 20px 140px' }}>
+        {/* From plan */}
+        {plannedItems.length > 0 && (
+          <>
+            <p className={styles.fieldLabel}>From plan</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+              {plannedItems.map((it) => {
+                const included = includedPlanIds.has(it.food_name)
+                return (
+                  <button
+                    key={it.food_name}
+                    onClick={() => togglePlan(it.food_name)}
+                    type="button"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px',
+                      background: included ? 'color-mix(in oklab, #BBF7D0 38%, var(--surface))' : 'var(--surface)',
+                      border: included ? '1px solid rgba(34,197,94,0.5)' : '1px solid var(--line)',
+                      borderRadius: 'var(--r-md)',
+                      width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none',
+                    }}
+                  >
+                    <span className="dq-check" data-on={included}>
+                      {included ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
+                    </span>
+                    <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <strong style={{ fontSize: 14 }}>{it.food_name}</strong>
+                      <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>{it.portion}× · {it.kcal} kcal</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Extras */}
+        {items.some((it) => it.source === 'extra') && (
+          <>
+            <p className={styles.fieldLabel}>Extras</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+              {items.filter((it) => it.source === 'extra').map((it) => (
+                <div
+                  key={it.name}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px',
+                    background: 'color-mix(in oklab, var(--a-soft) 60%, var(--surface))',
+                    border: '1px solid var(--a1)',
+                    borderRadius: 'var(--r-md)',
+                  }}
+                >
+                  <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <strong style={{ fontSize: 14 }}>{it.name}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>{Math.round(it.kcalPer * it.portion)} kcal</span>
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-soft)', borderRadius: 999, padding: '2px 6px' }}>
+                    <button type="button" onClick={() => changePortion(it.name, -0.25)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>−</button>
+                    <span style={{ fontSize: 12, fontWeight: 700, minWidth: 32, textAlign: 'center' }}>{it.portion % 1 === 0 ? it.portion : it.portion.toFixed(2)}</span>
+                    <button type="button" onClick={() => changePortion(it.name, 0.25)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>+</button>
+                  </div>
+                  <button aria-label="Remove" onClick={() => removeExtra(it.name)} type="button" style={{ border: 0, background: 'transparent', color: 'var(--t-3)', cursor: 'pointer', padding: 4, outline: 'none' }}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Library picker */}
+        <p className={styles.fieldLabel}>Add from library</p>
+        <div className="dq-h-scroll" style={{ margin: '0 -20px 10px 0', paddingRight: 20 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {FOOD_CATEGORIES.map((cat) => (
+              <button
+                className="dq-seg-item"
+                data-active={category === cat.id}
+                key={cat.id}
+                onClick={() => setCategory(cat.id)}
+                type="button"
+                style={{ border: 0, flex: '0 0 auto', padding: '6px 12px', fontSize: 12 }}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {filteredFoods.length === 0 ? (
+            <p className={styles.subtitle}>No foods in this category.</p>
+          ) : (
+            filteredFoods.map((food) => {
+              const isAdded = items.some((it) => it.name === food.name && it.source === 'extra')
+              return (
+                <button
+                  key={food.id}
+                  disabled={isAdded}
+                  onClick={() => addFromLibrary(food)}
+                  type="button"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 'var(--r-md)',
+                    width: '100%', textAlign: 'left',
+                    cursor: isAdded ? 'default' : 'pointer',
+                    outline: 'none',
+                    opacity: isAdded ? 0.4 : 1,
+                  }}
+                >
+                  <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <strong style={{ fontSize: 13 }}>{food.name}</strong>
+                    <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>
+                      {food.kcal_per_portion} kcal · {food.protein_g_per_portion}g · per {food.portion_unit}
+                    </span>
+                  </span>
+                  <Icon color={isAdded ? 'var(--success)' : 'var(--a1)'} name={isAdded ? 'check' : 'plus'} size={16} />
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Footer save */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0, right: 0, bottom: 0,
+          padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
+          background: 'var(--surface)',
+          borderTop: '1px solid var(--line)',
+          boxShadow: '0 -8px 24px rgba(15,23,42,0.08)',
+        }}
+      >
+        <Button disabled={saving || activeItems.length === 0} onClick={handleSave}>
+          {saving ? 'Saving...' : `Save ${activeItems.length} item${activeItems.length === 1 ? '' : 's'} · ${totalKcal} kcal`}
+        </Button>
+      </div>
+    </div>
   )
 }
