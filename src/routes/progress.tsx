@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
-import { Card, Icon, Skeleton } from '@/components/primitives'
+import { Card, Icon, Skeleton, type IconName } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
 import { todayKey, daysAgoKey } from '@/lib/dates'
 import { useDayTotals } from '@/hooks/useDayTotals'
@@ -10,6 +10,15 @@ import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { toast } from '@/stores/toastStore'
+import type { MealType } from '@/types/domain'
+
+type MealSlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
+const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
+  breakfast: { icon: 'sunrise', color: '#FB923C' },
+  lunch: { icon: 'sun', color: '#F59E0B' },
+  dinner: { icon: 'moon', color: '#6366F1' },
+  snack: { icon: 'snack', color: '#EC4899' },
+}
 
 type ProgressTab = 'weight' | 'kcal' | 'activity'
 type CalorieView = 'week' | 'month' | 'year'
@@ -188,29 +197,54 @@ function CaloriesTab() {
           })}
         </div>
       </div>
-      <Card padding={16}>
-        <p className="dq-eyebrow">Meals today</p>
-        {meals.length === 0 ? <p className={styles.subtitle}>No meals logged yet.</p> : null}
-        {meals.map((meal) => (
-          <div className={styles.habitRow} key={meal.id}>
-            <Icon color="var(--a1)" name="fork" />
-            <span className={styles.rowText}>
-              <strong>{meal.items[0]?.name ?? meal.meal_type}</strong>
-              <span className={styles.rowSub}>{meal.total_kcal} kcal - {meal.total_protein_g}g protein</span>
-            </span>
-          </div>
-        ))}
-      </Card>
+      <p className="dq-eyebrow" style={{ margin: '4px 4px 10px' }}>Meals today</p>
+      {meals.length === 0 ? (
+        <Card padding={16}>
+          <p className={styles.subtitle}>No meals logged yet.</p>
+        </Card>
+      ) : (
+        (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
+          const slotMeals = meals.filter((m) => m.meal_type === type)
+          if (slotMeals.length === 0) return null
+          const slotItems = slotMeals.flatMap((m) => m.items)
+          const slotKcal = slotMeals.reduce((s, m) => s + m.total_kcal, 0)
+          const meta = MEAL_META[type]
+          return (
+            <Card key={type} padding={14} style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Icon color={meta.color} name={meta.icon as IconName} size={22} />
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{slotKcal} kcal</span>
+              </div>
+              <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
+                {slotItems.map((it, idx) => (
+                  <div key={`${type}-${idx}-${it.name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {it.kcal} kcal</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )
+        })
+      )}
     </>
   )
 }
 
 function buildCalorieBars(totals: ReturnType<typeof useDayTotals>['data'], view: CalorieView) {
   if (view === 'week') {
-    return totals.slice(-7).map((t) => {
-      const date = new Date(`${t.date}T00:00:00`)
-      return { date: t.date, label: DAY_SHORT[date.getDay()], kcal: t.totals.kcal }
-    })
+    // Always render 7 days (rolling) — fill missing days with 0 so the
+    // chart shows immediately even before useDayTotals returns data.
+    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.kcal]))
+    const out: { date: string; label: string; kcal: number }[] = []
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      out.push({ date: key, label: DAY_SHORT[d.getDay()], kcal: totalsMap.get(key) ?? 0 })
+    }
+    return out
   }
 
   if (view === 'month') {
