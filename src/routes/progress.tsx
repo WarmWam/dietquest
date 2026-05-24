@@ -144,6 +144,8 @@ function CaloriesTab() {
   const [view, setView] = useState<CalorieView>('week')
   const { data: meals, error: mealsError } = useMeals()
   const { data: yearTotals, error: totalsError } = useDayTotals(365)
+  const { profile } = useUser()
+  const dailyTarget = profile?.settings?.daily_kcal_target ?? 1950
 
   // Live sum from meals[] (source of truth) — denormalized day totals
   // can drift if a meal was deleted without decrementing.
@@ -153,7 +155,7 @@ function CaloriesTab() {
   const todayDate = todayKey()
   const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, kcal: liveKcal, protein_g: liveProtein } } : t)
   const bars = buildCalorieBars(totals, view)
-  const maxKcal = Math.max(...bars.map((bar) => bar.kcal), 1)
+  const maxKcal = Math.max(...bars.map((bar) => bar.kcal), dailyTarget, 1)
 
   useEffect(() => {
     if (mealsError || totalsError) toast.error("Couldn't load calorie progress. Try again.")
@@ -181,16 +183,36 @@ function CaloriesTab() {
             </button>
           ))}
         </div>
-        <div className={styles.bars}>
+        <div
+          className={styles.bars}
+          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
+        >
           {bars.map((bar, index) => {
             const isToday = bar.date === todayDate
             const height = Math.max((bar.kcal / maxKcal) * 100, bar.kcal > 0 ? 8 : 3)
+            const zone = barZoneColor(bar.kcal, dailyTarget)
             return (
-              <div className={styles.barColumn} key={`${bar.label}-${index}`} style={{ height: '100%', minWidth: view === 'year' ? 18 : undefined }}>
-                <span style={{ color: 'var(--t-2)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+              <div
+                className={styles.barColumn}
+                key={`${bar.label}-${index}`}
+                style={{
+                  height: '100%',
+                  minWidth: view === 'year' ? 26 : undefined,
+                  flex: view === 'year' ? '0 0 auto' : undefined,
+                }}
+              >
+                <span style={{ color: bar.kcal > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
                   {formatKcalLabel(bar.kcal)}
                 </span>
-                <div className={styles.bar} style={{ background: isToday ? 'var(--a-grad)' : 'var(--bg-soft)', height: `${height}%` }} />
+                <div
+                  className={styles.bar}
+                  style={{
+                    background: bar.kcal > 0 ? zone.stroke : 'var(--bg-soft)',
+                    height: `${height}%`,
+                    outline: isToday ? '2px solid var(--a1)' : 'none',
+                    outlineOffset: isToday ? 1 : 0,
+                  }}
+                />
                 <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
               </div>
             )
@@ -248,33 +270,73 @@ function buildCalorieBars(totals: ReturnType<typeof useDayTotals>['data'], view:
   }
 
   if (view === 'month') {
-    const last28 = totals.slice(-28)
+    // 4 weekly buckets, each showing AVERAGE kcal/day over logged days.
+    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.kcal]))
+    const today = new Date()
     return Array.from({ length: 4 }, (_, index) => {
-      const chunk = last28.slice(index * 7, index * 7 + 7)
+      const weekStart = (3 - index) * 7 + 6 // days ago at start of bucket
+      let sum = 0
+      let count = 0
+      let lastDate = ''
+      for (let d = 0; d < 7; d++) {
+        const offset = weekStart - d
+        const dt = new Date(today)
+        dt.setDate(today.getDate() - offset)
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+        lastDate = key
+        const v = totalsMap.get(key) ?? 0
+        if (v > 0) {
+          sum += v
+          count += 1
+        }
+      }
       return {
-        date: chunk[chunk.length - 1]?.date ?? '',
+        date: lastDate,
         label: `W${index + 1}`,
-        kcal: chunk.reduce((sum, t) => sum + t.totals.kcal, 0),
+        kcal: count > 0 ? Math.round(sum / count) : 0,
       }
     })
   }
 
-  const monthMap = new Map<string, { label: string; kcal: number }>()
+  // Year: always show 12 rolling months, AVERAGE kcal/day per month.
+  const today = new Date()
+  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
+  }
   totals.forEach((t) => {
     const date = new Date(`${t.date}T00:00:00`)
     const key = `${date.getFullYear()}-${date.getMonth()}`
-    const current = monthMap.get(key) ?? { label: MONTH_SHORT[date.getMonth()], kcal: 0 }
-    current.kcal += t.totals.kcal
-    monthMap.set(key, current)
+    const bucket = monthBuckets.get(key)
+    if (!bucket) return
+    if (t.totals.kcal > 0) {
+      bucket.sum += t.totals.kcal
+      bucket.count += 1
+    }
   })
-
-  return Array.from(monthMap.entries()).slice(-12).map(([key, value]) => ({ date: key, ...value }))
+  return Array.from(monthBuckets.values()).map((b) => ({
+    date: b.date,
+    label: b.label,
+    kcal: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+  }))
 }
 
 function formatKcalLabel(kcal: number): string {
   if (kcal <= 0) return '0'
-  if (kcal >= 1000) return `${Math.round(kcal / 100) / 10}k`
-  return String(kcal)
+  return Math.round(kcal).toLocaleString()
+}
+
+// Same zone rules as the calorie ring: < 70% green, 70–99% yellow, ≥ 100% red.
+const BAR_STROKE = { green: '#86EFAC', yellow: '#FCD34D', red: '#FCA5A5' }
+const BAR_NUMBER = { green: '#16A34A', yellow: '#D97706', red: '#DC2626' }
+function barZoneColor(kcal: number, target: number): { stroke: string; number: string } {
+  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+  const pct = kcal / target
+  if (pct >= 1) return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
+  if (pct >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
+  return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
 }
 
 function ActivityTab() {
