@@ -348,9 +348,10 @@ function ActivityTab() {
   const month2 = useMonthWorkoutPlans(monthKeys[2])
   const month3 = useMonthWorkoutPlans(monthKeys[3])
   const activityWorkouts = workouts.filter((workout) => workout.kcal_burned >= 20)
+  const currentDateKey = todayKey()
   const workoutPlans = [month0.data, month1.data, month2.data, month3.data]
     .flat()
-    .filter((plan) => plan.date >= daysAgoKey(90) && plan.type !== 'rest')
+    .filter((plan) => plan.date >= daysAgoKey(90) && plan.date <= currentDateKey && plan.type !== 'rest')
   const planByDate = new Map(workoutPlans.map((plan) => [plan.date, plan]))
   const actualKcalByDate = groupWorkoutKcalByDate(activityWorkouts)
   const workoutsByDate = groupWorkoutsByDate(activityWorkouts)
