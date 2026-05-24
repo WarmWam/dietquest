@@ -3,17 +3,25 @@ import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, ImageSlot, Skeleton, Stepper } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
+import { useAnalysisUsage } from '@/hooks/useAnalysisUsage'
 import { useAnalyses } from '@/hooks/useAnalyses'
 import { useAuth } from '@/hooks/useAuth'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
-import { getDayTotalsRange, getMealsRange, getSleepRange, getWorkoutsRange, saveAnalysis, upsertUser } from '@/lib/db'
+import { getDayTotalsRange, getMealsRange, getSleepRange, getWorkoutsRange, saveAnalysis, saveAnalysisUsage, upsertUser } from '@/lib/db'
 import { enablePushNotifications, getNotificationPermission } from '@/lib/notifications'
 import { calculateBmr } from '@/lib/nutrition'
-import type { AnalysisPeriod, Sex } from '@/types/domain'
+import type { AnalysisPeriod, GeminiModelId, Sex } from '@/types/domain'
 
+const GEMINI_MODELS: Array<{ id: GeminiModelId; label: string; limit: number }> = [
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', limit: 20 },
+  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', limit: 20 },
+  { id: 'gemini-3-flash', label: 'Gemini 3 Flash', limit: 20 },
+  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite', limit: 500 },
+  { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', limit: 20 },
+]
 
 export function ProfileRoute() {
   const navigate = useNavigate()
@@ -29,6 +37,7 @@ export function ProfileRoute() {
   const [saving, setSaving] = useState(false)
   const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriod>('day')
   const [analysisDate, setAnalysisDate] = useState(todayInputValue())
+  const [analysisModel, setAnalysisModel] = useState<GeminiModelId>('gemini-3.5-flash')
   const [analyzing, setAnalyzing] = useState(false)
   const [enablingPush, setEnablingPush] = useState(false)
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission())
@@ -43,6 +52,10 @@ export function ProfileRoute() {
   // Goal progress
   const { data: weights, error: weightsError } = useWeights(60)
   const { data: analyses, error: analysesError } = useAnalyses()
+  const { data: analysisUsage, error: analysisUsageError } = useAnalysisUsage()
+  const selectedModelMeta = GEMINI_MODELS.find((model) => model.id === analysisModel) ?? GEMINI_MODELS[0]
+  const selectedModelUsed = analysisUsage.filter((usage) => usage.model_id === analysisModel).length
+  const selectedModelLimitReached = selectedModelUsed >= selectedModelMeta.limit
   const latestWeight = weights[weights.length - 1]
   const totalToLose = userProfile.weight_start_kg - userProfile.weight_target_kg
   const lost = userProfile.weight_start_kg - (latestWeight?.weight_kg ?? userProfile.weight_start_kg)
@@ -57,8 +70,8 @@ export function ProfileRoute() {
   const [months, setMonths] = useState(6)
 
   useEffect(() => {
-    if (userError || weightsError || analysesError) toast.error("Couldn't load profile data. Try again.")
-  }, [userError, weightsError, analysesError])
+    if (userError || weightsError || analysesError || analysisUsageError) toast.error("Couldn't load profile data. Try again.")
+  }, [userError, weightsError, analysesError, analysisUsageError])
 
   useEffect(() => {
     if (profile?.profile) {
@@ -208,7 +221,7 @@ export function ProfileRoute() {
   }
 
   async function handleRunAnalysis() {
-    if (!user || analyzing) return
+    if (!user || analyzing || selectedModelLimitReached) return
     setAnalyzing(true)
     try {
       const endDate = analysisDate
@@ -223,6 +236,7 @@ export function ProfileRoute() {
       const idToken = await user.getIdToken()
       const payload = {
         uid: user.uid,
+        model_id: analysisModel,
         period: analysisPeriod,
         start_date: startDate,
         end_date: endDate,
@@ -275,6 +289,7 @@ export function ProfileRoute() {
 
       await saveAnalysis(user.uid, {
         period: analysisPeriod,
+        model_id: analysisModel,
         start_date: startDate,
         end_date: endDate,
         summary: result.summary,
@@ -282,6 +297,7 @@ export function ProfileRoute() {
         risks: result.risks ?? [],
         actions: result.actions ?? [],
       })
+      await saveAnalysisUsage(user.uid, analysisModel, todayInputValue())
       toast.success('Analysis saved.')
       haptic(10)
     } catch (err) {
@@ -400,12 +416,28 @@ export function ProfileRoute() {
                 type="date"
                 value={analysisDate}
               />
-              <Button disabled={analyzing} onClick={() => void handleRunAnalysis()} style={{ minWidth: 104 }}>
+      <Button disabled={analyzing || selectedModelLimitReached} onClick={() => void handleRunAnalysis()} style={{ minWidth: 104 }}>
                 {analyzing ? 'Sending...' : 'Analyze'}
               </Button>
             </div>
+            <select
+              aria-label="Gemini model"
+              onChange={(event) => setAnalysisModel(event.target.value as GeminiModelId)}
+              style={dateInputStyle}
+              value={analysisModel}
+            >
+              {GEMINI_MODELS.map((model) => {
+                const used = analysisUsage.filter((usage) => usage.model_id === model.id).length
+                return (
+                  <option key={model.id} value={model.id}>
+                    {model.label} ({used}/{model.limit})
+                  </option>
+                )
+              })}
+            </select>
             <p className={styles.rowSub}>
-              {analysisPeriod === 'week' ? `Analyzes ${formatRangeLabel(addDays(analysisDate, -6), analysisDate)}.` : `Analyzes ${analysisDate}.`}
+              {selectedModelLimitReached ? 'Selected model reached today limit. ' : ''}
+              {analysisPeriod === 'week' ? `Analyzes ${formatRangeLabel(addDays(analysisDate, -6), analysisDate)}.` : `Analyzes ${analysisDate}.`} Model: {selectedModelMeta.label}.
             </p>
           </div>
           {analyses.slice(0, 3).map((analysis) => (

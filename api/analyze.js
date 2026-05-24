@@ -1,4 +1,14 @@
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash'
+const ALLOWED_MODELS = new Set([
+  'gemini-2.5-flash',
+  'gemini-3.5-flash',
+  'gemini-3-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash-lite',
+])
+
+function pickModel(modelId) {
+  return ALLOWED_MODELS.has(modelId) ? modelId : 'gemini-3.5-flash'
+}
 
 function sendJson(res, statusCode, payload) {
   res.statusCode = statusCode
@@ -90,8 +100,9 @@ export default async function handler(req, res) {
       sendJson(res, 403, { error: 'Forbidden.' })
       return
     }
+    const model = pickModel(body.model_id)
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,7 +125,7 @@ export default async function handler(req, res) {
     const json = await geminiResponse.json()
     const text = json.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || ''
     const result = normalizeResult(text)
-    sendJson(res, 200, result)
+    sendJson(res, 200, { ...result, model_id: model })
   } catch (error) {
     console.error('[analysis]', error)
     sendJson(res, 500, { error: 'Analysis failed. Try again.' })

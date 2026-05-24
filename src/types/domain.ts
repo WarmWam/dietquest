@@ -53,10 +53,12 @@ export type DayTotals = {
 }
 
 export type AnalysisPeriod = 'day' | 'week'
+export type GeminiModelId = 'gemini-2.5-flash' | 'gemini-3.5-flash' | 'gemini-3-flash' | 'gemini-3.1-flash-lite' | 'gemini-2.5-flash-lite'
 
 export type HealthAnalysis = {
   id: string
   period: AnalysisPeriod
+  model_id?: GeminiModelId
   start_date: string
   end_date: string
   summary: string
@@ -65,6 +67,13 @@ export type HealthAnalysis = {
   actions: string[]
   created_at?: Date
   updated_at?: Date
+}
+
+export type AnalysisUsage = {
+  id: string
+  date: string
+  model_id: GeminiModelId
+  created_at?: Date
 }
 
 export type MealItem = {

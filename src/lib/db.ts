@@ -22,7 +22,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { daysAgoKey } from '@/lib/dates'
-import type { DayTotals, Food, HealthAnalysis, MealLog, MealPlan, MealPlanItem, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog, WorkoutPlan } from '@/types/domain'
+import type { AnalysisUsage, DayTotals, Food, GeminiModelId, HealthAnalysis, MealLog, MealPlan, MealPlanItem, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog, WorkoutPlan } from '@/types/domain'
 import { emptyMealPlan, normalizeFoodCategory } from '@/types/domain'
 
 type WatchState<T> = {
@@ -162,6 +162,7 @@ function deserializeAnalysis(snapshot: QueryDocumentSnapshot<DocumentData>): Hea
   return {
     id: snapshot.id,
     period: data.period === 'week' ? 'week' : 'day',
+    model_id: isGeminiModelId(data.model_id) ? data.model_id : undefined,
     start_date: String(data.start_date ?? ''),
     end_date: String(data.end_date ?? ''),
     summary: String(data.summary ?? ''),
@@ -171,6 +172,24 @@ function deserializeAnalysis(snapshot: QueryDocumentSnapshot<DocumentData>): Hea
     created_at: fromTimestamp(data.created_at),
     updated_at: fromTimestamp(data.updated_at),
   }
+}
+
+function deserializeAnalysisUsage(snapshot: QueryDocumentSnapshot<DocumentData>): AnalysisUsage {
+  const data = snapshot.data()
+  return {
+    id: snapshot.id,
+    date: String(data.date ?? ''),
+    model_id: isGeminiModelId(data.model_id) ? data.model_id : 'gemini-2.5-flash',
+    created_at: fromTimestamp(data.created_at),
+  }
+}
+
+function isGeminiModelId(value: unknown): value is GeminiModelId {
+  return value === 'gemini-2.5-flash'
+    || value === 'gemini-3.5-flash'
+    || value === 'gemini-3-flash'
+    || value === 'gemini-3.1-flash-lite'
+    || value === 'gemini-2.5-flash-lite'
 }
 
 function deserializePreset(snapshot: QueryDocumentSnapshot<DocumentData>): MealPreset {
@@ -424,6 +443,24 @@ export function watchAnalyses(uid: string, cb: WatchCallback<HealthAnalysis[]>):
     query(userCollection(uid, 'analyses'), orderBy('updated_at', 'desc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeAnalysis), error: null }),
     listenerError(`users/${uid}/analyses`, [], cb),
+  )
+}
+
+export async function saveAnalysisUsage(uid: string, modelId: GeminiModelId, date: string): Promise<string> {
+  const docRef = await addDoc(userCollection(uid, 'analysis_usage'), { date, model_id: modelId, created_at: serverTimestamp() })
+  return docRef.id
+}
+
+export function watchAnalysisUsage(uid: string, date: string, cb: WatchCallback<AnalysisUsage[]>): Unsubscribe {
+  return onSnapshot(
+    query(userCollection(uid, 'analysis_usage'), where('date', '==', date)),
+    (snapshot) => cb({
+      data: snapshot.docs
+        .map(deserializeAnalysisUsage)
+        .sort((a, b) => (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0)),
+      error: null,
+    }),
+    listenerError(`users/${uid}/analysis_usage date=${date}`, [], cb),
   )
 }
 
