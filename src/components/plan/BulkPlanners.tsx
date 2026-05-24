@@ -130,6 +130,11 @@ const GENERIC_SLOTS: { id: MealSlot; label: string }[] = [
 let _idCounter = 0
 const nextId = () => `item-${++_idCounter}-${Date.now()}`
 
+function randomAllPool(foods: Food[], slot: MealSlot): Food[] {
+  if (slot === 'snack') return foods
+  return foods.filter((food) => food.category !== 'fruit')
+}
+
 // ─────────────────────────────────────────────────────────────
 // Bulk MEAL planner
 // ─────────────────────────────────────────────────────────────
@@ -254,7 +259,7 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
 
     anyItems.forEach((it) => {
       if (it.kind !== 'random_all') return
-      const picked = pickRandom(foods)
+      const picked = pickRandom(randomAllPool(foods, slot))
       if (picked) out.push(makeMealItem(picked, it.portion))
     })
 
@@ -706,10 +711,11 @@ function ModeButton({ icon, title, onClick }: { icon: 'fork' | 'sparkle'; title:
 }
 
 function CategoryPicker({ onPick, onCancel }: { onPick: (cat: FoodCategory) => void; onCancel: () => void }) {
+  const categories = FOOD_CATEGORIES.filter((category) => category.id !== 'fruit')
   return (
     <FullscreenModal onClose={onCancel} title="Pick category" zIndex={140}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {FOOD_CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <button key={cat.id} onClick={() => onPick(cat.id)} type="button"
             style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', background: 'var(--surface)', cursor: 'pointer', outline: 'none', textAlign: 'left' }}>
             <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{cat.label}</span>
