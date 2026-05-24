@@ -5,6 +5,7 @@ import { BulkMealPlanner, BulkWorkoutPlanner } from '@/components/plan/BulkPlann
 import { FullscreenModal } from '@/components/plan/FullscreenModal'
 import { useFoods } from '@/hooks/useFoods'
 import { useMealPlan, useMonthMealPlans } from '@/hooks/useMealPlan'
+import { useMeals } from '@/hooks/useMeals'
 import { useMonthWorkoutPlans, useWorkoutPlan } from '@/hooks/useWorkoutPlan'
 import { useScrollLock } from '@/hooks/useScrollLock'
 import { useUser } from '@/hooks/useUser'
@@ -309,11 +310,44 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
   const settings = profile?.settings ?? DEFAULT_SETTINGS
   const { data: plan, save: saveMealPlan } = useMealPlan(date)
   const { data: workout, save: saveWorkoutPlan, remove: removeWorkoutPlan } = useWorkoutPlan(date)
+  const { data: dayMeals, add: addMealLog } = useMeals(date)
   const [picking, setPicking] = useState<MealSlot | null>(null)
   const [workoutEditing, setWorkoutEditing] = useState(false)
 
+  // Track which meal_types are already logged today (for plan→log button state)
+  const loggedSlots = useMemo(() => new Set(dayMeals.map((m) => m.meal_type)), [dayMeals])
+
   const dateObj = new Date(date)
   const niceDate = dateObj.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })
+
+  async function logSlotAsEaten(slot: MealSlot) {
+    const items = plan[slot]
+    if (items.length === 0) return
+    try {
+      await addMealLog({
+        date,
+        meal_type: slot,
+        items: items.map((it) => ({
+          name: it.food_name,
+          portion: it.portion,
+          kcal: it.kcal,
+          protein_g: it.protein_g,
+          carb_g: 0,
+          fat_g: 0,
+        })),
+        total_kcal: items.reduce((s, it) => s + it.kcal, 0),
+        total_protein_g: items.reduce((s, it) => s + it.protein_g, 0),
+        total_carb_g: 0,
+        total_fat_g: 0,
+      })
+      toast.success(`${slot.charAt(0).toUpperCase() + slot.slice(1)} logged from plan`)
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't log meal.")
+      haptic([20, 40, 20])
+    }
+  }
 
   async function addFoodToSlot(slot: MealSlot, food: Food, portion: number) {
     const newItem: MealPlanItem = {
@@ -399,8 +433,10 @@ function DaySheet({ date, onClose }: { date: string; onClose: () => void }) {
               items={plan[slot.id]}
               icon={slot.icon}
               color={slot.color}
+              logged={loggedSlots.has(slot.id)}
               onAdd={() => setPicking(slot.id)}
               onRemove={(idx) => void removeFromSlot(slot.id, idx)}
+              onLog={() => void logSlotAsEaten(slot.id)}
             />
           ))}
 
@@ -458,23 +494,38 @@ function MealSlotCard({
   items,
   icon,
   color,
+  logged,
   onAdd,
   onRemove,
+  onLog,
 }: {
   items: MealPlanItem[]
   icon: SlotIcon
   color: string
+  logged?: boolean
   onAdd: () => void
   onRemove: (index: number) => void
+  onLog?: () => void
 }) {
   const totalKcal = items.reduce((sum, it) => sum + it.kcal, 0)
+  const canLog = !!onLog && items.length > 0 && !logged
   return (
-    <Card padding={14} style={{ marginBottom: 10 }}>
+    <Card padding={14} style={{ marginBottom: 10, background: logged ? 'color-mix(in oklab, #BBF7D0 30%, var(--surface))' : undefined }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: items.length ? 10 : 0 }}>
         <Icon color={color} name={icon} size={22} />
         <span style={{ flex: 1, fontSize: 13, color: 'var(--t-2)', fontWeight: 600 }}>
-          {items.length === 0 ? 'No items' : `${totalKcal} kcal`}
+          {items.length === 0 ? 'No items' : `${totalKcal} kcal${logged ? ' · ✓ eaten' : ''}`}
         </span>
+        {canLog ? (
+          <button
+            aria-label="Log this as eaten"
+            onClick={onLog}
+            type="button"
+            style={{ height: 30, padding: '0 10px', borderRadius: '15px', border: 0, background: 'var(--success)', color: '#fff', cursor: 'pointer', outline: 'none', fontSize: 12, fontWeight: 700 }}
+          >
+            ✓ Log
+          </button>
+        ) : null}
         <button
           aria-label="Add"
           onClick={onAdd}
