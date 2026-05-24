@@ -13,7 +13,7 @@ import { haptic } from '@/lib/haptic'
 import { getDayTotalsRange, getMealsRange, getSleepRange, getWorkoutsRange, saveAnalysis, saveAnalysisUsage, upsertUser } from '@/lib/db'
 import { enablePushNotifications, getNotificationPermission } from '@/lib/notifications'
 import { calculateBmr } from '@/lib/nutrition'
-import type { AnalysisPeriod, GeminiModelId, Sex } from '@/types/domain'
+import type { AnalysisPeriod, GeminiModelId, HealthAnalysis, Sex } from '@/types/domain'
 
 const GEMINI_MODELS: Array<{ id: GeminiModelId; label: string; limit: number }> = [
   { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', limit: 20 },
@@ -34,6 +34,7 @@ export function ProfileRoute() {
   // Edit profile states
   const [isEditing, setIsEditing] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const [saving, setSaving] = useState(false)
   const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriod>('day')
   const [analysisDate, setAnalysisDate] = useState(todayInputValue())
@@ -56,6 +57,9 @@ export function ProfileRoute() {
   const selectedModelMeta = GEMINI_MODELS.find((model) => model.id === analysisModel) ?? GEMINI_MODELS[0]
   const selectedModelUsed = analysisUsage.filter((usage) => usage.model_id === analysisModel).length
   const selectedModelLimitReached = selectedModelUsed >= selectedModelMeta.limit
+  const selectedAnalysisStart = analysisPeriod === 'week' ? addDays(analysisDate, -6) : analysisDate
+  const selectedAnalysis = findAnalysis(analyses, analysisPeriod, selectedAnalysisStart, analysisDate)
+  const latestAnalysis = analyses[0]
   const latestWeight = weights[weights.length - 1]
   const totalToLose = userProfile.weight_start_kg - userProfile.weight_target_kg
   const lost = userProfile.weight_start_kg - (latestWeight?.weight_kg ?? userProfile.weight_start_kg)
@@ -392,7 +396,35 @@ export function ProfileRoute() {
         </Section>
 
         <Section title="Analysis">
-          <div className={styles.settingRow} style={{ alignItems: 'stretch', flexDirection: 'column', gap: 12 }}>
+          <button className={styles.settingRow} onClick={() => setShowAnalysis(true)} type="button" style={{ border: 0, textAlign: 'left', width: '100%' }}>
+            <Icon color="var(--a1)" name="sparkle" />
+            <span className={styles.rowText}>
+              <strong>Analysis view</strong>
+              <span className={styles.rowSub}>
+                {latestAnalysis ? `Latest: ${latestAnalysis.period === 'week' ? '7 days' : 'Daily'} · ${formatRangeLabel(latestAnalysis.start_date, latestAnalysis.end_date)}` : 'Choose a date and analyze your health data.'}
+              </span>
+            </span>
+            <Icon color="var(--t-3)" name="chevron" />
+          </button>
+        </Section>
+
+        <Button onClick={handleSignOut} variant="ghost" style={{ color: '#991B1B', fontWeight: 800 }}>
+          Sign out
+        </Button>
+      </div>
+
+      {/* Edit Profile modal sheet overlay */}
+      {showAnalysis && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'var(--bg)', overflowY: 'auto', padding: '18px 20px 110px' }}>
+          <header className={styles.screenHeader} style={{ marginBottom: 16 }}>
+            <button aria-label="Close analysis" className={styles.iconButton} onClick={() => setShowAnalysis(false)} type="button">
+              <Icon name="x" />
+            </button>
+            <strong>Analysis</strong>
+            <span style={{ width: 40 }} />
+          </header>
+
+          <div style={{ display: 'grid', gap: 12 }}>
             <div className="dq-seg" style={{ width: '100%' }}>
               {(['day', 'week'] as AnalysisPeriod[]).map((period) => (
                 <button
@@ -416,8 +448,8 @@ export function ProfileRoute() {
                 type="date"
                 value={analysisDate}
               />
-      <Button disabled={analyzing || selectedModelLimitReached} onClick={() => void handleRunAnalysis()} style={{ minWidth: 104 }}>
-                {analyzing ? 'Sending...' : 'Analyze'}
+              <Button disabled={analyzing || selectedModelLimitReached} onClick={() => void handleRunAnalysis()} style={{ minWidth: 118 }}>
+                {analyzing ? 'Sending...' : selectedAnalysis ? 'Re-analyze' : 'Analyze'}
               </Button>
             </div>
             <select
@@ -435,27 +467,50 @@ export function ProfileRoute() {
                 )
               })}
             </select>
-            <p className={styles.rowSub}>
+            <p className={styles.rowSub} style={{ margin: 0 }}>
               {selectedModelLimitReached ? 'Selected model reached today limit. ' : ''}
-              {analysisPeriod === 'week' ? `Analyzes ${formatRangeLabel(addDays(analysisDate, -6), analysisDate)}.` : `Analyzes ${analysisDate}.`} Model: {selectedModelMeta.label}.
+              {analysisPeriod === 'week' ? `Viewing ${formatRangeLabel(selectedAnalysisStart, analysisDate)}.` : `Viewing ${analysisDate}.`} Model: {selectedModelMeta.label}.
             </p>
           </div>
-          {analyses.slice(0, 3).map((analysis) => (
-            <div className={styles.settingRow} key={analysis.id} style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 8 }}>
-              <span className={styles.rowText}>
-                <strong>{analysis.period === 'week' ? '7-day analysis' : 'Daily analysis'}</strong>
-                <span className={styles.rowSub}>{formatRangeLabel(analysis.start_date, analysis.end_date)}</span>
-              </span>
-              <p className={styles.subtitle} style={{ margin: 0 }}>{analysis.summary}</p>
-              {analysis.actions.length > 0 ? <p className={styles.rowSub}>Next: {analysis.actions[0]}</p> : null}
-            </div>
-          ))}
-        </Section>
 
-        <Button onClick={handleSignOut} variant="ghost" style={{ color: '#991B1B', fontWeight: 800 }}>
-          Sign out
-        </Button>
-      </div>
+          <div style={{ height: 16 }} />
+          {selectedAnalysis ? (
+            <AnalysisResult analysis={selectedAnalysis} />
+          ) : (
+            <Card padding={18} style={{ textAlign: 'center' }}>
+              <Icon color="var(--t-3)" name="sparkle" />
+              <p className={styles.subtitle} style={{ margin: '10px 0 0' }}>No analysis for this date yet.</p>
+            </Card>
+          )}
+
+          {analyses.length > 0 ? (
+            <>
+              <div style={{ height: 18 }} />
+              <div className={styles.sectionLabel}><span className="dq-eyebrow">Recent</span></div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {analyses.slice(0, 8).map((analysis) => (
+                  <button
+                    className={styles.settingRow}
+                    key={analysis.id}
+                    onClick={() => {
+                      setAnalysisPeriod(analysis.period)
+                      setAnalysisDate(analysis.end_date)
+                    }}
+                    type="button"
+                    style={{ border: 0, textAlign: 'left', width: '100%' }}
+                  >
+                    <span className={styles.rowText}>
+                      <strong>{analysis.period === 'week' ? '7-day analysis' : 'Daily analysis'}</strong>
+                      <span className={styles.rowSub}>{formatRangeLabel(analysis.start_date, analysis.end_date)}</span>
+                    </span>
+                    <Icon color="var(--t-3)" name="chevron" />
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
 
       {/* Edit Profile modal sheet overlay */}
       {isEditing && (
@@ -647,6 +702,41 @@ function parseAnalysisResponse(raw: string): { error?: string; summary?: string;
   } catch {
     return { error: raw.slice(0, 120) || 'Analysis failed' }
   }
+}
+
+function findAnalysis(analyses: HealthAnalysis[], period: AnalysisPeriod, startDate: string, endDate: string): HealthAnalysis | undefined {
+  return analyses.find((analysis) => analysis.period === period && analysis.start_date === startDate && analysis.end_date === endDate)
+}
+
+function AnalysisResult({ analysis }: { analysis: HealthAnalysis }) {
+  const modelLabel = GEMINI_MODELS.find((model) => model.id === analysis.model_id)?.label
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Card padding={16}>
+        <p className="dq-eyebrow">{analysis.period === 'week' ? '7 days' : 'Daily'} · {formatRangeLabel(analysis.start_date, analysis.end_date)}</p>
+        <strong className="dq-num" style={{ fontSize: 24 }}>Summary</strong>
+        <p className={styles.subtitle} style={{ margin: '8px 0 0' }}>{analysis.summary}</p>
+        {modelLabel ? <p className={styles.rowSub} style={{ marginTop: 10 }}>{modelLabel}</p> : null}
+      </Card>
+      <AnalysisBullets title="Wins" items={analysis.wins} />
+      <AnalysisBullets title="Watchouts" items={analysis.risks} />
+      <AnalysisBullets title="Next Actions" items={analysis.actions} />
+    </div>
+  )
+}
+
+function AnalysisBullets({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null
+  return (
+    <Card padding={16}>
+      <p className="dq-eyebrow">{title}</p>
+      <ul style={{ display: 'grid', gap: 8, margin: '10px 0 0', paddingLeft: 18 }}>
+        {items.map((item) => (
+          <li key={item} style={{ color: 'var(--t-2)', fontSize: 13, lineHeight: 1.45 }}>{item}</li>
+        ))}
+      </ul>
+    </Card>
+  )
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
