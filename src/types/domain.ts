@@ -64,6 +64,7 @@ export type HealthAnalysis = {
   risks: string[]
   actions: string[]
   created_at?: Date
+  updated_at?: Date
 }
 
 export type MealItem = {

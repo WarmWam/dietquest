@@ -169,6 +169,7 @@ function deserializeAnalysis(snapshot: QueryDocumentSnapshot<DocumentData>): Hea
     risks: Array.isArray(data.risks) ? data.risks.map(String) : [],
     actions: Array.isArray(data.actions) ? data.actions.map(String) : [],
     created_at: fromTimestamp(data.created_at),
+    updated_at: fromTimestamp(data.updated_at),
   }
 }
 
@@ -412,14 +413,15 @@ export async function getWorkoutsRange(uid: string, startDate: string, endDate: 
   return snapshot.docs.map(deserializeWorkout)
 }
 
-export async function saveAnalysis(uid: string, analysis: Omit<HealthAnalysis, 'id' | 'created_at'>): Promise<string> {
-  const docRef = await addDoc(userCollection(uid, 'analyses'), { ...analysis, created_at: serverTimestamp() })
-  return docRef.id
+export async function saveAnalysis(uid: string, analysis: Omit<HealthAnalysis, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
+  const id = `${analysis.period}_${analysis.start_date}_${analysis.end_date}`
+  await setDoc(doc(db, 'users', uid, 'analyses', id), { ...analysis, updated_at: serverTimestamp() }, { merge: true })
+  return id
 }
 
 export function watchAnalyses(uid: string, cb: WatchCallback<HealthAnalysis[]>): Unsubscribe {
   return onSnapshot(
-    query(userCollection(uid, 'analyses'), orderBy('created_at', 'desc')),
+    query(userCollection(uid, 'analyses'), orderBy('updated_at', 'desc')),
     (snapshot) => cb({ data: snapshot.docs.map(deserializeAnalysis), error: null }),
     listenerError(`users/${uid}/analyses`, [], cb),
   )
