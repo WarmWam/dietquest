@@ -269,7 +269,8 @@ export function ProfileRoute() {
         },
         body: JSON.stringify(payload),
       })
-      const result = await response.json()
+      const rawResult = await response.text()
+      const result = rawResult ? parseAnalysisResponse(rawResult) : {}
       if (!response.ok) throw new Error(result.error || 'Analysis failed')
 
       await saveAnalysis(user.uid, {
@@ -606,6 +607,14 @@ function toDateKey(date: Date): string {
 
 function formatRangeLabel(startDate: string, endDate: string): string {
   return startDate === endDate ? startDate : `${startDate} to ${endDate}`
+}
+
+function parseAnalysisResponse(raw: string): { error?: string; summary?: string; wins?: string[]; risks?: string[]; actions?: string[] } {
+  try {
+    return JSON.parse(raw) as { error?: string; summary?: string; wins?: string[]; risks?: string[]; actions?: string[] }
+  } catch {
+    return { error: raw.slice(0, 120) || 'Analysis failed' }
+  }
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

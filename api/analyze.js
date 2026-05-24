@@ -1,4 +1,10 @@
-const GEMINI_MODEL = 'gemini-2.5-flash'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash'
+
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify(payload))
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -58,20 +64,16 @@ function normalizeResult(text) {
   }
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.statusCode = 405
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: 'Method not allowed' }))
+    sendJson(res, 405, { error: 'Method not allowed' })
     return
   }
 
   try {
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
     if (!apiKey) {
-      res.statusCode = 503
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Analysis API is not configured yet.' }))
+      sendJson(res, 503, { error: 'Analysis API is not configured yet.' })
       return
     }
 
@@ -79,17 +81,13 @@ module.exports = async function handler(req, res) {
     const idToken = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : ''
     const uid = idToken ? await verifyFirebaseToken(idToken) : null
     if (!uid) {
-      res.statusCode = 401
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Sign in required.' }))
+      sendJson(res, 401, { error: 'Sign in required.' })
       return
     }
 
     const body = await readBody(req)
     if (body.uid !== uid) {
-      res.statusCode = 403
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'Forbidden.' }))
+      sendJson(res, 403, { error: 'Forbidden.' })
       return
     }
 
@@ -116,13 +114,9 @@ module.exports = async function handler(req, res) {
     const json = await geminiResponse.json()
     const text = json.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || ''
     const result = normalizeResult(text)
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify(result))
+    sendJson(res, 200, result)
   } catch (error) {
     console.error('[analysis]', error)
-    res.statusCode = 500
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: 'Analysis failed. Try again.' }))
+    sendJson(res, 500, { error: 'Analysis failed. Try again.' })
   }
 }
