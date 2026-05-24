@@ -394,9 +394,15 @@ function HomeFullContent({
             </label>
             <span className="dq-eyebrow">{formatDayMonth(selectedDate)}</span>
           </span>
-          <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
-            {Math.max(settings.daily_kcal_target - liveKcal, 0)} kcal left
-          </span>
+          {liveKcal > settings.daily_kcal_target ? (
+            <span style={{ color: 'var(--danger)', fontSize: 12, fontWeight: 800 }}>
+              {liveKcal - settings.daily_kcal_target} kcal over
+            </span>
+          ) : (
+            <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
+              {settings.daily_kcal_target - liveKcal} kcal left
+            </span>
+          )}
         </div>
         <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} />
       </Card>
@@ -531,6 +537,7 @@ function PlanMealCard({
   const kcal = items.reduce((sum, item) => sum + item.kcal, 0)
   const actualItems = loggedMeals.flatMap((meal) => meal.items)
   const planNames = new Set(items.map((it) => it.food_name))
+  const actualNames = new Set(actualItems.map((it) => it.name))
   // "Extras" are logged items not in plan
   const actualExtras = actualItems.filter((it) => !planNames.has(it.name))
   const actualKcal = loggedMeals.reduce((sum, meal) => sum + meal.total_kcal, 0)
@@ -562,12 +569,24 @@ function PlanMealCard({
 
       {items.length > 0 && (
         <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
-          {items.map((item) => (
-            <div key={`plan-${item.food_id}-${item.food_name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{item.food_name}</span>
-              <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{item.portion}× · {item.kcal} kcal</span>
-            </div>
-          ))}
+          {items.map((item) => {
+            const skipped = done && !actualNames.has(item.food_name)
+            return (
+              <div
+                key={`plan-${item.food_id}-${item.food_name}`}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  opacity: skipped ? 0.55 : 1,
+                  textDecoration: skipped ? 'line-through' : 'none',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 700, color: skipped ? 'var(--t-3)' : 'var(--t-1)' }}>{item.food_name}</span>
+                <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{item.portion}× · {item.kcal} kcal</span>
+              </div>
+            )
+          })}
         </div>
       )}
 
