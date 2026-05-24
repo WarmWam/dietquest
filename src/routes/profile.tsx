@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, ImageSlot, Skeleton, Stepper } from '@/components/primitives'
 import { DEFAULT_PROFILE } from '@/data/defaults'
+import { useAnalyses } from '@/hooks/useAnalyses'
 import { useAuth } from '@/hooks/useAuth'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
 import { toast } from '@/stores/toastStore'
 import { haptic } from '@/lib/haptic'
-import { upsertUser } from '@/lib/db'
+import { getDayTotalsRange, getMealsRange, getSleepRange, getWorkoutsRange, saveAnalysis, upsertUser } from '@/lib/db'
 import { enablePushNotifications, getNotificationPermission } from '@/lib/notifications'
 import { calculateBmr } from '@/lib/nutrition'
-import type { Sex } from '@/types/domain'
+import type { AnalysisPeriod, Sex } from '@/types/domain'
 
 
 export function ProfileRoute() {
@@ -26,6 +27,9 @@ export function ProfileRoute() {
   const [isEditing, setIsEditing] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriod>('day')
+  const [analysisDate, setAnalysisDate] = useState(todayInputValue())
+  const [analyzing, setAnalyzing] = useState(false)
   const [enablingPush, setEnablingPush] = useState(false)
   const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission())
   const [notifications, setNotifications] = useState({
@@ -38,6 +42,7 @@ export function ProfileRoute() {
 
   // Goal progress
   const { data: weights, error: weightsError } = useWeights(60)
+  const { data: analyses, error: analysesError } = useAnalyses()
   const latestWeight = weights[weights.length - 1]
   const totalToLose = userProfile.weight_start_kg - userProfile.weight_target_kg
   const lost = userProfile.weight_start_kg - (latestWeight?.weight_kg ?? userProfile.weight_start_kg)
@@ -52,8 +57,8 @@ export function ProfileRoute() {
   const [months, setMonths] = useState(6)
 
   useEffect(() => {
-    if (userError || weightsError) toast.error("Couldn't load profile data. Try again.")
-  }, [userError, weightsError])
+    if (userError || weightsError || analysesError) toast.error("Couldn't load profile data. Try again.")
+  }, [userError, weightsError, analysesError])
 
   useEffect(() => {
     if (profile?.profile) {
@@ -202,6 +207,91 @@ export function ProfileRoute() {
     haptic([20, 40, 20])
   }
 
+  async function handleRunAnalysis() {
+    if (!user || analyzing) return
+    setAnalyzing(true)
+    try {
+      const endDate = analysisDate
+      const dates = analysisPeriod === 'week' ? getDateRange(addDays(endDate, -6), endDate) : [endDate]
+      const startDate = dates[0]
+      const [totals, meals, workouts, sleeps] = await Promise.all([
+        getDayTotalsRange(user.uid, dates),
+        getMealsRange(user.uid, startDate, endDate),
+        getWorkoutsRange(user.uid, startDate, endDate),
+        getSleepRange(user.uid, dates),
+      ])
+      const idToken = await user.getIdToken()
+      const payload = {
+        uid: user.uid,
+        period: analysisPeriod,
+        start_date: startDate,
+        end_date: endDate,
+        targets: {
+          kcal: profile?.settings?.daily_kcal_target ?? 0,
+          protein_g: profile?.settings?.daily_protein_target ?? 0,
+          water_ml: 3000,
+          sleep_hours: 8,
+        },
+        days: dates.map((date) => ({
+          date,
+          totals: totals.find((item) => item.date === date)?.totals,
+          meals: meals
+            .filter((meal) => meal.date === date)
+            .map((meal) => ({
+              type: meal.meal_type,
+              total_kcal: meal.total_kcal,
+              total_protein_g: meal.total_protein_g,
+              items: meal.items.map((item) => ({
+                name: item.name,
+                portion: item.portion,
+                kcal: item.kcal,
+                protein_g: item.protein_g,
+              })),
+            })),
+          workouts: workouts
+            .filter((workout) => workout.date === date)
+            .map((workout) => ({ type: workout.type, kcal_burned: workout.kcal_burned, duration_min: workout.duration_min })),
+          sleep: sleeps.find((sleep) => sleep.date === date)
+            ? {
+                duration_min: sleeps.find((sleep) => sleep.date === date)?.duration_min,
+                bedtime: sleeps.find((sleep) => sleep.date === date)?.bedtime,
+                wake_time: sleeps.find((sleep) => sleep.date === date)?.wake_time,
+              }
+            : null,
+        })),
+      }
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Analysis failed')
+
+      await saveAnalysis(user.uid, {
+        period: analysisPeriod,
+        start_date: startDate,
+        end_date: endDate,
+        summary: result.summary,
+        wins: result.wins ?? [],
+        risks: result.risks ?? [],
+        actions: result.actions ?? [],
+      })
+      toast.success('Analysis saved.')
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error(err instanceof Error ? err.message : "Couldn't analyze this range.")
+      haptic([20, 40, 20])
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   const pushStatus =
     pushPermission === 'granted'
       ? 'Enabled on this device'
@@ -280,6 +370,51 @@ export function ProfileRoute() {
               >
                 <span className={styles.switchKnob} />
               </button>
+            </div>
+          ))}
+        </Section>
+
+        <Section title="Analysis">
+          <div className={styles.settingRow} style={{ alignItems: 'stretch', flexDirection: 'column', gap: 12 }}>
+            <div className="dq-seg" style={{ width: '100%' }}>
+              {(['day', 'week'] as AnalysisPeriod[]).map((period) => (
+                <button
+                  className="dq-seg-item"
+                  data-active={analysisPeriod === period}
+                  key={period}
+                  onClick={() => setAnalysisPeriod(period)}
+                  type="button"
+                  style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
+                >
+                  {period === 'day' ? 'Day' : '7 days'}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+              <input
+                aria-label="Analysis date"
+                max={todayInputValue()}
+                onChange={(event) => setAnalysisDate(event.target.value)}
+                style={dateInputStyle}
+                type="date"
+                value={analysisDate}
+              />
+              <Button disabled={analyzing} onClick={() => void handleRunAnalysis()} style={{ minWidth: 104 }}>
+                {analyzing ? 'Sending...' : 'Analyze'}
+              </Button>
+            </div>
+            <p className={styles.rowSub}>
+              {analysisPeriod === 'week' ? `Analyzes ${formatRangeLabel(addDays(analysisDate, -6), analysisDate)}.` : `Analyzes ${analysisDate}.`}
+            </p>
+          </div>
+          {analyses.slice(0, 3).map((analysis) => (
+            <div className={styles.settingRow} key={analysis.id} style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 8 }}>
+              <span className={styles.rowText}>
+                <strong>{analysis.period === 'week' ? '7-day analysis' : 'Daily analysis'}</strong>
+                <span className={styles.rowSub}>{formatRangeLabel(analysis.start_date, analysis.end_date)}</span>
+              </span>
+              <p className={styles.subtitle} style={{ margin: 0 }}>{analysis.summary}</p>
+              {analysis.actions.length > 0 ? <p className={styles.rowSub}>Next: {analysis.actions[0]}</p> : null}
             </div>
           ))}
         </Section>
@@ -431,6 +566,47 @@ export function ProfileRoute() {
 }
 
 
+
+const dateInputStyle = {
+  background: 'var(--bg-soft)',
+  border: 0,
+  borderRadius: 'var(--r-md)',
+  color: 'var(--t-1)',
+  font: 'inherit',
+  fontSize: 13,
+  fontWeight: 800,
+  outline: 'none',
+  padding: '10px 12px',
+  width: '100%',
+}
+
+function todayInputValue(): string {
+  return toDateKey(new Date())
+}
+
+function addDays(dateKey: string, days: number): string {
+  const date = new Date(`${dateKey}T00:00:00`)
+  date.setDate(date.getDate() + days)
+  return toDateKey(date)
+}
+
+function getDateRange(startDate: string, endDate: string): string[] {
+  const out: string[] = []
+  let cursor = startDate
+  while (cursor <= endDate) {
+    out.push(cursor)
+    cursor = addDays(cursor, 1)
+  }
+  return out
+}
+
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatRangeLabel(startDate: string, endDate: string): string {
+  return startDate === endDate ? startDate : `${startDate} to ${endDate}`
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

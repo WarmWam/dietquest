@@ -22,7 +22,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { daysAgoKey } from '@/lib/dates'
-import type { DayTotals, Food, MealLog, MealPlan, MealPlanItem, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog, WorkoutPlan } from '@/types/domain'
+import type { DayTotals, Food, HealthAnalysis, MealLog, MealPlan, MealPlanItem, MealPreset, SleepLog, User, WaterLog, WeightLog, WorkoutLog, WorkoutPlan } from '@/types/domain'
 import { emptyMealPlan, normalizeFoodCategory } from '@/types/domain'
 
 type WatchState<T> = {
@@ -157,6 +157,21 @@ function deserializeSleep(id: string, data: DocumentData): SleepLog {
   }
 }
 
+function deserializeAnalysis(snapshot: QueryDocumentSnapshot<DocumentData>): HealthAnalysis {
+  const data = snapshot.data()
+  return {
+    id: snapshot.id,
+    period: data.period === 'week' ? 'week' : 'day',
+    start_date: String(data.start_date ?? ''),
+    end_date: String(data.end_date ?? ''),
+    summary: String(data.summary ?? ''),
+    wins: Array.isArray(data.wins) ? data.wins.map(String) : [],
+    risks: Array.isArray(data.risks) ? data.risks.map(String) : [],
+    actions: Array.isArray(data.actions) ? data.actions.map(String) : [],
+    created_at: fromTimestamp(data.created_at),
+  }
+}
+
 function deserializePreset(snapshot: QueryDocumentSnapshot<DocumentData>): MealPreset {
   const data = snapshot.data()
   return {
@@ -273,6 +288,13 @@ export function watchMeals(uid: string, date: string, cb: WatchCallback<MealLog[
   )
 }
 
+export async function getMealsRange(uid: string, startDate: string, endDate: string): Promise<MealLog[]> {
+  const snapshot = await getDocs(
+    query(userCollection(uid, 'meals'), where('date', '>=', startDate), where('date', '<=', endDate), orderBy('date', 'asc'))
+  )
+  return snapshot.docs.map(deserializeMeal)
+}
+
 export async function deleteMeal(uid: string, mealId: string): Promise<void> {
   // Read meal first to decrement day totals atomically. If meal doesn't
   // exist (already deleted), just no-op.
@@ -380,6 +402,26 @@ export function watchSleep(uid: string, date: string, cb: WatchCallback<SleepLog
     doc(db, 'users', uid, 'sleep', date),
     (snapshot) => cb({ data: snapshot.exists() ? deserializeSleep(snapshot.id, snapshot.data()) : null, error: null }),
     listenerError(`users/${uid}/sleep/${date}`, null, cb),
+  )
+}
+
+export async function getWorkoutsRange(uid: string, startDate: string, endDate: string): Promise<WorkoutLog[]> {
+  const snapshot = await getDocs(
+    query(userCollection(uid, 'workouts'), where('date', '>=', startDate), where('date', '<=', endDate), orderBy('date', 'asc'))
+  )
+  return snapshot.docs.map(deserializeWorkout)
+}
+
+export async function saveAnalysis(uid: string, analysis: Omit<HealthAnalysis, 'id' | 'created_at'>): Promise<string> {
+  const docRef = await addDoc(userCollection(uid, 'analyses'), { ...analysis, created_at: serverTimestamp() })
+  return docRef.id
+}
+
+export function watchAnalyses(uid: string, cb: WatchCallback<HealthAnalysis[]>): Unsubscribe {
+  return onSnapshot(
+    query(userCollection(uid, 'analyses'), orderBy('created_at', 'desc')),
+    (snapshot) => cb({ data: snapshot.docs.map(deserializeAnalysis), error: null }),
+    listenerError(`users/${uid}/analyses`, [], cb),
   )
 }
 

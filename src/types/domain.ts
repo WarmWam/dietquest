@@ -52,6 +52,20 @@ export type DayTotals = {
   }
 }
 
+export type AnalysisPeriod = 'day' | 'week'
+
+export type HealthAnalysis = {
+  id: string
+  period: AnalysisPeriod
+  start_date: string
+  end_date: string
+  summary: string
+  wins: string[]
+  risks: string[]
+  actions: string[]
+  created_at?: Date
+}
+
 export type MealItem = {
   name: string
   portion: number
