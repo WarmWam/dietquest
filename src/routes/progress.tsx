@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Card, Icon, Skeleton, type IconName } from '@/components/primitives'
@@ -8,9 +8,10 @@ import { useDayTotals } from '@/hooks/useDayTotals'
 import { useMeals } from '@/hooks/useMeals'
 import { useUser } from '@/hooks/useUser'
 import { useWeights } from '@/hooks/useWeights'
+import { useMonthWorkoutPlans } from '@/hooks/useWorkoutPlan'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { toast } from '@/stores/toastStore'
-import type { MealType } from '@/types/domain'
+import type { MealType, WorkoutLog, WorkoutPlan, WorkoutPlanType } from '@/types/domain'
 
 type MealSlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
@@ -341,35 +342,29 @@ function barZoneColor(kcal: number, target: number): { stroke: string; number: s
 
 function ActivityTab() {
   const { data: workouts, error: workoutsError } = useWorkouts(90)
+  const monthKeys = getRecentMonthKeys(4)
+  const month0 = useMonthWorkoutPlans(monthKeys[0])
+  const month1 = useMonthWorkoutPlans(monthKeys[1])
+  const month2 = useMonthWorkoutPlans(monthKeys[2])
+  const month3 = useMonthWorkoutPlans(monthKeys[3])
   const activityWorkouts = workouts.filter((workout) => workout.kcal_burned >= 20)
-  const burned = activityWorkouts.reduce((sum, workout) => sum + workout.kcal_burned, 0)
+  const workoutPlans = [month0.data, month1.data, month2.data, month3.data]
+    .flat()
+    .filter((plan) => plan.date >= daysAgoKey(90) && plan.type !== 'rest')
+  const planByDate = new Map(workoutPlans.map((plan) => [plan.date, plan]))
+  const actualKcalByDate = groupWorkoutKcalByDate(activityWorkouts)
+  const workoutsByDate = groupWorkoutsByDate(activityWorkouts)
+  const activityDateKeys = new Set([...workoutPlans.map((plan) => plan.date), ...activityWorkouts.map((workout) => workout.date)])
+  const typeStats = buildActivityTypeStats(activityDateKeys, planByDate, workoutsByDate)
+  const bestKcal = Math.max(...Array.from(actualKcalByDate.values()), 0)
 
   // Build heatmap: 13 weeks × 7 days = 91 cells representing last 91 days
   const today = new Date()
-  const workoutDates = new Set(activityWorkouts.map((w) => w.date))
-
-  // Compute best week (most burned kcal in any 7-day window)
-  function computeBestWeek(): number {
-    if (activityWorkouts.length === 0) return 0
-    let best = 0
-    for (let weekStart = 0; weekStart < 13; weekStart++) {
-      let weekKcal = 0
-      for (let d = 0; d < 7; d++) {
-        const dayOffset = weekStart * 7 + d
-        const dateKey = daysAgoKey(90 - dayOffset)
-        const dayWorkouts = activityWorkouts.filter((w) => w.date === dateKey)
-        weekKcal += dayWorkouts.reduce((s, w) => s + w.kcal_burned, 0)
-      }
-      best = Math.max(best, weekKcal)
-    }
-    return best
-  }
-
-  const bestWeekKcal = computeBestWeek()
+  const planError = month0.error || month1.error || month2.error || month3.error
 
   useEffect(() => {
-    if (workoutsError) toast.error("Couldn't load activity progress. Try again.")
-  }, [workoutsError])
+    if (workoutsError || planError) toast.error("Couldn't load activity progress. Try again.")
+  }, [workoutsError, planError])
 
   return (
     <>
@@ -391,20 +386,79 @@ function ActivityTab() {
                 const cellDate = new Date(today)
                 cellDate.setDate(cellDate.getDate() - dayOffset)
                 const cellKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`
-                const hasWorkout = workoutDates.has(cellKey)
-                return <span className={styles.heatCell} key={day} style={{ opacity: hasWorkout ? 0.8 : 0.12 }} />
+                const cellStyle = getActivityCellStyle(planByDate.get(cellKey), actualKcalByDate.get(cellKey) ?? 0)
+                return <span className={styles.heatCell} key={day} style={cellStyle} />
               })}
             </div>
           ))}
         </div>
       </div>
       <div className={styles.metricGrid}>
-        <Metric label="Walks" value={`${activityWorkouts.length}`} />
-        <Metric label="Burned" value={`${burned}`} />
-        <Metric label="Best week" value={bestWeekKcal ? `${bestWeekKcal} kcal` : '—'} />
+        <Metric label="Incline days" value={formatActivityDays(typeStats.incline_walk, typeStats.total)} />
+        <Metric label="Bodyweight" value={formatActivityDays(typeStats.bodyweight, typeStats.total)} />
+        <Metric label="Other" value={formatActivityDays(typeStats.other, typeStats.total)} />
+        <Metric label="Best kcal" value={bestKcal ? `${bestKcal}` : '0'} />
       </div>
     </>
   )
+}
+
+function getRecentMonthKeys(count: number): string[] {
+  const today = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth() - index, 1)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  })
+}
+
+function groupWorkoutKcalByDate(workouts: WorkoutLog[]): Map<string, number> {
+  const out = new Map<string, number>()
+  workouts.forEach((workout) => {
+    out.set(workout.date, (out.get(workout.date) ?? 0) + workout.kcal_burned)
+  })
+  return out
+}
+
+function groupWorkoutsByDate(workouts: WorkoutLog[]): Map<string, WorkoutLog[]> {
+  const out = new Map<string, WorkoutLog[]>()
+  workouts.forEach((workout) => {
+    out.set(workout.date, [...(out.get(workout.date) ?? []), workout])
+  })
+  return out
+}
+
+function buildActivityTypeStats(
+  dateKeys: Set<string>,
+  planByDate: Map<string, WorkoutPlan>,
+  workoutsByDate: Map<string, WorkoutLog[]>,
+): Record<Exclude<WorkoutPlanType, 'rest'>, number> & { total: number } {
+  const stats = { incline_walk: 0, bodyweight: 0, other: 0, total: 0 }
+  dateKeys.forEach((dateKey) => {
+    const plannedType = planByDate.get(dateKey)?.type
+    const loggedType = workoutsByDate.get(dateKey)?.[0]?.type
+    const type = plannedType && plannedType !== 'rest' ? plannedType : loggedType
+    if (!type) return
+    stats[type] += 1
+    stats.total += 1
+  })
+  return stats
+}
+
+function formatActivityDays(count: number, total: number): string {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0
+  return `${count}d (${pct}%)`
+}
+
+function getActivityCellStyle(plan: WorkoutPlan | undefined, actualKcal: number): CSSProperties {
+  if (plan) {
+    const target = Math.max(plan.kcal_target ?? 0, 0)
+    const ratio = target > 0 ? actualKcal / target : actualKcal > 0 ? 1 : 0
+    if (ratio >= 1) return { background: '#BBF7D0', opacity: 1, boxShadow: '0 0 12px rgba(34, 197, 94, 0.24)' }
+    if (ratio >= 0.7) return { background: '#FEF3C7', opacity: 1, boxShadow: '0 0 12px rgba(245, 158, 11, 0.22)' }
+    return { background: '#FECACA', opacity: 1, boxShadow: '0 0 12px rgba(239, 68, 68, 0.22)' }
+  }
+  if (actualKcal > 0) return { background: '#DDD6FE', opacity: 0.9, boxShadow: '0 0 12px rgba(99, 102, 241, 0.2)' }
+  return { background: 'var(--bg-soft)', opacity: 1, boxShadow: 'none' }
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

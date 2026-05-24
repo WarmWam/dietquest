@@ -124,6 +124,10 @@ function LibraryTab() {
         />
       </Card>
 
+      <Button icon="plus" onClick={() => setEditing('new')} variant="secondary" style={{ marginBottom: 12 }}>
+        Add food
+      </Button>
+
       <div className="dq-h-scroll" style={{ margin: '0 -20px 14px 0', paddingRight: 20 }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <CategoryChip active={filter === 'all'} label="All" onClick={() => setFilter('all')} />
@@ -164,11 +168,6 @@ function LibraryTab() {
           ))}
         </div>
       )}
-
-      <div style={{ height: 14 }} />
-      <Button icon="plus" onClick={() => setEditing('new')} variant="secondary">
-        Add food
-      </Button>
 
       {editing && (
         <FoodEditSheet
