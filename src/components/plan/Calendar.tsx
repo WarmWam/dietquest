@@ -108,14 +108,10 @@ export function CalendarTab() {
   for (let d = 1; d <= daysInMonth; d += 1) cells.push({ day: d, date: formatDateKey(year, month, d) })
   while (cells.length < 42) cells.push(null)
 
-  const todayMeal = mealMap.get(todayKey) ?? null
-  const todayWorkout = workoutMap.get(todayKey) ?? null
   const [bulk, setBulk] = useState<null | 'meal' | 'workout'>(null)
 
   return (
     <>
-      <TodayPlanCard meal={todayMeal} workout={todayWorkout} onOpen={() => setSelectedDate(todayKey)} />
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
         <button
           onClick={() => setBulk('workout')}
@@ -226,80 +222,6 @@ export function CalendarTab() {
   )
 }
 
-function TodayPlanCard({
-  meal,
-  workout,
-  onOpen,
-}: {
-  meal: MealPlan | null
-  workout: WorkoutPlan | null
-  onOpen: () => void
-}) {
-  const hasAny = !!meal && meal.totals.kcal > 0
-  const items = meal
-    ? ([
-        { slot: 'breakfast', icon: 'sunrise' as const, color: '#FB923C', items: meal.breakfast },
-        { slot: 'lunch', icon: 'sun' as const, color: '#F59E0B', items: meal.lunch },
-        { slot: 'dinner', icon: 'moon' as const, color: '#6366F1', items: meal.dinner },
-        { slot: 'snack', icon: 'snack' as const, color: '#EC4899', items: meal.snack },
-      ]).filter((s) => s.items.length > 0)
-    : []
-  const workoutMeta = workout ? WORKOUT_PLAN_TYPES.find((t) => t.id === workout.type) : null
-
-  return (
-    <Card padding={16} raised style={{ marginBottom: 14 }}>
-      <button
-        onClick={onOpen}
-        type="button"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          border: 0,
-          background: 'transparent',
-          cursor: 'pointer',
-          outline: 'none',
-          padding: 0,
-          marginBottom: hasAny || workout ? 12 : 0,
-        }}
-      >
-        <span style={{ textAlign: 'left' }}>
-          <p className="dq-eyebrow">Today</p>
-          {hasAny ? (
-            <strong className="dq-num" style={{ fontSize: 22 }}>
-              {meal!.totals.kcal} kcal · {meal!.totals.protein_g}g P
-            </strong>
-          ) : (
-            <strong style={{ fontSize: 15 }}>No plan yet · tap to add</strong>
-          )}
-        </span>
-        <Icon color="var(--a1)" name="chevron" />
-      </button>
-
-      {items.map((slot) => (
-        <div key={slot.slot} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
-          <Icon color={slot.color} name={slot.icon} size={22} />
-          <span style={{ flex: 1, fontSize: 13, color: 'var(--t-1)', lineHeight: 1.4 }}>
-            {slot.items.map((it) => `${it.food_name}${it.portion !== 1 ? ` ×${it.portion}` : ''}`).join(', ')}
-          </span>
-          <span className="dq-pill" style={{ alignSelf: 'center' }}>
-            {slot.items.reduce((s, it) => s + it.kcal, 0)} kcal
-          </span>
-        </div>
-      ))}
-
-      {workout && workout.type !== 'rest' ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
-          <Icon color="var(--success)" name={(workoutMeta?.icon as any) ?? 'walk'} size={22} />
-          <span style={{ flex: 1, fontSize: 13, color: 'var(--t-1)' }}>
-            {workoutMeta?.label ?? workout.type}{workout.kcal_target ? ` · ${workout.kcal_target} kcal` : ''}
-          </span>
-        </div>
-      ) : null}
-    </Card>
-  )
-}
 
 // ─────────────────────────────────────────────────────────────
 // Day sheet — meals + workout planner
