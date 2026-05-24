@@ -8,22 +8,28 @@ type RingProps = {
   sub?: string
 }
 
-const ZONE_GREEN = '#16A34A'
-const ZONE_YELLOW = '#F59E0B'
-const ZONE_RED = '#DC2626'
-
-function calorieColor(pct: number): string {
-  // Eating budget: under 70% = good, 70-99% = warning, >=100% = over
-  if (pct >= 1) return ZONE_RED
-  if (pct >= 0.7) return ZONE_YELLOW
-  return ZONE_GREEN
+// Pastel strokes (rings) + bold tints (numbers)
+const STROKE = {
+  green: '#86EFAC',
+  yellow: '#FCD34D',
+  red: '#FCA5A5',
+}
+const NUMBER = {
+  green: '#16A34A',
+  yellow: '#D97706',
+  red: '#DC2626',
 }
 
-function proteinColor(pct: number): string {
-  // Protein intake: under 70% = need more, 70-99% = close, >=100% = hit target
-  if (pct >= 1) return ZONE_GREEN
-  if (pct >= 0.7) return ZONE_YELLOW
-  return ZONE_RED
+function calorieZone(pct: number) {
+  if (pct >= 1) return { stroke: STROKE.red, number: NUMBER.red }
+  if (pct >= 0.7) return { stroke: STROKE.yellow, number: NUMBER.yellow }
+  return { stroke: STROKE.green, number: NUMBER.green }
+}
+
+function proteinZone(pct: number) {
+  if (pct >= 1) return { stroke: STROKE.green, number: NUMBER.green }
+  if (pct >= 0.7) return { stroke: STROKE.yellow, number: NUMBER.yellow }
+  return { stroke: STROKE.red, number: NUMBER.red }
 }
 
 export function Ring({
@@ -35,18 +41,20 @@ export function Ring({
   label = 'eaten',
   sub = 'kcal',
 }: RingProps) {
-  const stroke = 16
-  const innerStroke = 8
+  // Slightly slimmer rings + tighter gap → more breathing room for the
+  // centered text so PROTEIN row doesn't kiss the inner stroke.
+  const stroke = 14
+  const innerStroke = 6
   const r1 = (size - stroke) / 2
-  const r2 = r1 - stroke - 6
+  const r2 = r1 - stroke - 3
   const c1 = 2 * Math.PI * r1
   const c2 = 2 * Math.PI * r2
   const rawCalPct = target > 0 ? eaten / target : 0
   const rawProteinPct = proteinTarget > 0 ? protein / proteinTarget : 0
   const pct = Math.min(rawCalPct, 1)
   const pctProtein = Math.min(rawProteinPct, 1)
-  const calStroke = calorieColor(rawCalPct)
-  const proteinStroke = proteinColor(rawProteinPct)
+  const cal = calorieZone(rawCalPct)
+  const prot = proteinZone(rawProteinPct)
 
   return (
     <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
@@ -57,7 +65,7 @@ export function Ring({
           cy={size / 2}
           r={r1}
           fill="none"
-          stroke={calStroke}
+          stroke={cal.stroke}
           strokeDasharray={c1}
           strokeDashoffset={c1 * (1 - pct)}
           strokeLinecap="round"
@@ -69,7 +77,7 @@ export function Ring({
           cy={size / 2}
           r={r2}
           fill="none"
-          stroke={proteinStroke}
+          stroke={prot.stroke}
           strokeDasharray={c2}
           strokeDashoffset={c2 * (1 - pctProtein)}
           strokeLinecap="round"
@@ -88,16 +96,16 @@ export function Ring({
           textAlign: 'center',
         }}
       >
-        <div className="dq-eyebrow">{label}</div>
-        <div className="dq-num" style={{ fontSize: 48, fontWeight: 800, lineHeight: 1 }}>
+        <div className="dq-eyebrow" style={{ color: 'var(--t-3)' }}>{label}</div>
+        <div className="dq-num" style={{ fontSize: 46, fontWeight: 800, lineHeight: 1, color: cal.number }}>
           {eaten.toLocaleString()}
         </div>
-        <div style={{ color: 'var(--t-2)', fontSize: 13, fontWeight: 500 }}>
+        <div style={{ color: 'var(--t-2)', fontSize: 12, fontWeight: 500 }}>
           / {target.toLocaleString()} {sub}
         </div>
-        <div style={{ color: proteinStroke, display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, marginTop: 8 }}>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: proteinStroke }} />
-          PROTEIN {Math.round(protein)}/{Math.round(proteinTarget)}g
+        <div style={{ color: 'var(--t-2)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, marginTop: 6 }}>
+          <span style={{ width: 5, height: 5, borderRadius: 999, background: 'var(--t-2)' }} />
+          PROTEIN&nbsp;<span style={{ color: prot.number, fontWeight: 800 }}>{Math.round(protein)}</span>/{Math.round(proteinTarget)}g
         </div>
       </div>
     </div>
