@@ -229,6 +229,15 @@ export async function getDayTotalsRange(uid: string, dates: string[]): Promise<D
   })
 }
 
+export async function getSleepRange(uid: string, dates: string[]): Promise<SleepLog[]> {
+  const snapshots = await Promise.all(
+    dates.map((date) => getDoc(doc(db, 'users', uid, 'sleep', date)))
+  )
+  return snapshots
+    .filter((snapshot) => snapshot.exists())
+    .map((snapshot) => deserializeSleep(snapshot.id, snapshot.data()))
+}
+
 export async function upsertDayTotals(uid: string, date: string, totals: DayTotals): Promise<void> {
   await setDoc(doc(db, 'users', uid, 'days', date), { ...totals, updated_at: serverTimestamp() }, { merge: true })
 }

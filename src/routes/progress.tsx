@@ -6,12 +6,14 @@ import { DEFAULT_PROFILE } from '@/data/defaults'
 import { todayKey, daysAgoKey } from '@/lib/dates'
 import { useDayTotals } from '@/hooks/useDayTotals'
 import { useMeals } from '@/hooks/useMeals'
+import { useSleeps } from '@/hooks/useSleeps'
 import { useUser } from '@/hooks/useUser'
+import { useWater } from '@/hooks/useWater'
 import { useWeights } from '@/hooks/useWeights'
 import { useMonthWorkoutPlans } from '@/hooks/useWorkoutPlan'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { toast } from '@/stores/toastStore'
-import type { MealType, WorkoutLog, WorkoutPlan, WorkoutPlanType } from '@/types/domain'
+import type { DayTotals, MealType, SleepLog, WorkoutLog, WorkoutPlan, WorkoutPlanType } from '@/types/domain'
 
 type MealSlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
@@ -21,14 +23,21 @@ const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
   snack: { icon: 'snack', color: '#EC4899' },
 }
 
-type ProgressTab = 'weight' | 'kcal' | 'protein' | 'activity'
+type ProgressTab = 'weight' | 'health' | 'activity'
 type CalorieView = 'week' | 'month' | 'year'
+type HealthMetric = 'kcal' | 'protein' | 'drink' | 'sleep'
 
 const tabs: Array<{ id: ProgressTab; label: string }> = [
   { id: 'weight', label: 'Weight' },
+  { id: 'health', label: 'Health' },
+  { id: 'activity', label: 'Activity' },
+]
+
+const healthTabs: Array<{ id: HealthMetric; label: string }> = [
   { id: 'kcal', label: 'Calories' },
   { id: 'protein', label: 'Protein' },
-  { id: 'activity', label: 'Activity' },
+  { id: 'drink', label: 'Drink' },
+  { id: 'sleep', label: 'Sleep' },
 ]
 
 const DAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -37,8 +46,9 @@ const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 export function ProgressRoute() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const requestedTab = params.get('tab') as ProgressTab | null
-  const tab = requestedTab === 'kcal' || requestedTab === 'protein' || requestedTab === 'activity' ? requestedTab : 'weight'
+  const requestedTab = params.get('tab')
+  const tab: ProgressTab = requestedTab === 'health' || requestedTab === 'kcal' || requestedTab === 'protein' ? 'health' : requestedTab === 'activity' ? 'activity' : 'weight'
+  const initialMetric: HealthMetric = requestedTab === 'protein' ? 'protein' : 'kcal'
 
   return (
     <AppScreen activeNav="progress">
@@ -52,7 +62,7 @@ export function ProgressRoute() {
             ))}
           </div>
         </div>
-        {tab === 'kcal' ? <CaloriesTab /> : tab === 'protein' ? <ProteinTab /> : tab === 'activity' ? <ActivityTab /> : <WeightTab />}
+        {tab === 'health' ? <HealthTab initialMetric={initialMetric} /> : tab === 'activity' ? <ActivityTab /> : <WeightTab />}
       </div>
     </AppScreen>
   )
@@ -138,6 +148,30 @@ function WeightTab() {
         <Metric label="Lost" value={`${lost.toFixed(1)} kg`} />
         <Metric label="To target" value={`${toTarget.toFixed(1)} kg`} />
       </div>
+    </>
+  )
+}
+
+function HealthTab({ initialMetric }: { initialMetric: HealthMetric }) {
+  const [metric, setMetric] = useState<HealthMetric>(initialMetric)
+
+  return (
+    <>
+      <div className="dq-seg" style={{ width: '100%', margin: '0 0 14px' }}>
+        {healthTabs.map((item) => (
+          <button
+            className="dq-seg-item"
+            data-active={metric === item.id}
+            key={item.id}
+            onClick={() => setMetric(item.id)}
+            type="button"
+            style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none' }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {metric === 'protein' ? <ProteinTab /> : metric === 'drink' ? <DrinkTab /> : metric === 'sleep' ? <SleepTab /> : <CaloriesTab />}
     </>
   )
 }
@@ -314,7 +348,7 @@ function ProteinTab() {
                 }}
               >
                 <span style={{ color: bar.protein > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
-                  {formatProteinLabel(bar.protein)}
+                  {formatProteinNumberLabel(bar.protein)}
                 </span>
                 <div
                   className={styles.bar}
@@ -362,6 +396,161 @@ function ProteinTab() {
         })
       )}
     </>
+  )
+}
+
+function DrinkTab() {
+  const [view, setView] = useState<CalorieView>('week')
+  const { data: yearTotals, error: totalsError } = useDayTotals(365)
+  const { totalMl, error: waterError } = useWater()
+  const todayDate = todayKey()
+  const targetMl = 3000
+  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, water_ml: totalMl } } : t)
+  const bars = buildWaterBars(totals, view)
+  const maxMl = Math.max(...bars.map((bar) => bar.ml), targetMl, 1)
+
+  useEffect(() => {
+    if (totalsError || waterError) toast.error("Couldn't load drink progress. Try again.")
+  }, [totalsError, waterError])
+
+  return (
+    <>
+      <div className={styles.chartCard}>
+        <p className="dq-eyebrow">Today</p>
+        <strong className="dq-num" style={{ fontSize: 42 }}>
+          {(totalMl / 1000).toFixed(1)} L
+        </strong>
+        <p className={styles.subtitle}>{totalMl} / {targetMl} ml</p>
+        <TimeRangeTabs view={view} onChange={setView} />
+        <div
+          className={styles.bars}
+          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
+        >
+          {bars.map((bar, index) => {
+            const isToday = bar.date === todayDate
+            const height = Math.max((bar.ml / maxMl) * 100, bar.ml > 0 ? 8 : 3)
+            const zone = targetZoneColor(bar.ml, targetMl)
+            return (
+              <div
+                className={styles.barColumn}
+                key={`${bar.label}-${index}`}
+                style={{
+                  height: '100%',
+                  minWidth: view === 'year' ? 26 : undefined,
+                  flex: view === 'year' ? '0 0 auto' : undefined,
+                }}
+              >
+                <span style={{ color: bar.ml > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+                  {bar.ml}
+                </span>
+                <div
+                  className={styles.bar}
+                  style={{
+                    background: bar.ml > 0 ? zone.stroke : 'var(--bg-soft)',
+                    height: `${height}%`,
+                    outline: isToday ? '2px solid var(--a1)' : 'none',
+                    outlineOffset: isToday ? 1 : 0,
+                  }}
+                />
+                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <Card padding={14}>
+        <p className="dq-eyebrow">Goal</p>
+        <strong className="dq-num" style={{ fontSize: 24 }}>{Math.round((totalMl / targetMl) * 100)}%</strong>
+        <p className={styles.subtitle}>Daily drink target is 3.0 L.</p>
+      </Card>
+    </>
+  )
+}
+
+function SleepTab() {
+  const [view, setView] = useState<CalorieView>('week')
+  const { data: sleeps, error: sleepsError } = useSleeps(365)
+  const todayDate = todayKey()
+  const sleepByDate = new Map(sleeps.map((sleep) => [sleep.date, sleep]))
+  const todaySleep = sleepByDate.get(todayDate)
+  const targetHours = 8
+  const bars = buildSleepBars(sleeps, view)
+  const maxHours = Math.max(...bars.map((bar) => bar.hours), targetHours, 1)
+
+  useEffect(() => {
+    if (sleepsError) toast.error("Couldn't load sleep progress. Try again.")
+  }, [sleepsError])
+
+  return (
+    <>
+      <div className={styles.chartCard}>
+        <p className="dq-eyebrow">Today</p>
+        <strong className="dq-num" style={{ fontSize: 42 }}>
+          {formatSleepHours(todaySleep?.duration_min ?? 0)}
+        </strong>
+        <p className={styles.subtitle}>{todaySleep ? `${todaySleep.bedtime} - ${todaySleep.wake_time}` : 'No sleep logged today'}</p>
+        <TimeRangeTabs view={view} onChange={setView} />
+        <div
+          className={styles.bars}
+          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
+        >
+          {bars.map((bar, index) => {
+            const isToday = bar.date === todayDate
+            const height = Math.max((bar.hours / maxHours) * 100, bar.hours > 0 ? 8 : 3)
+            const zone = targetZoneColor(bar.hours, targetHours)
+            return (
+              <div
+                className={styles.barColumn}
+                key={`${bar.label}-${index}`}
+                style={{
+                  height: '100%',
+                  minWidth: view === 'year' ? 26 : undefined,
+                  flex: view === 'year' ? '0 0 auto' : undefined,
+                }}
+              >
+                <span style={{ color: bar.hours > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+                  {formatCompactNumber(bar.hours)}
+                </span>
+                <div
+                  className={styles.bar}
+                  style={{
+                    background: bar.hours > 0 ? zone.stroke : 'var(--bg-soft)',
+                    height: `${height}%`,
+                    outline: isToday ? '2px solid var(--a1)' : 'none',
+                    outlineOffset: isToday ? 1 : 0,
+                  }}
+                />
+                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <Card padding={14}>
+        <p className="dq-eyebrow">Goal</p>
+        <strong className="dq-num" style={{ fontSize: 24 }}>{targetHours} h</strong>
+        <p className={styles.subtitle}>Sleep target is tracked from saved sleep logs.</p>
+      </Card>
+    </>
+  )
+}
+
+function TimeRangeTabs({ view, onChange }: { view: CalorieView; onChange: (view: CalorieView) => void }) {
+  return (
+    <div className="dq-seg" style={{ width: '100%', margin: '14px 0 6px' }}>
+      {(['week', 'month', 'year'] as CalorieView[]).map((item) => (
+        <button
+          className="dq-seg-item"
+          data-active={view === item}
+          key={item}
+          onClick={() => onChange(item)}
+          type="button"
+          style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
+        >
+          {item}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -517,14 +706,167 @@ function buildProteinBars(totals: ReturnType<typeof useDayTotals>['data'], view:
   }))
 }
 
+function buildWaterBars(totals: DayTotals[], view: CalorieView) {
+  if (view === 'week') {
+    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.water_ml]))
+    const out: { date: string; label: string; ml: number }[] = []
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      out.push({ date: key, label: DAY_SHORT[d.getDay()], ml: totalsMap.get(key) ?? 0 })
+    }
+    return out
+  }
+
+  if (view === 'month') {
+    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.water_ml]))
+    const today = new Date()
+    return Array.from({ length: 4 }, (_, index) => {
+      const weekStart = (3 - index) * 7 + 6
+      let sum = 0
+      let count = 0
+      let lastDate = ''
+      for (let d = 0; d < 7; d++) {
+        const offset = weekStart - d
+        const dt = new Date(today)
+        dt.setDate(today.getDate() - offset)
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+        lastDate = key
+        const v = totalsMap.get(key) ?? 0
+        if (v > 0) {
+          sum += v
+          count += 1
+        }
+      }
+      return {
+        date: lastDate,
+        label: `W${index + 1}`,
+        ml: count > 0 ? Math.round(sum / count) : 0,
+      }
+    })
+  }
+
+  const today = new Date()
+  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
+  }
+  totals.forEach((t) => {
+    const date = new Date(`${t.date}T00:00:00`)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    const bucket = monthBuckets.get(key)
+    if (!bucket) return
+    if (t.totals.water_ml > 0) {
+      bucket.sum += t.totals.water_ml
+      bucket.count += 1
+    }
+  })
+  return Array.from(monthBuckets.values()).map((b) => ({
+    date: b.date,
+    label: b.label,
+    ml: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+  }))
+}
+
+function buildSleepBars(sleeps: SleepLog[], view: CalorieView) {
+  const sleepMap = new Map(sleeps.map((sleep) => [sleep.date, sleep.duration_min / 60]))
+  if (view === 'week') {
+    const out: { date: string; label: string; hours: number }[] = []
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      out.push({ date: key, label: DAY_SHORT[d.getDay()], hours: sleepMap.get(key) ?? 0 })
+    }
+    return out
+  }
+
+  if (view === 'month') {
+    const today = new Date()
+    return Array.from({ length: 4 }, (_, index) => {
+      const weekStart = (3 - index) * 7 + 6
+      let sum = 0
+      let count = 0
+      let lastDate = ''
+      for (let d = 0; d < 7; d++) {
+        const offset = weekStart - d
+        const dt = new Date(today)
+        dt.setDate(today.getDate() - offset)
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+        lastDate = key
+        const v = sleepMap.get(key) ?? 0
+        if (v > 0) {
+          sum += v
+          count += 1
+        }
+      }
+      return {
+        date: lastDate,
+        label: `W${index + 1}`,
+        hours: count > 0 ? Math.round((sum / count) * 10) / 10 : 0,
+      }
+    })
+  }
+
+  const today = new Date()
+  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
+  }
+  sleeps.forEach((sleep) => {
+    const date = new Date(`${sleep.date}T00:00:00`)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    const bucket = monthBuckets.get(key)
+    if (!bucket || sleep.duration_min <= 0) return
+    bucket.sum += sleep.duration_min / 60
+    bucket.count += 1
+  })
+  return Array.from(monthBuckets.values()).map((b) => ({
+    date: b.date,
+    label: b.label,
+    hours: b.count > 0 ? Math.round((b.sum / b.count) * 10) / 10 : 0,
+  }))
+}
+
 function formatProteinLabel(protein: number): string {
   if (protein <= 0) return '0g'
   return `${Math.round(protein * 10) / 10}g`
 }
 
+function formatProteinNumberLabel(protein: number): string {
+  if (protein <= 0) return '0'
+  return formatCompactNumber(protein)
+}
+
+function formatCompactNumber(value: number): string {
+  if (value <= 0) return '0'
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1)
+}
+
+function formatSleepHours(minutes: number): string {
+  if (minutes <= 0) return '0 h'
+  return `${formatCompactNumber(minutes / 60)} h`
+}
+
 function proteinZoneColor(protein: number, target: number): { stroke: string; number: string } {
   if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
   const pct = protein / target
+  if (pct >= 1) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+  if (pct >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
+  return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
+}
+
+function targetZoneColor(value: number, target: number): { stroke: string; number: string } {
+  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+  const pct = value / target
   if (pct >= 1) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
   if (pct >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
   return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
