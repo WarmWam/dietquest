@@ -16,9 +16,9 @@ import { calculateBmr } from '@/lib/nutrition'
 import type { AnalysisPeriod, GeminiModelId, Sex } from '@/types/domain'
 
 const GEMINI_MODELS: Array<{ id: GeminiModelId; label: string; limit: number }> = [
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', limit: 20 },
   { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', limit: 20 },
   { id: 'gemini-3-flash', label: 'Gemini 3 Flash', limit: 20 },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', limit: 20 },
   { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite', limit: 500 },
   { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', limit: 20 },
 ]

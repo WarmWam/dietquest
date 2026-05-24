@@ -447,20 +447,20 @@ export function watchAnalyses(uid: string, cb: WatchCallback<HealthAnalysis[]>):
 }
 
 export async function saveAnalysisUsage(uid: string, modelId: GeminiModelId, date: string): Promise<string> {
-  const docRef = await addDoc(userCollection(uid, 'analysis_usage'), { date, model_id: modelId, created_at: serverTimestamp() })
+  const docRef = await addDoc(collection(db, 'analysis_usage'), { uid, date, model_id: modelId, created_at: serverTimestamp() })
   return docRef.id
 }
 
-export function watchAnalysisUsage(uid: string, date: string, cb: WatchCallback<AnalysisUsage[]>): Unsubscribe {
+export function watchAnalysisUsage(date: string, cb: WatchCallback<AnalysisUsage[]>): Unsubscribe {
   return onSnapshot(
-    query(userCollection(uid, 'analysis_usage'), where('date', '==', date)),
+    query(collection(db, 'analysis_usage'), where('date', '==', date)),
     (snapshot) => cb({
       data: snapshot.docs
         .map(deserializeAnalysisUsage)
         .sort((a, b) => (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0)),
       error: null,
     }),
-    listenerError(`users/${uid}/analysis_usage date=${date}`, [], cb),
+    listenerError(`analysis_usage date=${date}`, [], cb),
   )
 }
 

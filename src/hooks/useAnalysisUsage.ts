@@ -7,7 +7,8 @@ import type { AnalysisUsage } from '@/types/domain'
 export function useAnalysisUsage(date = todayKey()) {
   const fallback = useMemo<AnalysisUsage[]>(() => [], [])
   const subscribe = useCallback((uid: string, next: (data: AnalysisUsage[], error: Error | null) => void) => {
-    return watchAnalysisUsage(uid, date, ({ data, error }) => next(data, error))
+    void uid
+    return watchAnalysisUsage(date, ({ data, error }) => next(data, error))
   }, [date])
 
   return useWatch(fallback, subscribe)
