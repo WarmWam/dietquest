@@ -21,6 +21,7 @@ export type IconName =
   | 'target'
   | 'sun'
   | 'sunrise'
+  | 'snack'
   | 'play'
   | 'pause'
   | 'stop'
@@ -112,11 +113,21 @@ export function Icon({
     ),
     sunrise: (
       <>
-        <circle cx="12" cy="11" r="3" />
-        <path d="M12 4v2M5 11H3M21 11h-2M6.34 5.34l1.41 1.41M16.25 6.75l1.41-1.41" />
-        <path d="M3 17h4M17 17h4" />
-        <path d="M8 20h8" />
-        <path d="M11.5 14.5c-2 .3-3.5 1.6-3.5 3.5h8c0-1.9-1.5-3.2-3.5-3.5" />
+        {/* sun rising behind mountains */}
+        <circle cx="12" cy="10" r="3" />
+        <path d="M12 3v2M5 10H3M21 10h-2M6 4.5l1.5 1.5M16.5 6l1.5-1.5" />
+        {/* mountain range below */}
+        <path d="M2 19l5-6 3 3 4-5 4 4 4-3" />
+        <path d="M2 21h20" />
+      </>
+    ),
+    snack: (
+      <>
+        {/* wrapped candy / snack bag */}
+        <rect x="6" y="9" width="12" height="6" rx="1.5" />
+        <path d="M6 9l-3-2v10l3-2" />
+        <path d="M18 9l3-2v10l-3-2" />
+        <path d="M9 12h6" />
       </>
     ),
     play: <path d="M6 4l14 8-14 8z" fill={color} stroke="none" />,

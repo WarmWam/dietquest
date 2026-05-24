@@ -17,13 +17,13 @@ import { useWorkouts } from '@/hooks/useWorkouts'
 import { todayKey as getTodayKey } from '@/lib/dates'
 import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, type UserSettings, type WaterLog, type WorkoutLog, type WorkoutPlan } from '@/types/domain'
 
-type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
+type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 
 const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
   breakfast: { icon: 'sunrise', color: '#FB923C' },
   lunch: { icon: 'sun', color: '#F59E0B' },
   dinner: { icon: 'moon', color: '#6366F1' },
-  snack: { icon: 'sparkle', color: '#EC4899' },
+  snack: { icon: 'snack', color: '#EC4899' },
 }
 
 export function HomeRoute() {

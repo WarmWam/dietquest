@@ -28,13 +28,13 @@ import {
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
-type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'sparkle'
+type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 
 const MEAL_SLOTS: { id: MealSlot; icon: SlotIcon; color: string }[] = [
   { id: 'breakfast', icon: 'sunrise', color: '#FB923C' },
   { id: 'lunch', icon: 'sun', color: '#F59E0B' },
   { id: 'dinner', icon: 'moon', color: '#6366F1' },
-  { id: 'snack', icon: 'sparkle', color: '#EC4899' },
+  { id: 'snack', icon: 'snack', color: '#EC4899' },
 ]
 
 function pad(n: number): string {
@@ -240,7 +240,7 @@ function TodayPlanCard({
         { slot: 'breakfast', icon: 'sunrise' as const, color: '#FB923C', items: meal.breakfast },
         { slot: 'lunch', icon: 'sun' as const, color: '#F59E0B', items: meal.lunch },
         { slot: 'dinner', icon: 'moon' as const, color: '#6366F1', items: meal.dinner },
-        { slot: 'snack', icon: 'sparkle' as const, color: '#EC4899', items: meal.snack },
+        { slot: 'snack', icon: 'snack' as const, color: '#EC4899', items: meal.snack },
       ]).filter((s) => s.items.length > 0)
     : []
   const workoutMeta = workout ? WORKOUT_PLAN_TYPES.find((t) => t.id === workout.type) : null
