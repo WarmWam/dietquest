@@ -995,11 +995,16 @@ function getActivityCellStyle(plan: WorkoutPlan | undefined, actualKcal: number)
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
+  const activityValue = value.match(/^(.+?)\s(\(.+\))$/)
   return (
     <Card padding={14}>
       <p className="dq-eyebrow">{label}</p>
       <strong className="dq-num" style={{ fontSize: 24 }}>
-        {value}
+        {activityValue ? (
+          <>
+            {activityValue[1]} <span style={{ fontSize: 18 }}>{activityValue[2]}</span>
+          </>
+        ) : value}
       </strong>
     </Card>
   )

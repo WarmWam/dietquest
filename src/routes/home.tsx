@@ -45,7 +45,7 @@ export function HomeRoute() {
   const [selectedDate, setSelectedDate] = useState(() => params.get('date') || getTodayKey())
   const { profile, loading: userLoading, error: userError } = useUser()
   const { data: meals, add: addMeal, remove: removeMeal, loading: mealsLoading, error: mealsError } = useMeals(selectedDate)
-  const { data: today, loading: todayLoading, error: todayError } = useToday(selectedDate)
+  const { loading: todayLoading, error: todayError } = useToday(selectedDate)
   const hasError = mealsError || todayError
   const sheet = params.get('sheet') === '1'
   const settings = profile?.settings ?? DEFAULT_SETTINGS
@@ -142,7 +142,7 @@ export function HomeRoute() {
         ) : hasError ? (
           <HomeErrorCard error={hasError} />
         ) : (
-          <HomeFullContent addMeal={addMeal} meals={meals} removeMeal={removeMeal} selectedDate={selectedDate} setSelectedDate={setSelectedDate} settings={settings} today={today} />
+          <HomeFullContent addMeal={addMeal} meals={meals} removeMeal={removeMeal} selectedDate={selectedDate} setSelectedDate={setSelectedDate} settings={settings} />
         )}
       </div>
       {sheet ? <LogSheet /> : null}
@@ -157,7 +157,6 @@ function HomeFullContent({
   selectedDate,
   setSelectedDate,
   settings,
-  today,
 }: {
   addMeal: ReturnType<typeof useMeals>['add']
   meals: MealLog[]
@@ -165,7 +164,6 @@ function HomeFullContent({
   selectedDate: string
   setSelectedDate: (date: string) => void
   settings: UserSettings
-  today: ReturnType<typeof useToday>['data']
 }) {
   const navigate = useNavigate()
   const todayKey = selectedDate
@@ -178,8 +176,8 @@ function HomeFullContent({
   const { data: workouts, add: addWorkout, remove: removeWorkout, error: workoutsError } = useWorkouts(1)
   const [savingTask, setSavingTask] = useState<string | null>(null)
   const [waterAmount, setWaterAmount] = useState(0)
-  const [sleepStart, setSleepStart] = useState(sleep?.bedtime ?? '')
-  const [sleepEnd, setSleepEnd] = useState(sleep?.wake_time ?? '')
+  const [sleepStart, setSleepStart] = useState(sleep?.bedtime ?? '22:00')
+  const [sleepEnd, setSleepEnd] = useState(sleep?.wake_time ?? '06:00')
   const [workoutKcal, setWorkoutKcal] = useState('')
   const [customizing, setCustomizing] = useState<MealType | null>(null)
   const { data: foodsCatalog } = useFoods()
@@ -198,6 +196,9 @@ function HomeFullContent({
     if (sleep) {
       setSleepStart(sleep.bedtime)
       setSleepEnd(sleep.wake_time)
+    } else {
+      setSleepStart('22:00')
+      setSleepEnd('06:00')
     }
   }, [sleep])
 
@@ -482,7 +483,6 @@ function HomeFullContent({
         />
         <div className="dq-divider" />
         <SleepTask
-          done={today.habits.sleep_on_time}
           end={sleepEnd}
           onEndChange={setSleepEnd}
           onSave={() => void saveSleep()}
@@ -743,7 +743,6 @@ function WaterTask({
 }
 
 function SleepTask({
-  done,
   end,
   onEndChange,
   onSave,
@@ -751,7 +750,6 @@ function SleepTask({
   saving,
   start,
 }: {
-  done: boolean
   end: string
   onEndChange: (value: string) => void
   onSave: () => void
@@ -759,8 +757,12 @@ function SleepTask({
   saving: boolean
   start: string
 }) {
+  const durationMin = start && end ? calculateSleepDuration(start, end) : 0
+  const ratio = durationMin / 480
+  const done = ratio >= 1
+  const highlight = durationMin > 0 ? getGoalHighlight(ratio) : undefined
   return (
-    <>
+    <div style={{ background: highlight, borderRadius: 'var(--r-md)', padding: '10px 0' }}>
       <Habit done={done} label="Sleep" sub={start && end ? `${start} - ${end}` : 'Start sleep - End sleep'} />
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) 38px', gap: 6, padding: '0 0 10px 34px' }}>
         <input aria-label="Start sleep" onChange={(event) => onStartChange(event.target.value)} style={timeInputStyle} type="time" value={start} />
@@ -769,7 +771,7 @@ function SleepTask({
           <Icon name="arrowUp" />
         </button>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -803,6 +805,12 @@ const timeInputStyle = {
   outline: 'none',
   padding: '8px 4px',
   width: '100%',
+}
+
+function getGoalHighlight(ratio: number): string {
+  if (ratio >= 1) return 'color-mix(in oklab, #BBF7D0 42%, transparent)'
+  if (ratio >= 0.7) return 'color-mix(in oklab, #FEF3C7 52%, transparent)'
+  return 'color-mix(in oklab, #FECACA 48%, transparent)'
 }
 
 function calculateSleepDuration(start: string, end: string): number {
