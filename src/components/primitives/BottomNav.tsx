@@ -8,7 +8,7 @@ type BottomNavProps = {
 }
 
 const navItems: Array<{ id: NavId; label: string; icon: IconName }> = [
-  { id: 'home', label: 'Today', icon: 'home' },
+  { id: 'home', label: 'Home', icon: 'home' },
   { id: 'progress', label: 'Progress', icon: 'chart' },
   { id: 'plan', label: 'Plan', icon: 'list' },
   { id: 'profile', label: 'Profile', icon: 'user' },

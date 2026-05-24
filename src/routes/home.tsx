@@ -19,6 +19,18 @@ import { WORKOUT_PLAN_TYPES, type MealLog, type MealPlanItem, type MealType, typ
 
 type SlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function formatDayMonth(isoDate: string): string {
+  // input: YYYY-MM-DD → output: "24 May"
+  const parts = isoDate.split('-')
+  if (parts.length !== 3) return isoDate
+  const day = parseInt(parts[2], 10)
+  const monthIdx = parseInt(parts[1], 10) - 1
+  if (isNaN(day) || monthIdx < 0 || monthIdx > 11) return isoDate
+  return `${day} ${MONTH_SHORT[monthIdx]}`
+}
+
 const mealMeta: Record<MealType, { icon: SlotIcon; color: string }> = {
   breakfast: { icon: 'sunrise', color: '#FB923C' },
   lunch: { icon: 'sun', color: '#F59E0B' },
@@ -338,7 +350,7 @@ function HomeFullContent({
       <Card raised padding={18}>
         <div className={styles.screenHeader}>
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <span className="dq-eyebrow">Today</span>
+            <span className="dq-eyebrow">{formatDayMonth(selectedDate)}</span>
             <label aria-label="Pick date" htmlFor="today-date-picker" style={{ color: 'var(--a1)', cursor: 'pointer', display: 'inline-flex', position: 'relative' }}>
               <Icon name="cal" size={17} />
               <input
@@ -545,18 +557,23 @@ function WorkoutPlanTask({
   const meta = plan ? WORKOUT_PLAN_TYPES.find((type) => type.id === plan.type) : null
   const label = meta?.label ?? 'No workout planned'
   const plannedKcal = plan?.kcal_target ?? 0
+  const isRest = plan?.type === 'rest'
   const hitTarget = done && totalWorkoutKcal >= plannedKcal
-  const sub = done
-    ? `${totalWorkoutKcal} / ${plannedKcal} kcal logged`
-    : plan
-      ? plan.type === 'rest'
-        ? 'Rest day'
-        : `${plannedKcal} kcal planned`
-      : 'Plan from Calendar'
+  const isComplete = done || isRest
+  const greenBg = 'color-mix(in oklab, #BBF7D0 42%, transparent)'
+  const yellowBg = 'color-mix(in oklab, #FEF3C7 52%, transparent)'
+  const bg = isComplete ? (isRest || hitTarget ? greenBg : yellowBg) : undefined
+  const sub = isRest
+    ? 'Rest day'
+    : done
+      ? `${totalWorkoutKcal} / ${plannedKcal} kcal logged`
+      : plan
+        ? `${plannedKcal} kcal planned`
+        : 'Plan from Calendar'
 
   return (
-    <div style={{ background: done ? (hitTarget ? 'color-mix(in oklab, #BBF7D0 42%, transparent)' : 'color-mix(in oklab, #FEF3C7 52%, transparent)') : undefined, borderRadius: 'var(--r-md)', padding: '10px 0' }}>
-      <Habit done={done || plan?.type === 'rest'} label={label} sub={sub} />
+    <div style={{ background: bg, borderRadius: 'var(--r-md)', padding: '10px 0' }}>
+      <Habit done={isComplete} label={label} sub={sub} />
       <div style={{ padding: '0 0 10px 38px' }}>
         {plan && plan.type !== 'rest' ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 44px', gap: 8 }}>
