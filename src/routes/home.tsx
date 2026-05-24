@@ -529,15 +529,12 @@ function PlanMealCard({
   saving: boolean
 }) {
   const kcal = items.reduce((sum, item) => sum + item.kcal, 0)
-  const protein = Math.round(items.reduce((sum, item) => sum + item.protein_g, 0) * 10) / 10
   const actualItems = loggedMeals.flatMap((meal) => meal.items)
-  const actualNames = new Set(actualItems.map((item) => item.name))
+  const planNames = new Set(items.map((it) => it.food_name))
+  // "Extras" are logged items not in plan
+  const actualExtras = actualItems.filter((it) => !planNames.has(it.name))
   const actualKcal = loggedMeals.reduce((sum, meal) => sum + meal.total_kcal, 0)
-  const actualProtein = Math.round(loggedMeals.reduce((sum, meal) => sum + meal.total_protein_g, 0) * 10) / 10
-  const ateDifferent = done && items.length > 0 && !items.every((item) => actualNames.has(item.food_name))
-  const overPlan = done && actualKcal > kcal
-  const displayKcal = done ? actualKcal : kcal
-  const displayProtein = done ? actualProtein : protein
+  const overPlan = done && actualKcal > kcal && kcal > 0
 
   return (
     <Card
@@ -551,31 +548,44 @@ function PlanMealCard({
       <div className={styles.habitRow}>
         <Icon color={mealMeta[mealType].color} name={mealMeta[mealType].icon} />
         <span className={styles.rowText}>
-          <strong>{done ? `${displayKcal} kcal actual` : items.length ? `${displayKcal} kcal` : 'No planned menu'}</strong>
+          <strong>{done ? `${actualKcal} kcal` : items.length ? `${kcal} kcal` : 'No planned menu'}</strong>
           <span className={styles.rowSub} style={{ marginTop: 4 }}>
-            {done ? `${displayProtein}g protein actual${items.length ? ` - planned ${kcal} kcal` : ''}` : items.length ? `${displayProtein}g protein planned` : 'Use Ate different to log this slot'}
+            {done
+              ? `${loggedMeals.length} log${loggedMeals.length === 1 ? '' : 's'}${items.length ? ` · planned ${kcal} kcal` : ''}`
+              : items.length ? 'planned' : 'Tap Customize to log this slot'}
           </span>
         </span>
         <span className="dq-check" data-on={done}>
           {done ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
         </span>
       </div>
-      {items.length ? (
-        <div style={{ display: 'grid', gap: 6, margin: '10px 0 12px 34px' }}>
+
+      {items.length > 0 && (
+        <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
           {items.map((item) => (
-            <div key={`${item.food_id}-${item.food_name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, textDecoration: ateDifferent ? 'line-through' : undefined, color: ateDifferent ? 'var(--t-3)' : undefined }}>{item.food_name}</span>
-              <span className={styles.rowSub}>{item.portion}x · {item.kcal} kcal</span>
+            <div key={`plan-${item.food_id}-${item.food_name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{item.food_name}</span>
+              <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{item.portion}× · {item.kcal} kcal</span>
             </div>
           ))}
         </div>
-      ) : null}
-      {ateDifferent ? (
-        <p className={styles.subtitle} style={{ margin: '0 0 12px 34px' }}>
-          Actual: {actualItems.map((item) => `${item.name} (${item.kcal} kcal)`).join(', ')}
-        </p>
-      ) : null}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      )}
+
+      {done && actualExtras.length > 0 && (
+        <>
+          <div style={{ height: 1, background: 'var(--line)', margin: '10px 0 10px 34px' }} />
+          <div style={{ display: 'grid', gap: 6, margin: '0 0 0 34px' }}>
+            {actualExtras.map((item, idx) => (
+              <div key={`extra-${item.name}-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{item.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{item.portion}× · {item.kcal} kcal</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
         <Button disabled={(items.length === 0 && !done) || saving} onClick={onConfirm} variant="secondary">
           {done ? 'Undo' : 'Ate as planned'}
         </Button>
@@ -961,19 +971,10 @@ function CustomizeMealSheet({
   onCancel: () => void
 }) {
   useScrollLock()
-  // Initial state: if there's an existing log, edit it. Otherwise, pre-check all planned items.
+  // Initial state: always start with plan items as 'plan' rows. In edit mode,
+  // additionally pull in any extras (logged items not matching any plan name).
   const [items, setItems] = useState<CustomItem[]>(() => {
-    if (existingItems.length > 0) {
-      return existingItems.map((it) => ({
-        name: it.name,
-        portion: it.portion,
-        unit: it.unit,
-        kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
-        proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
-        source: 'extra', // can't easily tell which was from plan, treat all as flexible
-      }))
-    }
-    return plannedItems.map((it) => ({
+    const planRows: CustomItem[] = plannedItems.map((it) => ({
       name: it.food_name,
       portion: it.portion,
       unit: 'serving',
@@ -981,10 +982,27 @@ function CustomizeMealSheet({
       proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
       source: 'plan',
     }))
+    if (existingItems.length === 0) return planRows
+    const planNames = new Set(plannedItems.map((p) => p.food_name))
+    const extraRows: CustomItem[] = existingItems
+      .filter((it) => !planNames.has(it.name))
+      .map((it) => ({
+        name: it.name,
+        portion: it.portion,
+        unit: it.unit,
+        kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
+        proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
+        source: 'extra',
+      }))
+    return [...planRows, ...extraRows]
   })
-  const [includedPlanIds, setIncludedPlanIds] = useState<Set<string>>(
-    () => new Set(plannedItems.map((it) => it.food_name)),
-  )
+  // Plan-item inclusion: in new mode, all checked; in edit mode, only those
+  // that were actually logged remain checked.
+  const [includedPlanIds, setIncludedPlanIds] = useState<Set<string>>(() => {
+    if (existingItems.length === 0) return new Set(plannedItems.map((it) => it.food_name))
+    const existingNames = new Set(existingItems.map((it) => it.name))
+    return new Set(plannedItems.filter((it) => existingNames.has(it.food_name)).map((it) => it.food_name))
+  })
   const [category, setCategory] = useState<FoodCategory>('food')
 
   const filteredFoods = foods.filter((f) => f.category === category)
