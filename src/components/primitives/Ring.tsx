@@ -84,7 +84,7 @@ export function Ring({
         </div>
         <div style={{ color: 'var(--a1)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, marginTop: 8 }}>
           <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--a1)', opacity: 0.6 }} />
-          PROTEIN {protein}/{proteinTarget}g
+          PROTEIN {Math.round(protein)}/{Math.round(proteinTarget)}g
         </div>
       </div>
     </div>
