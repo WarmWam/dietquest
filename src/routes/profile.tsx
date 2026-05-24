@@ -20,6 +20,7 @@ export function ProfileRoute() {
   const { profile, loading, error: userError } = useUser()
   const userProfile = profile?.profile ?? DEFAULT_PROFILE
   const displayName = profile?.display_name ?? user?.displayName ?? 'DietQuest'
+  const avatarUrl = user?.photoURL ?? undefined
 
   // Edit profile states
   const [isEditing, setIsEditing] = useState(false)
@@ -218,7 +219,7 @@ export function ProfileRoute() {
         <h1 className={styles.headerTitle}>Profile</h1>
         <Card raised padding={18} style={{ marginTop: 14, position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: 44 }}>
-            <ImageSlot id="avatar" placeholder={displayName[0] ?? 'D'} shape="circle" style={{ width: 64, height: 64, minHeight: 64 }} />
+            <ImageSlot id="avatar" placeholder={displayName[0] ?? 'D'} shape="circle" src={avatarUrl} style={{ width: 64, height: 64, minHeight: 64 }} />
             <span className={styles.rowText}>
               <strong>{displayName}</strong>
               <span className={styles.rowSub}>{userProfile.age} - {userProfile.height_cm} cm - Firebase sync on</span>
