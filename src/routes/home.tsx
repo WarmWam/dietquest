@@ -350,17 +350,17 @@ function HomeFullContent({
       <Card raised padding={18}>
         <div className={styles.screenHeader}>
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <span className="dq-eyebrow">{formatDayMonth(selectedDate)}</span>
             <label aria-label="Pick date" htmlFor="today-date-picker" style={{ color: 'var(--a1)', cursor: 'pointer', display: 'inline-flex', position: 'relative' }}>
-              <Icon name="cal" size={17} />
+              <Icon name="cal" size={26} />
               <input
                 id="today-date-picker"
                 onChange={(event) => setSelectedDate(event.target.value || getTodayKey())}
-                style={{ cursor: 'pointer', inset: 0, opacity: 0, position: 'absolute', width: 28 }}
+                style={{ cursor: 'pointer', inset: 0, opacity: 0, position: 'absolute', width: 40, height: 40 }}
                 type="date"
                 value={selectedDate}
               />
             </label>
+            <span className="dq-eyebrow">{formatDayMonth(selectedDate)}</span>
           </span>
           <span style={{ color: 'var(--success)', fontSize: 12, fontWeight: 800 }}>
             {Math.max(settings.daily_kcal_target - liveKcal, 0)} kcal left
