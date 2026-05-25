@@ -1112,7 +1112,7 @@ function CustomizeMealSheet({
         <span style={{ width: 40 }} />
       </header>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 20px 140px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 20px 24px' }}>
         {/* From plan */}
         {plannedItems.length > 0 && (
           <>
@@ -1241,8 +1241,7 @@ function CustomizeMealSheet({
       {/* Footer save */}
       <div
         style={{
-          position: 'absolute',
-          left: 0, right: 0, bottom: 0,
+          flexShrink: 0,
           padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
           background: 'var(--surface)',
           borderTop: '1px solid var(--line)',
@@ -1250,7 +1249,7 @@ function CustomizeMealSheet({
         }}
       >
         <Button disabled={saving || activeItems.length === 0} onClick={handleSave}>
-          {saving ? 'Saving...' : `Save ${activeItems.length} item${activeItems.length === 1 ? '' : 's'} · ${totalKcal} kcal`}
+          {saving ? 'Saving...' : activeItems.length > 0 ? `Save ${activeItems.length} item${activeItems.length === 1 ? '' : 's'} · ${totalKcal} kcal` : 'Select items to save'}
         </Button>
       </div>
     </div>
