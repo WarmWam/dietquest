@@ -134,9 +134,8 @@ export function Ring({
               cx={x}
               cy={y}
               r={outerMarkerR}
-              fill="#FFFFFF"
-              stroke="rgba(15,23,42,0.45)"
-              strokeWidth={1.25}
+              fill="rgba(255,255,255,0.5)"
+              stroke="none"
             />
           )
         })}
@@ -148,9 +147,8 @@ export function Ring({
               cx={x}
               cy={y}
               r={innerMarkerR}
-              fill="#FFFFFF"
-              stroke="rgba(15,23,42,0.45)"
-              strokeWidth={1.25}
+              fill="rgba(255,255,255,0.5)"
+              stroke="none"
             />
           )
         })}
