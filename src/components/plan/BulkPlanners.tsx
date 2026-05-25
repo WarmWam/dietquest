@@ -734,23 +734,59 @@ function FoodPickerLite({
   onCancel: () => void
 }) {
   const [query, setQuery] = useState('')
-  const filtered = foods.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
+  const [filter, setFilter] = useState<FoodCategory | 'all'>('all')
+  const filterLabel = filter === 'all' ? 'All' : FOOD_CATEGORIES.find((c) => c.id === filter)?.label ?? 'category'
+  const filtered = foods.filter((f) => {
+    if (filter !== 'all' && f.category !== filter) return false
+    const q = query.trim().toLowerCase()
+    if (q && !f.name.toLowerCase().includes(q)) return false
+    return true
+  })
 
   return (
     <FullscreenModal onClose={onCancel} title={`Pick food for ${slotLabel}`} zIndex={130}>
         <div>
           <input
             type="search"
-            placeholder="Search foods..."
+            placeholder={`Search in ${filterLabel}...`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ width: '100%', padding: '10px 14px', fontSize: 14, border: 0, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', outline: 'none', fontFamily: 'inherit', color: 'var(--t-1)', marginBottom: 10 }}
           />
+          <div className="dq-h-scroll" style={{ margin: '0 -20px 12px 0', paddingRight: 20 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                className="dq-seg-item"
+                data-active={filter === 'all'}
+                type="button"
+                onClick={() => setFilter('all')}
+                style={{ border: 0, flex: '0 0 auto', padding: '6px 12px', fontSize: 12 }}
+              >
+                All
+              </button>
+              {FOOD_CATEGORIES.map((cat) => (
+                <button
+                  className="dq-seg-item"
+                  data-active={filter === cat.id}
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setFilter(cat.id)}
+                  style={{ border: 0, flex: '0 0 auto', padding: '6px 12px', fontSize: 12 }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div>
           {filtered.length === 0 ? (
             <p className={styles.subtitle} style={{ textAlign: 'center', padding: 20 }}>
-              {foods.length === 0 ? 'Library empty. Add foods in Library tab.' : 'No matches.'}
+              {foods.length === 0
+                ? 'Library empty. Add foods in Library tab.'
+                : query
+                  ? `No match for "${query}" in ${filterLabel}.`
+                  : `No foods in ${filterLabel}.`}
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

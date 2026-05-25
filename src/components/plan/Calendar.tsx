@@ -533,7 +533,7 @@ function FoodPicker({
         <div>
           <input
             type="search"
-            placeholder="Search..."
+            placeholder={`Search in ${filter === 'all' ? 'All' : FOOD_CATEGORIES.find((c) => c.id === filter)?.label ?? 'category'}...`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
