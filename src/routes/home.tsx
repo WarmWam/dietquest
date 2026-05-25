@@ -1031,8 +1031,14 @@ function CustomizeMealSheet({
     return new Set(plannedItems.filter((it) => existingNames.has(it.food_name)).map((it) => it.food_name))
   })
   const [category, setCategory] = useState<FoodCategory>('food')
+  const [librarySearch, setLibrarySearch] = useState('')
 
-  const filteredFoods = foods.filter((f) => f.category === category)
+  const filteredFoods = foods.filter((f) => {
+    if (f.category !== category) return false
+    const q = librarySearch.trim().toLowerCase()
+    if (!q) return true
+    return f.name.toLowerCase().includes(q)
+  })
 
   // Build the actual list of items considering plan inclusions + extras
   const activeItems: CustomItem[] = items.filter((it) => it.source !== 'plan' || includedPlanIds.has(it.name))
@@ -1200,9 +1206,44 @@ function CustomizeMealSheet({
             ))}
           </div>
         </div>
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          <span style={{ position: 'absolute', top: '50%', left: 12, transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', color: 'var(--t-3)', pointerEvents: 'none' }}>
+            <Icon name="search" size={14} />
+          </span>
+          <input
+            type="text"
+            value={librarySearch}
+            onChange={(e) => setLibrarySearch(e.target.value)}
+            placeholder={`Search in ${FOOD_CATEGORIES.find((c) => c.id === category)?.label ?? 'category'}...`}
+            style={{
+              width: '100%',
+              padding: '10px 34px 10px 32px',
+              fontSize: 13,
+              border: 0,
+              background: 'var(--bg-soft)',
+              borderRadius: 'var(--r-pill)',
+              outline: 'none',
+              fontFamily: 'inherit',
+              color: 'var(--t-1)',
+              boxSizing: 'border-box',
+            }}
+          />
+          {librarySearch ? (
+            <button
+              aria-label="Clear search"
+              type="button"
+              onClick={() => setLibrarySearch('')}
+              style={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', border: 0, background: 'transparent', color: 'var(--t-3)', cursor: 'pointer', padding: 4, outline: 'none', display: 'flex', alignItems: 'center' }}
+            >
+              <Icon name="x" size={12} />
+            </button>
+          ) : null}
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filteredFoods.length === 0 ? (
-            <p className={styles.subtitle}>No foods in this category.</p>
+            <p className={styles.subtitle}>
+              {librarySearch ? `No match for "${librarySearch}" in this category.` : 'No foods in this category.'}
+            </p>
           ) : (
             filteredFoods.map((food) => {
               const isAdded = items.some((it) => it.name === food.name && it.source === 'extra')
