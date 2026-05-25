@@ -22,6 +22,7 @@ import { listenForForegroundNotifications } from './lib/notifications'
 import { bulkAddFoods, getCatalogCount, getLegacyUserFoods, updateFood, watchFoods } from './lib/db'
 import { STARTER_FOODS } from './data/starterFoods'
 import { STARTER_COM_FOODS } from './data/starterComFoods'
+import { EXTENDED_FOOD_PACK } from './data/extendedFoodPack'
 
 function App() {
   useEffect(() => {
@@ -96,6 +97,23 @@ function AuthGate() {
                 console.log(`[catalog] re-categorized ${updates.length} starter items`)
               }
               localStorage.setItem(CAT_SYNC_FLAG, '1')
+            }
+
+            // Pass 4: one-time bulk import of the extended Thai dish pack
+            // (~500 menu items). Dedupes against the live catalog by name,
+            // so it's safe even if some entries were added by hand earlier.
+            const EXT_PACK_FLAG = 'dq-extended-food-pack-v1'
+            if (!localStorage.getItem(EXT_PACK_FLAG)) {
+              const refreshed = await new Promise<typeof data>((res) => {
+                const u = watchFoods('', ({ data: d }) => { u(); res(d) })
+              })
+              const liveNames = new Set(refreshed.map((f) => f.name))
+              const newOnes = EXTENDED_FOOD_PACK.filter((p) => !liveNames.has(p.name))
+              if (newOnes.length > 0) {
+                await bulkAddFoods(newOnes)
+                console.log(`[catalog] imported ${newOnes.length} extended food pack items`)
+              }
+              localStorage.setItem(EXT_PACK_FLAG, '1')
             }
 
             resolve()
