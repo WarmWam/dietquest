@@ -7,12 +7,13 @@ type RingProps = {
   label?: string
   sub?: string
   // Per-meal breakdown in slot order [breakfast, lunch, dinner, snack].
-  // Used to draw thin dividers between meal segments on each ring.
+  // When supplied, both rings render as gap-separated segments instead of
+  // a single continuous arc.
   calBySlot?: number[]
   proteinBySlot?: number[]
 }
 
-// Pastel strokes (rings) + bold tints (numbers)
+// Pastel strokes (zone-coded) + bold tints (numbers)
 const STROKE = {
   green: '#86EFAC',
   yellow: '#FCD34D',
@@ -23,6 +24,9 @@ const NUMBER = {
   yellow: '#D97706',
   red: '#DC2626',
 }
+
+// Distinct pastel per meal slot. Index 0..3 = breakfast, lunch, dinner, snack.
+const MEAL_PASTEL = ['#FDBA74', '#FCD34D', '#A5B4FC', '#F9A8D4']
 
 function calorieZone(pct: number) {
   if (pct >= 1) return { stroke: STROKE.red, number: NUMBER.red }
@@ -36,22 +40,25 @@ function proteinZone(pct: number) {
   return { stroke: STROKE.red, number: NUMBER.red }
 }
 
-// Walk a per-slot array, return the cumulative percentage at the END of each
-// slot. Only emit boundaries that fall inside the colored arc so we never
-// place a marker on the empty grey track. The last slot's end is the arc
-// tip — we skip it (the rounded linecap is its visual cap) but still emit
-// the previous boundaries even if the cumulative equals filledPct.
-function buildDividers(slots: number[] | undefined, target: number, filledPct: number): number[] {
-  if (!slots || slots.length === 0 || target <= 0 || filledPct <= 0) return []
-  const out: number[] = []
-  let running = 0
-  for (let i = 0; i < slots.length - 1; i++) {
-    running += slots[i] || 0
-    if (running <= 0) continue
-    const pct = running / target
-    // Allow up to filledPct but not the very tip — leave a hair of room so
-    // the marker doesn't sit on top of the rounded linecap.
-    if (pct > 0 && pct <= Math.min(filledPct, 1) - 0.001) out.push(pct)
+type Segment = { startPct: number; lenPct: number; slotIdx: number }
+
+// Build gap-separated segments capped at the target. Empty slots are
+// skipped; cumulative length never exceeds 100% of the ring.
+function buildSegments(slots: number[] | undefined, target: number, fallbackValue: number): Segment[] {
+  // If no per-slot data provided, treat the whole eaten value as one
+  // segment so the ring still renders without breaking older callers.
+  const effectiveSlots = slots && slots.length > 0 ? slots : [fallbackValue, 0, 0, 0]
+  if (target <= 0) return []
+  const out: Segment[] = []
+  let cum = 0
+  for (let i = 0; i < effectiveSlots.length; i++) {
+    const val = effectiveSlots[i] || 0
+    if (val <= 0) continue
+    const lenPct = Math.min(val / target, Math.max(0, 1 - cum))
+    if (lenPct <= 0) continue
+    out.push({ startPct: cum, lenPct, slotIdx: i })
+    cum += lenPct
+    if (cum >= 1) break
   }
   return out
 }
@@ -77,78 +84,62 @@ export function Ring({
   const c2 = 2 * Math.PI * r2
   const rawCalPct = target > 0 ? eaten / target : 0
   const rawProteinPct = proteinTarget > 0 ? protein / proteinTarget : 0
-  const pct = Math.min(rawCalPct, 1)
-  const pctProtein = Math.min(rawProteinPct, 1)
   const cal = calorieZone(rawCalPct)
   const prot = proteinZone(rawProteinPct)
 
+  // Gap (in stroke-length units) carved out of each segment's end.
+  // Small enough to look like a hairline, large enough to read on mobile.
+  const GAP_PX = 4
+
+  const calSegments = buildSegments(calBySlot, target, eaten)
+  const proteinSegments = buildSegments(proteinBySlot, proteinTarget, protein)
+
   const cx = size / 2
   const cy = size / 2
-  // Outer + inner divider points. The SVG is rotated -90deg so theta=0 sits at
-  // 12 o'clock; we add positions clockwise from there as pct grows.
-  const calDividers = buildDividers(calBySlot, target, pct)
-  const proteinDividers = buildDividers(proteinBySlot, proteinTarget, pctProtein)
-  // Marker size: bisect the stroke. Slight overshoot so the divider's
-  // border reads clearly against the pastel arc on both sides.
-  const outerMarkerR = stroke / 2 + 1
-  const innerMarkerR = innerStroke / 2 + 1.5
-
-  function pointOn(r: number, p: number) {
-    const theta = 2 * Math.PI * p
-    return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) }
-  }
 
   return (
     <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
+        {/* Outer track */}
         <circle cx={cx} cy={cy} r={r1} fill="none" stroke="var(--bg-soft)" strokeWidth={stroke} />
-        <circle
-          cx={cx}
-          cy={cy}
-          r={r1}
-          fill="none"
-          stroke={cal.stroke}
-          strokeDasharray={c1}
-          strokeDashoffset={c1 * (1 - pct)}
-          strokeLinecap="round"
-          strokeWidth={stroke}
-        />
-        <circle cx={cx} cy={cy} r={r2} fill="none" stroke="var(--bg-soft)" strokeWidth={innerStroke} />
-        <circle
-          cx={cx}
-          cy={cy}
-          r={r2}
-          fill="none"
-          stroke={prot.stroke}
-          strokeDasharray={c2}
-          strokeDashoffset={c2 * (1 - pctProtein)}
-          strokeLinecap="round"
-          strokeWidth={innerStroke}
-        />
-        {/* Meal-segment dividers — small white circles bisecting each arc */}
-        {calDividers.map((p, i) => {
-          const { x, y } = pointOn(r1, p)
+        {/* Outer segments (one per meal slot, colored per meal) */}
+        {calSegments.map((seg, i) => {
+          const segLenAbs = c1 * seg.lenPct
+          const visibleLen = Math.max(segLenAbs - GAP_PX, 0.5)
           return (
             <circle
-              key={`cal-div-${i}`}
-              cx={x}
-              cy={y}
-              r={outerMarkerR}
-              fill="rgba(255,255,255,0.5)"
-              stroke="none"
+              key={`cal-seg-${i}`}
+              cx={cx}
+              cy={cy}
+              r={r1}
+              fill="none"
+              stroke={MEAL_PASTEL[seg.slotIdx] ?? cal.stroke}
+              strokeWidth={stroke}
+              strokeLinecap="butt"
+              strokeDasharray={`${visibleLen} ${c1}`}
+              strokeDashoffset={-c1 * seg.startPct}
             />
           )
         })}
-        {proteinDividers.map((p, i) => {
-          const { x, y } = pointOn(r2, p)
+
+        {/* Inner track */}
+        <circle cx={cx} cy={cy} r={r2} fill="none" stroke="var(--bg-soft)" strokeWidth={innerStroke} />
+        {/* Inner segments (one per meal slot, all sharing the zone color) */}
+        {proteinSegments.map((seg, i) => {
+          const segLenAbs = c2 * seg.lenPct
+          const visibleLen = Math.max(segLenAbs - GAP_PX, 0.5)
           return (
             <circle
-              key={`prot-div-${i}`}
-              cx={x}
-              cy={y}
-              r={innerMarkerR}
-              fill="rgba(255,255,255,0.5)"
-              stroke="none"
+              key={`prot-seg-${i}`}
+              cx={cx}
+              cy={cy}
+              r={r2}
+              fill="none"
+              stroke={prot.stroke}
+              strokeWidth={innerStroke}
+              strokeLinecap="butt"
+              strokeDasharray={`${visibleLen} ${c2}`}
+              strokeDashoffset={-c2 * seg.startPct}
             />
           )
         })}
