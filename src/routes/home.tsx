@@ -192,6 +192,16 @@ function HomeFullContent({
   const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
   const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
 
+  // Per-meal breakdown in fixed order (snack always last) so the donut can
+  // draw segment dividers showing how each meal contributed.
+  const SLOT_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
+  const calBySlot = SLOT_ORDER.map((t) =>
+    meals.filter((m) => m.meal_type === t).reduce((s, m) => s + (m.total_kcal ?? 0), 0),
+  )
+  const proteinBySlot = SLOT_ORDER.map((t) =>
+    meals.filter((m) => m.meal_type === t).reduce((s, m) => s + (m.total_protein_g ?? 0), 0),
+  )
+
   useEffect(() => {
     if (sleep) {
       setSleepStart(sleep.bedtime)
@@ -405,7 +415,7 @@ function HomeFullContent({
             </span>
           )}
         </div>
-        <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} />
+        <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} calBySlot={calBySlot} proteinBySlot={proteinBySlot} />
       </Card>
       {!isToday ? (
         <Button onClick={() => setSelectedDate(getTodayKey())} variant="ghost">

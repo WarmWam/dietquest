@@ -6,6 +6,10 @@ type RingProps = {
   proteinTarget?: number
   label?: string
   sub?: string
+  // Per-meal breakdown in slot order [breakfast, lunch, dinner, snack].
+  // Used to draw thin dividers between meal segments on each ring.
+  calBySlot?: number[]
+  proteinBySlot?: number[]
 }
 
 // Pastel strokes (rings) + bold tints (numbers)
@@ -32,6 +36,23 @@ function proteinZone(pct: number) {
   return { stroke: STROKE.red, number: NUMBER.red }
 }
 
+// Walk a per-slot array, return the cumulative percentage at the END of each
+// slot (except the very last — its end is the arc end and needs no divider).
+// We only emit a divider if it falls strictly inside (0, filledPct] so it
+// always lands on the colored arc, never on the empty track.
+function buildDividers(slots: number[] | undefined, target: number, filledPct: number): number[] {
+  if (!slots || slots.length === 0 || target <= 0) return []
+  const out: number[] = []
+  let running = 0
+  for (let i = 0; i < slots.length - 1; i++) {
+    running += slots[i] || 0
+    if (running <= 0) continue
+    const pct = running / target
+    if (pct > 0 && pct < filledPct - 0.005) out.push(pct)
+  }
+  return out
+}
+
 export function Ring({
   size = 220,
   eaten = 1240,
@@ -40,6 +61,8 @@ export function Ring({
   proteinTarget = 140,
   label = 'eaten',
   sub = 'kcal',
+  calBySlot,
+  proteinBySlot,
 }: RingProps) {
   // Slightly slimmer rings + tighter gap → more breathing room for the
   // centered text so PROTEIN row doesn't kiss the inner stroke.
@@ -56,13 +79,28 @@ export function Ring({
   const cal = calorieZone(rawCalPct)
   const prot = proteinZone(rawProteinPct)
 
+  const cx = size / 2
+  const cy = size / 2
+  // Outer + inner divider points. The SVG is rotated -90deg so theta=0 sits at
+  // 12 o'clock; we add positions clockwise from there as pct grows.
+  const calDividers = buildDividers(calBySlot, target, pct)
+  const proteinDividers = buildDividers(proteinBySlot, proteinTarget, pctProtein)
+  // Marker size: slightly smaller than the stroke so it cleanly bisects.
+  const outerMarkerR = Math.max(stroke / 2 - 2, 2.5)
+  const innerMarkerR = Math.max(innerStroke / 2 + 0.5, 2.5)
+
+  function pointOn(r: number, p: number) {
+    const theta = 2 * Math.PI * p
+    return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) }
+  }
+
   return (
     <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={r1} fill="none" stroke="var(--bg-soft)" strokeWidth={stroke} />
+        <circle cx={cx} cy={cy} r={r1} fill="none" stroke="var(--bg-soft)" strokeWidth={stroke} />
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={cx}
+          cy={cy}
           r={r1}
           fill="none"
           stroke={cal.stroke}
@@ -71,10 +109,10 @@ export function Ring({
           strokeLinecap="round"
           strokeWidth={stroke}
         />
-        <circle cx={size / 2} cy={size / 2} r={r2} fill="none" stroke="var(--bg-soft)" strokeWidth={innerStroke} />
+        <circle cx={cx} cy={cy} r={r2} fill="none" stroke="var(--bg-soft)" strokeWidth={innerStroke} />
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={cx}
+          cy={cy}
           r={r2}
           fill="none"
           stroke={prot.stroke}
@@ -83,6 +121,35 @@ export function Ring({
           strokeLinecap="round"
           strokeWidth={innerStroke}
         />
+        {/* Meal-segment dividers — small white circles bisecting each arc */}
+        {calDividers.map((p, i) => {
+          const { x, y } = pointOn(r1, p)
+          return (
+            <circle
+              key={`cal-div-${i}`}
+              cx={x}
+              cy={y}
+              r={outerMarkerR}
+              fill="var(--surface)"
+              stroke="rgba(15,23,42,0.08)"
+              strokeWidth={1}
+            />
+          )
+        })}
+        {proteinDividers.map((p, i) => {
+          const { x, y } = pointOn(r2, p)
+          return (
+            <circle
+              key={`prot-div-${i}`}
+              cx={x}
+              cy={y}
+              r={innerMarkerR}
+              fill="var(--surface)"
+              stroke="rgba(15,23,42,0.08)"
+              strokeWidth={1}
+            />
+          )
+        })}
       </svg>
       <div
         style={{
