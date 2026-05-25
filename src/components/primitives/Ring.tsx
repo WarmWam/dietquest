@@ -37,18 +37,21 @@ function proteinZone(pct: number) {
 }
 
 // Walk a per-slot array, return the cumulative percentage at the END of each
-// slot (except the very last — its end is the arc end and needs no divider).
-// We only emit a divider if it falls strictly inside (0, filledPct] so it
-// always lands on the colored arc, never on the empty track.
+// slot. Only emit boundaries that fall inside the colored arc so we never
+// place a marker on the empty grey track. The last slot's end is the arc
+// tip — we skip it (the rounded linecap is its visual cap) but still emit
+// the previous boundaries even if the cumulative equals filledPct.
 function buildDividers(slots: number[] | undefined, target: number, filledPct: number): number[] {
-  if (!slots || slots.length === 0 || target <= 0) return []
+  if (!slots || slots.length === 0 || target <= 0 || filledPct <= 0) return []
   const out: number[] = []
   let running = 0
   for (let i = 0; i < slots.length - 1; i++) {
     running += slots[i] || 0
     if (running <= 0) continue
     const pct = running / target
-    if (pct > 0 && pct < filledPct - 0.005) out.push(pct)
+    // Allow up to filledPct but not the very tip — leave a hair of room so
+    // the marker doesn't sit on top of the rounded linecap.
+    if (pct > 0 && pct <= Math.min(filledPct, 1) - 0.001) out.push(pct)
   }
   return out
 }
@@ -85,9 +88,10 @@ export function Ring({
   // 12 o'clock; we add positions clockwise from there as pct grows.
   const calDividers = buildDividers(calBySlot, target, pct)
   const proteinDividers = buildDividers(proteinBySlot, proteinTarget, pctProtein)
-  // Marker size: slightly smaller than the stroke so it cleanly bisects.
-  const outerMarkerR = Math.max(stroke / 2 - 2, 2.5)
-  const innerMarkerR = Math.max(innerStroke / 2 + 0.5, 2.5)
+  // Marker size: bisect the stroke. Slight overshoot so the divider's
+  // border reads clearly against the pastel arc on both sides.
+  const outerMarkerR = stroke / 2 + 1
+  const innerMarkerR = innerStroke / 2 + 1.5
 
   function pointOn(r: number, p: number) {
     const theta = 2 * Math.PI * p
@@ -130,9 +134,9 @@ export function Ring({
               cx={x}
               cy={y}
               r={outerMarkerR}
-              fill="var(--surface)"
-              stroke="rgba(15,23,42,0.08)"
-              strokeWidth={1}
+              fill="#FFFFFF"
+              stroke="rgba(15,23,42,0.45)"
+              strokeWidth={1.25}
             />
           )
         })}
@@ -144,9 +148,9 @@ export function Ring({
               cx={x}
               cy={y}
               r={innerMarkerR}
-              fill="var(--surface)"
-              stroke="rgba(15,23,42,0.08)"
-              strokeWidth={1}
+              fill="#FFFFFF"
+              stroke="rgba(15,23,42,0.45)"
+              strokeWidth={1.25}
             />
           )
         })}
