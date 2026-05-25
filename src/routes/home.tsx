@@ -1200,22 +1200,6 @@ function CustomizeMealSheet({
 
         {/* Library picker */}
         <p className={styles.fieldLabel}>Add from library</p>
-        <div className="dq-h-scroll" style={{ margin: '0 -20px 10px 0', paddingRight: 20 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {FOOD_CATEGORIES.map((cat) => (
-              <button
-                className="dq-seg-item"
-                data-active={category === cat.id}
-                key={cat.id}
-                onClick={() => setCategory(cat.id)}
-                type="button"
-                style={{ border: 0, flex: '0 0 auto', padding: '6px 12px', fontSize: 12 }}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
         <div style={{ position: 'relative', marginBottom: 10 }}>
           <span style={{ position: 'absolute', top: '50%', left: 12, transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', color: 'var(--t-3)', pointerEvents: 'none' }}>
             <Icon name="search" size={14} />
@@ -1248,6 +1232,22 @@ function CustomizeMealSheet({
               <Icon name="x" size={12} />
             </button>
           ) : null}
+        </div>
+        <div className="dq-h-scroll" style={{ margin: '0 -20px 10px 0', paddingRight: 20 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {FOOD_CATEGORIES.map((cat) => (
+              <button
+                className="dq-seg-item"
+                data-active={category === cat.id}
+                key={cat.id}
+                onClick={() => setCategory(cat.id)}
+                type="button"
+                style={{ border: 0, flex: '0 0 auto', padding: '6px 12px', fontSize: 12 }}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filteredFoods.length === 0 ? (
