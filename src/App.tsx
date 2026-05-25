@@ -23,6 +23,7 @@ import { bulkAddFoods, getCatalogCount, getLegacyUserFoods, updateFood, watchFoo
 import { STARTER_FOODS } from './data/starterFoods'
 import { STARTER_COM_FOODS } from './data/starterComFoods'
 import { EXTENDED_FOOD_PACK } from './data/extendedFoodPack'
+import { EXTENDED_FRUIT_PACK } from './data/extendedFruitPack'
 
 function App() {
   useEffect(() => {
@@ -114,6 +115,22 @@ function AuthGate() {
                 console.log(`[catalog] imported ${newOnes.length} extended food pack items`)
               }
               localStorage.setItem(EXT_PACK_FLAG, '1')
+            }
+
+            // Pass 5: one-time bulk import of the extended Thai fruit pack.
+            // Same dedup-by-name discipline as Pass 4; runs once per device.
+            const FRUIT_PACK_FLAG = 'dq-extended-fruit-pack-v1'
+            if (!localStorage.getItem(FRUIT_PACK_FLAG)) {
+              const refreshed = await new Promise<typeof data>((res) => {
+                const u = watchFoods('', ({ data: d }) => { u(); res(d) })
+              })
+              const liveNames = new Set(refreshed.map((f) => f.name))
+              const newFruits = EXTENDED_FRUIT_PACK.filter((p) => !liveNames.has(p.name))
+              if (newFruits.length > 0) {
+                await bulkAddFoods(newFruits)
+                console.log(`[catalog] imported ${newFruits.length} extended fruit pack items`)
+              }
+              localStorage.setItem(FRUIT_PACK_FLAG, '1')
             }
 
             resolve()
