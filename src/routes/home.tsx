@@ -1113,7 +1113,14 @@ function CustomizeMealSheet({
     <div
       style={{
         position: 'fixed',
-        inset: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        // Use the small/dynamic viewport height so iOS Safari's bottom
+        // URL bar can't eat into our footer — `inset: 0` resolves to the
+        // layout viewport which is taller than what the user actually sees.
+        height: '100dvh',
+        maxHeight: '100dvh',
         background: 'var(--bg)',
         zIndex: 120,
         display: 'flex',

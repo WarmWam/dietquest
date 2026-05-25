@@ -30,10 +30,17 @@ export function FullscreenModal({
         background: 'var(--bg)',
         display: 'flex',
         flexDirection: 'column',
-        inset: 0,
+        // Pin to top + use dynamic viewport height so iOS Safari's URL
+        // bar can't overlay the bottom of the sheet (which would hide
+        // sticky footer buttons like Save).
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '100dvh',
+        maxHeight: '100dvh',
         overflow: 'hidden',
         overscrollBehavior: 'contain',
-        position: 'fixed',
         zIndex,
       }}
     >
