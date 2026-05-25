@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Button, Card, Icon, Ring, Skeleton, type IconName } from '@/components/primitives'
@@ -1109,20 +1110,23 @@ function CustomizeMealSheet({
     onSave(finalItems)
   }
 
-  return (
+  // Render via portal to document.body so the sheet escapes the
+  // <Phone> wrapper's stacking context (`isolation: isolate` +
+  // `overflow: hidden`) and ancestor `backdrop-filter` chains that can
+  // turn `position: fixed` into a child-positioned element on iOS Safari
+  // — both in browser tabs and in PWA standalone mode.
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <div
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
-        // Use the small/dynamic viewport height so iOS Safari's bottom
-        // URL bar can't eat into our footer — `inset: 0` resolves to the
-        // layout viewport which is taller than what the user actually sees.
         height: '100dvh',
         maxHeight: '100dvh',
         background: 'var(--bg)',
-        zIndex: 120,
+        zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -1310,6 +1314,7 @@ function CustomizeMealSheet({
           {saving ? 'Saving...' : activeItems.length > 0 ? `Save ${activeItems.length} item${activeItems.length === 1 ? '' : 's'} · ${totalKcal} kcal` : 'Select items to save'}
         </Button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

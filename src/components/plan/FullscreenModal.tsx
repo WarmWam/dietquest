@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { appStyles as styles } from '@/components/layout/AppScreen'
 import { Icon, type IconName } from '@/components/primitives'
 import { useScrollLock } from '@/hooks/useScrollLock'
@@ -18,11 +19,13 @@ export function FullscreenModal({
   eyebrow,
   onClose,
   title,
-  zIndex = 120,
+  zIndex = 9999,
 }: FullscreenModalProps) {
   useScrollLock()
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       aria-modal="true"
       role="dialog"
@@ -31,8 +34,8 @@ export function FullscreenModal({
         display: 'flex',
         flexDirection: 'column',
         // Pin to top + use dynamic viewport height so iOS Safari's URL
-        // bar can't overlay the bottom of the sheet (which would hide
-        // sticky footer buttons like Save).
+        // bar / home indicator area can't hide the bottom of the sheet,
+        // and so footer buttons (Save, etc.) stay visible.
         position: 'fixed',
         top: 0,
         left: 0,
@@ -75,6 +78,7 @@ export function FullscreenModal({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
