@@ -123,7 +123,7 @@ export function LogMealRoute() {
 
   return (
     <AppScreen hideNav>
-      <div className={`${styles.screen} ${styles.scroll}`} style={{ paddingBottom: draft.length > 0 ? 140 : 24 }}>
+      <div className={`${styles.screen} ${styles.scroll}`} style={{ paddingBottom: 140 }}>
         <header className={styles.screenHeader}>
           <button className={styles.iconButton} onClick={() => navigate('/')} type="button">
             <Icon name="x" />
@@ -211,18 +211,18 @@ export function LogMealRoute() {
         </div>
       </div>
 
-      {draft.length > 0 && (
-        <div
-          style={{
-            position: 'fixed',
-            left: 0, right: 0, bottom: 0,
-            zIndex: 90,
-            background: 'var(--surface)',
-            borderTop: '1px solid var(--line)',
-            padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
-            boxShadow: '0 -8px 24px rgba(15,23,42,0.08)',
-          }}
-        >
+      <div
+        style={{
+          position: 'fixed',
+          left: 0, right: 0, bottom: 0,
+          zIndex: 90,
+          background: 'var(--surface)',
+          borderTop: '1px solid var(--line)',
+          padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)',
+          boxShadow: '0 -8px 24px rgba(15,23,42,0.08)',
+        }}
+      >
+        {draft.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 120, overflowY: 'auto', marginBottom: 10 }}>
             {draft.map((it) => {
               const food = foodMap.get(it.food_id)
@@ -242,11 +242,15 @@ export function LogMealRoute() {
               )
             })}
           </div>
-          <Button disabled={saving} onClick={() => void saveMeal()}>
-            {saving ? 'Saving...' : `Save ${draft.length} item${draft.length === 1 ? '' : 's'} · ${totals.kcal} kcal`}
-          </Button>
-        </div>
-      )}
+        )}
+        <Button disabled={saving || draft.length === 0} onClick={() => void saveMeal()}>
+          {saving
+            ? 'Saving...'
+            : draft.length > 0
+              ? `Save ${draft.length} item${draft.length === 1 ? '' : 's'} · ${totals.kcal} kcal`
+              : 'Tap + to select food'}
+        </Button>
+      </div>
     </AppScreen>
   )
 }
