@@ -25,9 +25,6 @@ const NUMBER = {
   red: '#DC2626',
 }
 
-// Distinct pastel per meal slot. Index 0..3 = breakfast, lunch, dinner, snack.
-const MEAL_PASTEL = ['#FDBA74', '#FCD34D', '#A5B4FC', '#F9A8D4']
-
 function calorieZone(pct: number) {
   if (pct >= 1) return { stroke: STROKE.red, number: NUMBER.red }
   if (pct >= 0.7) return { stroke: STROKE.yellow, number: NUMBER.yellow }
@@ -40,25 +37,41 @@ function proteinZone(pct: number) {
   return { stroke: STROKE.red, number: NUMBER.red }
 }
 
-type Segment = { startPct: number; lenPct: number; slotIdx: number }
+type Segment = {
+  startPct: number   // where the visible arc begins on the ring [0..1]
+  lenPct: number     // visible length on the ring [0..1] (capped at remaining room)
+  slotIdx: number    // 0=breakfast, 1=lunch, 2=dinner, 3=snack
+  rawCumEnd: number  // uncapped cumulative ratio at this segment's end — used for zone color
+}
 
 // Build gap-separated segments capped at the target. Empty slots are
-// skipped; cumulative length never exceeds 100% of the ring.
+// skipped; cumulative length never exceeds 100% of the ring. We also
+// keep the *uncapped* cumulative so per-segment color can still flag
+// over-target (raw cum >= 1 → red zone).
 function buildSegments(slots: number[] | undefined, target: number, fallbackValue: number): Segment[] {
-  // If no per-slot data provided, treat the whole eaten value as one
-  // segment so the ring still renders without breaking older callers.
   const effectiveSlots = slots && slots.length > 0 ? slots : [fallbackValue, 0, 0, 0]
   if (target <= 0) return []
   const out: Segment[] = []
-  let cum = 0
+  let cumVisible = 0
+  let cumRaw = 0
   for (let i = 0; i < effectiveSlots.length; i++) {
     const val = effectiveSlots[i] || 0
     if (val <= 0) continue
-    const lenPct = Math.min(val / target, Math.max(0, 1 - cum))
-    if (lenPct <= 0) continue
-    out.push({ startPct: cum, lenPct, slotIdx: i })
-    cum += lenPct
-    if (cum >= 1) break
+    const rawLenPct = val / target
+    cumRaw += rawLenPct
+    const lenPct = Math.min(rawLenPct, Math.max(0, 1 - cumVisible))
+    if (lenPct <= 0) {
+      // Still record so over-target slots after the cap can be styled red
+      // — but they have no visible arc to draw. Skip.
+      continue
+    }
+    out.push({ startPct: cumVisible, lenPct, slotIdx: i, rawCumEnd: cumRaw })
+    cumVisible += lenPct
+    if (cumVisible >= 1) {
+      // Continue accumulating cumRaw above for completeness, but stop
+      // pushing visible segments since the ring is full.
+      // (no-op here — loop will exit when slots run out)
+    }
   }
   return out
 }
@@ -102,10 +115,13 @@ export function Ring({
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
         {/* Outer track */}
         <circle cx={cx} cy={cy} r={r1} fill="none" stroke="var(--bg-soft)" strokeWidth={stroke} />
-        {/* Outer segments (one per meal slot, colored per meal) */}
+        {/* Outer segments — one per meal slot, each colored by the zone
+            criteria evaluated at THAT segment's cumulative end. So you
+            can see at a glance which meal pushed you into yellow/red. */}
         {calSegments.map((seg, i) => {
           const segLenAbs = c1 * seg.lenPct
           const visibleLen = Math.max(segLenAbs - GAP_PX, 0.5)
+          const segColor = calorieZone(seg.rawCumEnd).stroke
           return (
             <circle
               key={`cal-seg-${i}`}
@@ -113,7 +129,7 @@ export function Ring({
               cy={cy}
               r={r1}
               fill="none"
-              stroke={MEAL_PASTEL[seg.slotIdx] ?? cal.stroke}
+              stroke={segColor}
               strokeWidth={stroke}
               strokeLinecap="butt"
               strokeDasharray={`${visibleLen} ${c1}`}
