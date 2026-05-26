@@ -564,8 +564,9 @@ function PlanMealCard({
     <Card
       padding={14}
       style={{
-        background: done ? (overPlan ? 'color-mix(in oklab, #FEF3C7 58%, var(--surface))' : 'color-mix(in oklab, #BBF7D0 48%, var(--surface))') : undefined,
-        borderColor: done ? (overPlan ? 'rgba(245, 158, 11, 0.42)' : 'rgba(34, 197, 94, 0.36)') : undefined,
+        // Match the ring rule: green if at/under plan, red if over plan.
+        background: done ? (overPlan ? 'color-mix(in oklab, #FCA5A5 42%, var(--surface))' : 'color-mix(in oklab, #BBF7D0 48%, var(--surface))') : undefined,
+        borderColor: done ? (overPlan ? 'rgba(220, 38, 38, 0.40)' : 'rgba(34, 197, 94, 0.36)') : undefined,
         marginBottom: 10,
       }}
     >

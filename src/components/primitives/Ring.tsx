@@ -35,16 +35,11 @@ function calorieZone(pct: number) {
   return { stroke: STROKE.green, number: NUMBER.green }
 }
 
-// Per-meal calorie zone — compares this meal's actual kcal to what was
-// planned for the slot. Matches the meal card: at/under plan = green,
-// over plan = yellow, way over (>1.5x) = red. With no plan to compare,
-// fall back to green so the segment isn't punished.
+// Per-meal calorie zone — two colors only: green if at/under plan,
+// red if over plan. No plan to compare → green.
 function mealCalZone(actual: number, plan: number) {
   if (plan <= 0) return { stroke: STROKE.green }
-  const ratio = actual / plan
-  if (ratio > 1.5) return { stroke: STROKE.red }
-  if (ratio > 1) return { stroke: STROKE.yellow }
-  return { stroke: STROKE.green }
+  return actual > plan ? { stroke: STROKE.red } : { stroke: STROKE.green }
 }
 
 function proteinZone(pct: number) {
