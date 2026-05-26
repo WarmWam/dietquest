@@ -10,6 +10,10 @@ type RingProps = {
   // When supplied, both rings render as gap-separated segments instead of
   // a single continuous arc.
   calBySlot?: number[]
+  // Planned kcal per slot (parallel to calBySlot). When supplied, each
+  // calorie segment colours itself by actual-vs-plan ratio rather than by
+  // cumulative-vs-daily-target — so the ring agrees with the meal card.
+  calPlanBySlot?: number[]
   proteinBySlot?: number[]
 }
 
@@ -29,6 +33,18 @@ function calorieZone(pct: number) {
   if (pct >= 1) return { stroke: STROKE.red, number: NUMBER.red }
   if (pct >= 0.7) return { stroke: STROKE.yellow, number: NUMBER.yellow }
   return { stroke: STROKE.green, number: NUMBER.green }
+}
+
+// Per-meal calorie zone — compares this meal's actual kcal to what was
+// planned for the slot. Matches the meal card: at/under plan = green,
+// over plan = yellow, way over (>1.5x) = red. With no plan to compare,
+// fall back to green so the segment isn't punished.
+function mealCalZone(actual: number, plan: number) {
+  if (plan <= 0) return { stroke: STROKE.green }
+  const ratio = actual / plan
+  if (ratio > 1.5) return { stroke: STROKE.red }
+  if (ratio > 1) return { stroke: STROKE.yellow }
+  return { stroke: STROKE.green }
 }
 
 function proteinZone(pct: number) {
@@ -85,6 +101,7 @@ export function Ring({
   label = 'eaten',
   sub = 'kcal',
   calBySlot,
+  calPlanBySlot,
   proteinBySlot,
 }: RingProps) {
   // Slightly slimmer rings + tighter gap → more breathing room for the
@@ -115,13 +132,15 @@ export function Ring({
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
         {/* Outer track */}
         <circle cx={cx} cy={cy} r={r1} fill="none" stroke="var(--bg-soft)" strokeWidth={stroke} />
-        {/* Outer segments — one per meal slot, each colored by the zone
-            criteria evaluated at THAT segment's cumulative end. So you
-            can see at a glance which meal pushed you into yellow/red. */}
+        {/* Outer segments — one per meal slot, each colored by per-meal
+            actual-vs-plan ratio. Matches the meal card's color so the
+            ring and card always agree about whether a slot is on plan. */}
         {calSegments.map((seg, i) => {
           const segLenAbs = c1 * seg.lenPct
           const visibleLen = Math.max(segLenAbs - GAP_PX, 0.5)
-          const segColor = calorieZone(seg.rawCumEnd).stroke
+          const slotActual = calBySlot?.[seg.slotIdx] ?? 0
+          const slotPlan = calPlanBySlot?.[seg.slotIdx] ?? 0
+          const segColor = mealCalZone(slotActual, slotPlan).stroke
           return (
             <circle
               key={`cal-seg-${i}`}

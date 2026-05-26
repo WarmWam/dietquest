@@ -202,6 +202,12 @@ function HomeFullContent({
   const proteinBySlot = SLOT_ORDER.map((t) =>
     meals.filter((m) => m.meal_type === t).reduce((s, m) => s + (m.total_protein_g ?? 0), 0),
   )
+  // Planned kcal per slot (parallel to calBySlot) so the ring can colour
+  // each segment using the same rule as the meal card: green if at/under
+  // plan, yellow if over plan, red if well over.
+  const calPlanBySlot = SLOT_ORDER.map((t) =>
+    (plan?.[t] ?? []).reduce((s, it) => s + (it.kcal ?? 0), 0),
+  )
 
   useEffect(() => {
     if (sleep) {
@@ -416,7 +422,7 @@ function HomeFullContent({
             </span>
           )}
         </div>
-        <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} calBySlot={calBySlot} proteinBySlot={proteinBySlot} />
+        <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} calBySlot={calBySlot} calPlanBySlot={calPlanBySlot} proteinBySlot={proteinBySlot} />
       </Card>
       {!isToday ? (
         <Button onClick={() => setSelectedDate(getTodayKey())} variant="ghost">
