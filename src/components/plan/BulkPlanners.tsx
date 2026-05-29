@@ -53,15 +53,6 @@ function makeMealItem(food: Food, portion: number): MealPlanItem {
   }
 }
 
-function findFoodMatch(foods: Food[], patterns: string[]): Food | null {
-  const lower = (s: string) => s.toLowerCase()
-  for (const p of patterns) {
-    const match = foods.find((f) => lower(f.name).includes(lower(p)))
-    if (match) return match
-  }
-  return null
-}
-
 // ─────────────────────────────────────────────────────────────
 // Shared chrome
 // ─────────────────────────────────────────────────────────────
@@ -112,17 +103,10 @@ type GenericSlot = {
   items: SlotItem[]
 }
 
-type BreakfastConfig = {
-  enabled: boolean
-  whey_portion: number
-  egg_portion: number
-  fruit_mode: 'random_all' | 'pick'
-  fruit_picks: string[] // food_ids
-}
-
-type MealSlot = 'lunch' | 'dinner' | 'snack'
+type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 
 const GENERIC_SLOTS: { id: MealSlot; label: string }[] = [
+  { id: 'breakfast', label: 'Breakfast' },
   { id: 'lunch', label: 'Lunch' },
   { id: 'dinner', label: 'Dinner' },
   { id: 'snack', label: 'Snack' },
@@ -139,35 +123,22 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
   const { data: foods } = useFoods()
   const [{ start, end }, setRange] = useState(defaultRange())
-  const [breakfast, setBreakfast] = useState<BreakfastConfig>({
-    enabled: true,
-    whey_portion: 1,
-    egg_portion: 2,
-    fruit_mode: 'random_all',
-    fruit_picks: [],
-  })
   const [slots, setSlots] = useState<Record<MealSlot, GenericSlot>>({
+    breakfast: { enabled: false, items: [] },
     lunch: { enabled: false, items: [] },
     dinner: { enabled: false, items: [] },
     snack: { enabled: false, items: [] },
   })
-  const [dinnerWheyPortion, setDinnerWheyPortion] = useState(1)
   const [addMenu, setAddMenu] = useState<MealSlot | null>(null)
   const [picking, setPicking] = useState<{ slot: MealSlot; mode: 'specific' | 'category' } | null>(null)
   const [applying, setApplying] = useState(false)
 
   const dates = useMemo(() => datesInRange(start, end), [start, end])
   const foodMap = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
-  const fruits = useMemo(() => foods.filter((f) => f.category === 'fruit'), [foods])
-  const whey = useMemo(() => findFoodMatch(foods, ['Whey']), [foods])
-  const egg = useMemo(() => findFoodMatch(foods, ['ไข่', 'Egg']), [foods])
 
   const canApply =
     dates.length > 0 &&
-    (
-      (breakfast.enabled && (breakfast.whey_portion > 0 || breakfast.egg_portion > 0 || fruits.length > 0)) ||
-      Object.values(slots).some((s) => s.enabled && s.items.length > 0)
-    )
+    Object.values(slots).some((s) => s.enabled && s.items.length > 0)
 
   function updateSlot(slot: MealSlot, next: Partial<GenericSlot>) {
     setSlots((cur) => ({ ...cur, [slot]: { ...cur[slot], ...next } }))
@@ -193,28 +164,10 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
 
   // ─── Generation ──────────────────────────────────────────────
 
-  function buildBreakfast(): MealPlanItem[] {
-    if (!breakfast.enabled) return []
-    const out: MealPlanItem[] = []
-    if (whey && breakfast.whey_portion > 0) out.push(makeMealItem(whey, breakfast.whey_portion))
-    if (egg && breakfast.egg_portion > 0) out.push(makeMealItem(egg, breakfast.egg_portion))
-    const pool = breakfast.fruit_mode === 'random_all'
-      ? fruits
-      : fruits.filter((f) => breakfast.fruit_picks.includes(f.id))
-    const picked = pickRandom(pool)
-    if (picked) out.push(makeMealItem(picked, 1))
-    return out
-  }
-
   function buildSlot(slot: MealSlot): MealPlanItem[] {
     const cfg = slots[slot]
     if (!cfg.enabled) return []
     const out: MealPlanItem[] = []
-
-    // Dinner gets a fixed whey item up front (user-set portion).
-    if (slot === 'dinner' && whey && dinnerWheyPortion > 0) {
-      out.push(makeMealItem(whey, dinnerWheyPortion))
-    }
 
     const fixedFoods: SlotItem[] = []
     const randomFoodPool: SlotItem[] = []
@@ -268,7 +221,7 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
     try {
       const plans: MealPlan[] = dates.map((date) => ({
         date,
-        breakfast: buildBreakfast(),
+        breakfast: buildSlot('breakfast'),
         lunch: buildSlot('lunch'),
         dinner: buildSlot('dinner'),
         snack: buildSlot('snack'),
@@ -291,8 +244,6 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
     <SheetShell title="Bulk meal planner" onClose={onClose}>
       <DateRangeRow start={start} end={end} onChange={setRange} />
 
-      <BreakfastSection config={breakfast} fruits={fruits} whey={whey} egg={egg} onChange={setBreakfast} />
-
       {GENERIC_SLOTS.map((slot) => (
         <GenericSlotCard
           key={slot.id}
@@ -304,15 +255,6 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
           onShowAddMenu={() => setAddMenu(slot.id)}
           onRemove={(itemId) => removeItem(slot.id, itemId)}
           onUpdate={(itemId, patch) => updateItem(slot.id, itemId, patch)}
-          extra={
-            slot.id === 'dinner' && slots.dinner.enabled ? (
-              <DinnerWheySlot
-                whey={whey}
-                portion={dinnerWheyPortion}
-                onChange={setDinnerWheyPortion}
-              />
-            ) : null
-          }
         />
       ))}
 
@@ -366,155 +308,11 @@ export function BulkMealPlanner({ onClose }: { onClose: () => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Breakfast section — whey + egg + fruit
-// ─────────────────────────────────────────────────────────────
-
-function BreakfastSection({
-  config, fruits, whey, egg, onChange,
-}: {
-  config: BreakfastConfig
-  fruits: Food[]
-  whey: Food | null
-  egg: Food | null
-  onChange: (next: BreakfastConfig) => void
-}) {
-  function patch(p: Partial<BreakfastConfig>) { onChange({ ...config, ...p }) }
-  function toggleFruit(id: string) {
-    const next = config.fruit_picks.includes(id)
-      ? config.fruit_picks.filter((x) => x !== id)
-      : [...config.fruit_picks, id]
-    patch({ fruit_picks: next })
-  }
-
-  return (
-    <Card padding={14} style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: config.enabled ? 14 : 0 }}>
-        <button
-          className={styles.switch}
-          data-on={config.enabled}
-          onClick={() => patch({ enabled: !config.enabled })}
-          type="button"
-          aria-label="Toggle breakfast planning"
-        >
-          <span className={styles.switchKnob} />
-        </button>
-        <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>Breakfast</span>
-      </div>
-
-      {config.enabled && (
-        <>
-          {/* Whey + Egg */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-            <div>
-              <p className={styles.fieldLabel}>Whey</p>
-              {whey ? (
-                <PortionStepper value={config.whey_portion} unit={whey.portion_unit} step={0.5} min={0} max={10} onChange={(v) => patch({ whey_portion: v })} />
-              ) : (
-                <MissingItemNote label="Add a 'Whey' food in Library" />
-              )}
-            </div>
-            <div>
-              <p className={styles.fieldLabel}>Egg</p>
-              {egg ? (
-                <PortionStepper value={config.egg_portion} unit={egg.portion_unit} step={1} min={0} max={10} onChange={(v) => patch({ egg_portion: v })} />
-              ) : (
-                <MissingItemNote label="Add 'ไข่ต้ม' in Library" />
-              )}
-            </div>
-          </div>
-
-          {/* Fruit mode */}
-          <p className={styles.fieldLabel}>Fruit</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 10 }}>
-            <ModeChip active={config.fruit_mode === 'random_all'} label="Random all" onClick={() => patch({ fruit_mode: 'random_all' })} />
-            <ModeChip active={config.fruit_mode === 'pick'} label="Pick specific" onClick={() => patch({ fruit_mode: 'pick' })} />
-          </div>
-          {config.fruit_mode === 'pick' && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {fruits.length === 0 ? (
-                <MissingItemNote label="No fruits in library. Add some first." />
-              ) : (
-                fruits.map((f) => {
-                  const on = config.fruit_picks.includes(f.id)
-                  return (
-                    <button
-                      key={f.id}
-                      onClick={() => toggleFruit(f.id)}
-                      type="button"
-                      style={{
-                        padding: '6px 12px',
-                        border: 0,
-                        borderRadius: 'var(--r-pill)',
-                        background: on ? 'var(--a1)' : 'var(--bg-soft)',
-                        color: on ? '#fff' : 'var(--t-2)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        outline: 'none',
-                      }}
-                    >
-                      {on ? '✓ ' : ''}{f.name}
-                    </button>
-                  )
-                })
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </Card>
-  )
-}
-
-function MissingItemNote({ label }: { label: string }) {
-  return (
-    <p style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600, padding: '8px 10px', background: 'rgba(245,158,11,0.08)', borderRadius: 'var(--r-sm)' }}>
-      ⚠ {label}
-    </p>
-  )
-}
-
-function ModeChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      type="button"
-      style={{
-        padding: '10px 8px',
-        border: active ? '2px solid var(--a1)' : '1px solid var(--line)',
-        borderRadius: 'var(--r-md)',
-        background: active ? 'var(--a-soft)' : 'var(--surface)',
-        color: active ? 'var(--a1)' : 'var(--t-2)',
-        fontSize: 12,
-        fontWeight: 700,
-        cursor: 'pointer',
-        outline: 'none',
-      }}
-    >
-      {label}
-    </button>
-  )
-}
-
-function PortionStepper({ value, unit, step, min, max, onChange }: { value: number; unit: string; step: number; min: number; max: number; onChange: (v: number) => void }) {
-  const display = step % 1 === 0 ? value : value.toFixed(1)
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-soft)', borderRadius: 'var(--r-pill)', padding: '4px 8px', height: 38 }}>
-      <button type="button" onClick={() => onChange(Math.max(min, Number((value - step).toFixed(2))))} disabled={value <= min}
-        style={{ width: 26, height: 26, borderRadius: '50%', border: 0, background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>−</button>
-      <span style={{ fontSize: 14, fontWeight: 800 }}>{display} <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>{unit}</span></span>
-      <button type="button" onClick={() => onChange(Math.min(max, Number((value + step).toFixed(2))))} disabled={value >= max}
-        style={{ width: 26, height: 26, borderRadius: '50%', border: 0, background: 'var(--surface)', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>+</button>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────
-// Generic slot (lunch / dinner / snack)
+// Generic slot (breakfast / lunch / dinner / snack)
 // ─────────────────────────────────────────────────────────────
 
 function GenericSlotCard({
-  slot, slotId, label, foodMap, onToggleEnabled, onShowAddMenu, onRemove, onUpdate, extra,
+  slot, slotId, label, foodMap, onToggleEnabled, onShowAddMenu, onRemove, onUpdate,
 }: {
   slot: GenericSlot
   slotId: MealSlot
@@ -524,7 +322,6 @@ function GenericSlotCard({
   onShowAddMenu: () => void
   onRemove: (itemId: string) => void
   onUpdate: (itemId: string, patch: Partial<SlotItem>) => void
-  extra?: React.ReactNode
 }) {
   void slotId
   return (
@@ -553,8 +350,6 @@ function GenericSlotCard({
         ) : null}
       </div>
 
-      {slot.enabled && extra ? <div style={{ marginTop: 12 }}>{extra}</div> : null}
-
       {slot.enabled && slot.items.length > 0 ? (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {slot.items.map((it) => (
@@ -563,24 +358,6 @@ function GenericSlotCard({
         </div>
       ) : null}
     </Card>
-  )
-}
-
-function DinnerWheySlot({
-  whey, portion, onChange,
-}: {
-  whey: Food | null
-  portion: number
-  onChange: (v: number) => void
-}) {
-  if (!whey) {
-    return <MissingItemNote label="Add a 'Whey' food in Library to enable dinner whey" />
-  }
-  return (
-    <div>
-      <p className={styles.fieldLabel}>Whey (fixed)</p>
-      <PortionStepper value={portion} unit={whey.portion_unit} step={0.5} min={0} max={10} onChange={onChange} />
-    </div>
   )
 }
 
