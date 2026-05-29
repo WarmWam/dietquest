@@ -8,7 +8,8 @@
     "build": "node scripts/write-fcm-sw.mjs && tsc -b && vite build",
     "preview": "vite preview --host",
     "lint": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "backfill-sugar": "node scratch/backfill_sugar.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -27,6 +28,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "firebase-admin": "^13.10.0",
     "firebase-tools": "^15.18.0",
     "playwright": "^1.60.0",
     "prettier": "^3.3.0",

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppScreen, appStyles as styles } from '@/components/layout/AppScreen'
 import { Card, Icon, Skeleton, type IconName } from '@/components/primitives'
@@ -14,7 +14,7 @@ import { useMonthWorkoutPlans } from '@/hooks/useWorkoutPlan'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { toast } from '@/stores/toastStore'
 import { buildActualWeightSeries, buildCalculatedWeightSeries, type DayEnergy } from '@/lib/weight'
-import type { DayTotals, MealType, SleepLog, WorkoutLog, WorkoutPlan, WorkoutPlanType } from '@/types/domain'
+import type { MealItem, MealLog, MealType, WorkoutLog, WorkoutPlan, WorkoutPlanType } from '@/types/domain'
 
 type MealSlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
 const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
@@ -25,7 +25,6 @@ const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
 }
 
 type ProgressTab = 'weight' | 'health' | 'activity'
-type CalorieView = 'week' | 'month' | 'year'
 type HealthMetric = 'kcal' | 'protein' | 'sugar' | 'drink' | 'sleep'
 
 const tabs: Array<{ id: ProgressTab; label: string }> = [
@@ -257,108 +256,278 @@ function HealthTab({ initialMetric }: { initialMetric: HealthMetric }) {
   )
 }
 
-function CaloriesTab() {
-  const [view, setView] = useState<CalorieView>('week')
-  const { data: meals, error: mealsError } = useMeals()
-  const { data: yearTotals, error: totalsError } = useDayTotals(365)
-  const { profile } = useUser()
-  const dailyTarget = profile?.settings?.daily_kcal_target ?? 1950
+// ─────────────────────────────────────────────────────────────
+// Generic drill-down metric chart (Calories / Protein / Sugar / Drink / Sleep)
+//   meal mode:   tap a bar once → summary; tap same bar again → drill down
+//   simple mode: tap a bar → drill down immediately
+//   lowest level (a day) → meals (meal mode) or a day-detail card (simple)
+// ─────────────────────────────────────────────────────────────
 
-  // Live sum from meals[] (source of truth) — denormalized day totals
-  // can drift if a meal was deleted without decrementing.
-  const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
-  const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
+type Zone = { stroke: string; number: string }
+const BAR_STROKE = { green: '#86EFAC', yellow: '#FCD34D', red: '#FCA5A5' }
+const BAR_NUMBER = { green: '#16A34A', yellow: '#D97706', red: '#DC2626' }
 
-  const todayDate = todayKey()
-  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, kcal: liveKcal, protein_g: liveProtein } } : t)
-  const bars = buildCalorieBars(totals, view)
-  const maxKcal = Math.max(...bars.map((bar) => bar.kcal), dailyTarget, 1)
+// don't-exceed (kcal, sugar)
+function barZoneColor(value: number, target: number): Zone {
+  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+  const p = value / target
+  if (p >= 1) return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
+  if (p >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
+  return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+}
+// hit-target (protein, water, sleep)
+function targetZoneColor(value: number, target: number): Zone {
+  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+  const p = value / target
+  if (p >= 1) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
+  if (p >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
+  return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
+}
 
-  useEffect(() => {
-    if (mealsError || totalsError) toast.error("Couldn't load calorie progress. Try again.")
-  }, [mealsError, totalsError])
+function fmt1(v: number): string {
+  if (v <= 0) return '0'
+  const r = Math.round(v * 10) / 10
+  return Number.isInteger(r) ? `${r}` : r.toFixed(1)
+}
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function shiftDays(base: Date, n: number): Date {
+  const d = new Date(base)
+  d.setDate(d.getDate() + n)
+  return d
+}
+function prettyDate(dateKey: string): string {
+  const d = new Date(`${dateKey}T00:00:00`)
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+type Scope =
+  | { kind: 'year' }
+  | { kind: 'month'; y: number; m: number }
+  | { kind: 'week'; start: string }
+  | { kind: 'day'; date: string }
+type Bar = { key: string; label: string; value: number; isDay: boolean; dayDate?: string; child?: Scope }
+
+function avgOver(dates: string[], valueByDate: Map<string, number>): number {
+  let sum = 0
+  let count = 0
+  for (const d of dates) {
+    const v = valueByDate.get(d) ?? 0
+    if (v > 0) { sum += v; count += 1 }
+  }
+  return count > 0 ? sum / count : 0
+}
+
+function buildBars(scope: Scope, valueByDate: Map<string, number>): Bar[] {
+  const today = new Date()
+  if (scope.kind === 'year') {
+    const out: Bar[] = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      const y = d.getFullYear()
+      const m = d.getMonth()
+      const last = new Date(y, m + 1, 0).getDate()
+      const dates: string[] = []
+      for (let day = 1; day <= last; day++) dates.push(ymd(new Date(y, m, day)))
+      out.push({ key: `mon-${y}-${m}`, label: MONTH_SHORT[m], value: avgOver(dates, valueByDate), isDay: false, child: { kind: 'month', y, m } })
+    }
+    return out
+  }
+  if (scope.kind === 'month') {
+    const { y, m } = scope
+    const last = new Date(y, m + 1, 0).getDate()
+    const out: Bar[] = []
+    let wi = 0
+    for (let start = 1; start <= last; start += 7) {
+      wi++
+      const dates: string[] = []
+      for (let k = 0; k < 7 && start + k <= last; k++) dates.push(ymd(new Date(y, m, start + k)))
+      out.push({ key: `wk-${y}-${m}-${wi}`, label: `W${wi}`, value: avgOver(dates, valueByDate), isDay: false, child: { kind: 'week', start: dates[0] } })
+    }
+    return out
+  }
+  if (scope.kind === 'week') {
+    const start = new Date(`${scope.start}T00:00:00`)
+    const out: Bar[] = []
+    for (let k = 0; k < 7; k++) {
+      const d = shiftDays(start, k)
+      const key = ymd(d)
+      out.push({ key: `day-${key}`, label: DAY_SHORT[d.getDay()], value: valueByDate.get(key) ?? 0, isDay: true, dayDate: key })
+    }
+    return out
+  }
+  return []
+}
+
+function scopeLabel(scope: Scope): string {
+  if (scope.kind === 'year') return 'Year'
+  if (scope.kind === 'month') { const now = new Date(); return MONTH_SHORT[scope.m] + (scope.y !== now.getFullYear() ? ` ${scope.y}` : '') }
+  if (scope.kind === 'week') { const d = new Date(`${scope.start}T00:00:00`); return `Wk ${d.getDate()} ${MONTH_SHORT[d.getMonth()]}` }
+  return prettyDate(scope.date)
+}
+
+function MetricChart({
+  valueByDate, target, zone, formatValue, formatHeader, unit, todayValue, subtitle, mode, renderDay,
+}: {
+  valueByDate: Map<string, number>
+  target: number
+  zone: (v: number, t: number) => Zone
+  formatValue: (v: number) => string
+  formatHeader?: (v: number) => string
+  unit?: string
+  todayValue: number
+  subtitle: string
+  mode: 'meal' | 'simple'
+  renderDay: (date: string) => ReactNode
+}) {
+  const [stack, setStack] = useState<Scope[]>([{ kind: 'week', start: ymd(shiftDays(new Date(), -6)) }])
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const scope = stack[stack.length - 1]
+  const segLevel = scope.kind === 'year' ? 'year' : scope.kind === 'month' ? 'month' : 'week'
+  const todayK = todayKey()
+
+  function setSegment(level: 'week' | 'month' | 'year') {
+    const t = new Date()
+    const next: Scope = level === 'week' ? { kind: 'week', start: ymd(shiftDays(t, -6)) } : level === 'month' ? { kind: 'month', y: t.getFullYear(), m: t.getMonth() } : { kind: 'year' }
+    setStack([next])
+    setSelectedKey(null)
+  }
+  function drill(child: Scope) { setStack((s) => [...s, child]); setSelectedKey(null) }
+  function popTo(i: number) { setStack((s) => s.slice(0, i + 1)); setSelectedKey(null) }
+
+  const bars = buildBars(scope, valueByDate)
+  const maxVal = Math.max(...bars.map((b) => b.value), target, 1)
+  const isYear = scope.kind === 'year'
+  const headerColor = zone(todayValue, target).number
+
+  const defaultKey = mode === 'meal' && scope.kind === 'week' ? (bars.find((b) => b.dayDate === todayK)?.key ?? null) : null
+  const shownKey = selectedKey ?? defaultKey
+  const selectedBar = bars.find((b) => b.key === shownKey) ?? null
+
+  function onBarTap(bar: Bar) {
+    if (bar.isDay) { setSelectedKey(bar.key); return }
+    if (mode === 'simple') { if (bar.child) drill(bar.child); return }
+    if (shownKey !== bar.key) setSelectedKey(bar.key)
+    else if (bar.child) drill(bar.child)
+  }
+
+  let detail: ReactNode = null
+  if (selectedBar) {
+    if (selectedBar.isDay && selectedBar.dayDate) {
+      detail = renderDay(selectedBar.dayDate)
+    } else if (selectedBar.child) {
+      const children = buildBars(selectedBar.child, valueByDate)
+      const withVal = children.filter((c) => c.value > 0)
+      const maxChild = withVal.reduce((a, c) => (c.value > a ? c.value : a), 0)
+      const avg = withVal.length > 0 ? withVal.reduce((s, c) => s + c.value, 0) / withVal.length : 0
+      detail = (
+        <Card padding={14}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+            <p className="dq-eyebrow">{scopeLabel(selectedBar.child)} · breakdown</p>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-3)' }}>avg {formatValue(avg)}{unit ? ` ${unit}` : ''}/day</span>
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {children.map((c) => {
+              const z = zone(c.value, target)
+              const isMax = c.value > 0 && c.value === maxChild
+              return (
+                <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 36, fontSize: 12, fontWeight: 700, color: 'var(--t-2)' }}>{c.label}</span>
+                  <div style={{ flex: 1, height: 8, background: 'var(--bg-soft)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min((c.value / maxVal) * 100, 100)}%`, background: c.value > 0 ? z.stroke : 'transparent', borderRadius: 999 }} />
+                  </div>
+                  <span style={{ minWidth: 46, textAlign: 'right', fontSize: 12, fontWeight: 800, color: c.value > 0 ? z.number : 'var(--t-3)' }}>{formatValue(c.value)}</span>
+                  <span style={{ width: 26, fontSize: 10, fontWeight: 800, color: 'var(--a1)' }}>{isMax ? 'max' : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+          {mode === 'meal' ? <p className={styles.subtitle} style={{ marginTop: 10, fontSize: 11 }}>Tap this bar again to open {scopeLabel(selectedBar.child).toLowerCase()}.</p> : null}
+        </Card>
+      )
+    }
+  }
 
   return (
     <>
       <div className={styles.chartCard}>
         <p className="dq-eyebrow">Today</p>
-        <strong className="dq-num" style={{ fontSize: 42 }}>
-          {liveKcal}
+        <strong className="dq-num" style={{ fontSize: 42, color: headerColor }}>
+          {formatHeader ? formatHeader(todayValue) : `${formatValue(todayValue)}${unit ? ` ${unit}` : ''}`}
         </strong>
-        <p className={styles.subtitle}>{liveProtein}g protein logged</p>
+        <p className={styles.subtitle}>{subtitle}</p>
+
         <div className="dq-seg" style={{ width: '100%', margin: '14px 0 6px' }}>
-          {(['week', 'month', 'year'] as CalorieView[]).map((item) => (
-            <button
-              className="dq-seg-item"
-              data-active={view === item}
-              key={item}
-              onClick={() => setView(item)}
-              type="button"
-              style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
-            >
-              {item}
-            </button>
+          {(['week', 'month', 'year'] as const).map((item) => (
+            <button key={item} className="dq-seg-item" data-active={segLevel === item} type="button" onClick={() => setSegment(item)}
+              style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}>{item}</button>
           ))}
         </div>
-        <div
-          className={styles.bars}
-          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
-        >
-          {bars.map((bar, index) => {
-            const isToday = bar.date === todayDate
-            const height = Math.max((bar.kcal / maxKcal) * 100, bar.kcal > 0 ? 8 : 3)
-            const zone = barZoneColor(bar.kcal, dailyTarget)
+
+        {stack.length > 1 ? (
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, margin: '0 0 8px' }}>
+            {stack.map((s, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {i > 0 ? <Icon name="chevron" size={12} color="var(--t-3)" /> : null}
+                <button type="button" onClick={() => popTo(i)} disabled={i === stack.length - 1}
+                  style={{ border: 0, background: i === stack.length - 1 ? 'var(--a-soft)' : 'var(--bg-soft)', color: i === stack.length - 1 ? 'var(--a1)' : 'var(--t-2)', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999, cursor: i === stack.length - 1 ? 'default' : 'pointer', outline: 'none' }}>
+                  {scopeLabel(s)}
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className={styles.bars} style={isYear ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}>
+          {bars.map((bar) => {
+            const z = zone(bar.value, target)
+            const h = Math.max((bar.value / maxVal) * 100, bar.value > 0 ? 8 : 3)
+            const selected = bar.key === shownKey
             return (
-              <div
-                className={styles.barColumn}
-                key={`${bar.label}-${index}`}
-                style={{
-                  height: '100%',
-                  minWidth: view === 'year' ? 26 : undefined,
-                  flex: view === 'year' ? '0 0 auto' : undefined,
-                }}
-              >
-                <span style={{ color: bar.kcal > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
-                  {formatKcalLabel(bar.kcal)}
-                </span>
-                <div
-                  className={styles.bar}
-                  style={{
-                    background: bar.kcal > 0 ? zone.stroke : 'var(--bg-soft)',
-                    height: `${height}%`,
-                    outline: isToday ? '2px solid var(--a1)' : 'none',
-                    outlineOffset: isToday ? 1 : 0,
-                  }}
-                />
-                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
-              </div>
+              <button key={bar.key} type="button" onClick={() => onBarTap(bar)} className={styles.barColumn}
+                style={{ height: '100%', minWidth: isYear ? 26 : undefined, flex: isYear ? '0 0 auto' : undefined, border: 0, background: 'transparent', cursor: 'pointer', padding: 0, outline: 'none' }}>
+                <span style={{ color: bar.value > 0 ? z.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>{formatValue(bar.value)}</span>
+                <div className={styles.bar} style={{ background: bar.value > 0 ? z.stroke : 'var(--bg-soft)', height: `${h}%`, outline: selected ? '2px solid var(--a1)' : 'none', outlineOffset: selected ? 1 : 0 }} />
+                <span className="dq-eyebrow" style={{ fontSize: isYear ? 9 : undefined }}>{bar.label}</span>
+              </button>
             )
           })}
         </div>
       </div>
-      <p className="dq-eyebrow" style={{ margin: '4px 4px 10px' }}>Meals today</p>
+
+      {detail ? <div style={{ marginTop: 4 }}>{detail}</div> : null}
+    </>
+  )
+}
+
+function DayMeals({ date, field, suffix }: { date: string; field: 'kcal' | 'protein_g' | 'sugar_g'; suffix: string }) {
+  const { data: meals } = useMeals(date)
+  const valOf = (m: MealLog) => (field === 'kcal' ? m.total_kcal : field === 'protein_g' ? m.total_protein_g : (m.total_sugar_g ?? 0))
+  const itemVal = (it: MealItem) => (field === 'kcal' ? it.kcal : field === 'protein_g' ? it.protein_g : (it.sugar_g ?? 0))
+  return (
+    <>
+      <p className="dq-eyebrow" style={{ margin: '4px 4px 10px' }}>{prettyDate(date)}</p>
       {meals.length === 0 ? (
-        <Card padding={16}>
-          <p className={styles.subtitle}>No meals logged yet.</p>
-        </Card>
+        <Card padding={16}><p className={styles.subtitle}>No meals logged.</p></Card>
       ) : (
         (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
           const slotMeals = meals.filter((m) => m.meal_type === type)
           if (slotMeals.length === 0) return null
           const slotItems = slotMeals.flatMap((m) => m.items)
-          const slotKcal = slotMeals.reduce((s, m) => s + m.total_kcal, 0)
+          const total = slotMeals.reduce((s, m) => s + valOf(m), 0)
           const meta = MEAL_META[type]
           return (
             <Card key={type} padding={14} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Icon color={meta.color} name={meta.icon as IconName} size={22} />
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{slotKcal} kcal</span>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{fmt1(total)} {suffix}</span>
               </div>
               <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
                 {slotItems.map((it, idx) => (
                   <div key={`${type}-${idx}-${it.name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</span>
-                    <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {it.kcal} kcal</span>
+                    <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {fmt1(itemVal(it))} {suffix}</span>
                   </div>
                 ))}
               </div>
@@ -367,752 +536,115 @@ function CaloriesTab() {
         })
       )}
     </>
+  )
+}
+
+function CaloriesTab() {
+  const { data: meals, error: mealsError } = useMeals()
+  const { data: yearTotals, error: totalsError } = useDayTotals(365)
+  const { profile } = useUser()
+  const target = profile?.settings?.daily_kcal_target ?? 1950
+  const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
+  const valueByDate = useMemo(() => {
+    const map = new Map(yearTotals.map((t) => [t.date, t.totals.kcal]))
+    map.set(todayKey(), liveKcal)
+    return map
+  }, [yearTotals, liveKcal])
+  useEffect(() => { if (mealsError || totalsError) toast.error("Couldn't load calorie progress. Try again.") }, [mealsError, totalsError])
+  return (
+    <MetricChart valueByDate={valueByDate} target={target} zone={barZoneColor}
+      formatValue={(v) => Math.round(v).toLocaleString()} unit="kcal" todayValue={liveKcal}
+      subtitle={`limit ${target.toLocaleString()} kcal`} mode="meal"
+      renderDay={(date) => <DayMeals date={date} field="kcal" suffix="kcal" />} />
   )
 }
 
 function ProteinTab() {
-  const [view, setView] = useState<CalorieView>('week')
   const { data: meals, error: mealsError } = useMeals()
   const { data: yearTotals, error: totalsError } = useDayTotals(365)
   const { profile } = useUser()
-  const dailyTarget = profile?.settings?.daily_protein_target ?? 140
-
-  const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
-  const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
-  const todayDate = todayKey()
-  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, kcal: liveKcal, protein_g: liveProtein } } : t)
-  const bars = buildProteinBars(totals, view)
-  const maxProtein = Math.max(...bars.map((bar) => bar.protein), dailyTarget, 1)
-
-  useEffect(() => {
-    if (mealsError || totalsError) toast.error("Couldn't load protein progress. Try again.")
-  }, [mealsError, totalsError])
-
+  const target = profile?.settings?.daily_protein_target ?? 140
+  const liveProtein = meals.reduce((s, m) => s + (m.total_protein_g ?? 0), 0)
+  const valueByDate = useMemo(() => {
+    const map = new Map(yearTotals.map((t) => [t.date, t.totals.protein_g]))
+    map.set(todayKey(), liveProtein)
+    return map
+  }, [yearTotals, liveProtein])
+  useEffect(() => { if (mealsError || totalsError) toast.error("Couldn't load protein progress. Try again.") }, [mealsError, totalsError])
   return (
-    <>
-      <div className={styles.chartCard}>
-        <p className="dq-eyebrow">Today</p>
-        <strong className="dq-num" style={{ fontSize: 42 }}>
-          {formatProteinLabel(liveProtein)}
-        </strong>
-        <p className={styles.subtitle}>{liveKcal} kcal logged</p>
-        <div className="dq-seg" style={{ width: '100%', margin: '14px 0 6px' }}>
-          {(['week', 'month', 'year'] as CalorieView[]).map((item) => (
-            <button
-              className="dq-seg-item"
-              data-active={view === item}
-              key={item}
-              onClick={() => setView(item)}
-              type="button"
-              style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-        <div
-          className={styles.bars}
-          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
-        >
-          {bars.map((bar, index) => {
-            const isToday = bar.date === todayDate
-            const height = Math.max((bar.protein / maxProtein) * 100, bar.protein > 0 ? 8 : 3)
-            const zone = proteinZoneColor(bar.protein, dailyTarget)
-            return (
-              <div
-                className={styles.barColumn}
-                key={`${bar.label}-${index}`}
-                style={{
-                  height: '100%',
-                  minWidth: view === 'year' ? 26 : undefined,
-                  flex: view === 'year' ? '0 0 auto' : undefined,
-                }}
-              >
-                <span style={{ color: bar.protein > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
-                  {formatProteinNumberLabel(bar.protein)}
-                </span>
-                <div
-                  className={styles.bar}
-                  style={{
-                    background: bar.protein > 0 ? zone.stroke : 'var(--bg-soft)',
-                    height: `${height}%`,
-                    outline: isToday ? '2px solid var(--a1)' : 'none',
-                    outlineOffset: isToday ? 1 : 0,
-                  }}
-                />
-                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-      <p className="dq-eyebrow" style={{ margin: '4px 4px 10px' }}>Meals today</p>
-      {meals.length === 0 ? (
-        <Card padding={16}>
-          <p className={styles.subtitle}>No meals logged yet.</p>
-        </Card>
-      ) : (
-        (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
-          const slotMeals = meals.filter((m) => m.meal_type === type)
-          if (slotMeals.length === 0) return null
-          const slotItems = slotMeals.flatMap((m) => m.items)
-          const slotProtein = slotMeals.reduce((s, m) => s + m.total_protein_g, 0)
-          const meta = MEAL_META[type]
-          return (
-            <Card key={type} padding={14} style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Icon color={meta.color} name={meta.icon as IconName} size={22} />
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{formatProteinLabel(slotProtein)} protein</span>
-              </div>
-              <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
-                {slotItems.map((it, idx) => (
-                  <div key={`${type}-${idx}-${it.name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</span>
-                    <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {formatProteinLabel(it.protein_g)}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )
-        })
-      )}
-    </>
+    <MetricChart valueByDate={valueByDate} target={target} zone={targetZoneColor}
+      formatValue={(v) => fmt1(v)} unit="g" todayValue={liveProtein}
+      subtitle={`target ${target}g protein`} mode="meal"
+      renderDay={(date) => <DayMeals date={date} field="protein_g" suffix="g protein" />} />
   )
 }
 
 function SugarTab() {
-  const [view, setView] = useState<CalorieView>('week')
   const { data: meals, error: mealsError } = useMeals()
   const { data: yearTotals, error: totalsError } = useDayTotals(365)
   const { profile } = useUser()
-  const dailyTarget = profile?.settings?.daily_sugar_target ?? 36
-
-  const liveSugar = meals.reduce((sum, m) => sum + (m.total_sugar_g ?? 0), 0)
-  const todayDate = todayKey()
-  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, sugar_g: liveSugar } } : t)
-  const bars = buildSugarBars(totals, view)
-  const maxSugar = Math.max(...bars.map((bar) => bar.sugar), dailyTarget, 1)
-
-  useEffect(() => {
-    if (mealsError || totalsError) toast.error("Couldn't load sugar progress. Try again.")
-  }, [mealsError, totalsError])
-
+  const target = profile?.settings?.daily_sugar_target ?? 36
+  const liveSugar = meals.reduce((s, m) => s + (m.total_sugar_g ?? 0), 0)
+  const valueByDate = useMemo(() => {
+    const map = new Map(yearTotals.map((t) => [t.date, t.totals.sugar_g]))
+    map.set(todayKey(), liveSugar)
+    return map
+  }, [yearTotals, liveSugar])
+  useEffect(() => { if (mealsError || totalsError) toast.error("Couldn't load sugar progress. Try again.") }, [mealsError, totalsError])
   return (
-    <>
-      <div className={styles.chartCard}>
-        <p className="dq-eyebrow">Today</p>
-        <strong className="dq-num" style={{ fontSize: 42, color: barZoneColor(liveSugar, dailyTarget).number }}>
-          {Math.round(liveSugar)}g
-        </strong>
-        <p className={styles.subtitle}>limit {dailyTarget}g · less is better</p>
-        <TimeRangeTabs view={view} onChange={setView} />
-        <div
-          className={styles.bars}
-          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
-        >
-          {bars.map((bar, index) => {
-            const isToday = bar.date === todayDate
-            const height = Math.max((bar.sugar / maxSugar) * 100, bar.sugar > 0 ? 8 : 3)
-            const zone = barZoneColor(bar.sugar, dailyTarget)
-            return (
-              <div
-                className={styles.barColumn}
-                key={`${bar.label}-${index}`}
-                style={{
-                  height: '100%',
-                  minWidth: view === 'year' ? 26 : undefined,
-                  flex: view === 'year' ? '0 0 auto' : undefined,
-                }}
-              >
-                <span style={{ color: bar.sugar > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
-                  {Math.round(bar.sugar)}
-                </span>
-                <div
-                  className={styles.bar}
-                  style={{
-                    background: bar.sugar > 0 ? zone.stroke : 'var(--bg-soft)',
-                    height: `${height}%`,
-                    outline: isToday ? '2px solid var(--a1)' : 'none',
-                    outlineOffset: isToday ? 1 : 0,
-                  }}
-                />
-                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-      <p className="dq-eyebrow" style={{ margin: '4px 4px 10px' }}>Meals today</p>
-      {meals.length === 0 ? (
-        <Card padding={16}>
-          <p className={styles.subtitle}>No meals logged yet.</p>
-        </Card>
-      ) : (
-        (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
-          const slotMeals = meals.filter((m) => m.meal_type === type)
-          if (slotMeals.length === 0) return null
-          const slotItems = slotMeals.flatMap((m) => m.items)
-          const slotSugar = slotMeals.reduce((s, m) => s + (m.total_sugar_g ?? 0), 0)
-          const meta = MEAL_META[type]
-          return (
-            <Card key={type} padding={14} style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Icon color={meta.color} name={meta.icon as IconName} size={22} />
-                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{Math.round(slotSugar)}g sugar</span>
-              </div>
-              <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
-                {slotItems.map((it, idx) => (
-                  <div key={`${type}-${idx}-${it.name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</span>
-                    <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {Math.round(it.sugar_g ?? 0)}g</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )
-        })
-      )}
-    </>
+    <MetricChart valueByDate={valueByDate} target={target} zone={barZoneColor}
+      formatValue={(v) => fmt1(v)} unit="g" todayValue={liveSugar}
+      subtitle={`limit ${target}g · less is better`} mode="meal"
+      renderDay={(date) => <DayMeals date={date} field="sugar_g" suffix="g sugar" />} />
   )
 }
 
 function DrinkTab() {
-  const [view, setView] = useState<CalorieView>('week')
   const { data: yearTotals, error: totalsError } = useDayTotals(365)
   const { totalMl, error: waterError } = useWater()
-  const todayDate = todayKey()
-  const targetMl = 3000
-  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, water_ml: totalMl } } : t)
-  const bars = buildWaterBars(totals, view)
-  const maxMl = Math.max(...bars.map((bar) => bar.ml), targetMl, 1)
-
-  useEffect(() => {
-    if (totalsError || waterError) toast.error("Couldn't load drink progress. Try again.")
-  }, [totalsError, waterError])
-
+  const target = 3000
+  const valueByDate = useMemo(() => {
+    const map = new Map(yearTotals.map((t) => [t.date, t.totals.water_ml]))
+    map.set(todayKey(), totalMl)
+    return map
+  }, [yearTotals, totalMl])
+  useEffect(() => { if (totalsError || waterError) toast.error("Couldn't load drink progress. Try again.") }, [totalsError, waterError])
   return (
-    <>
-      <div className={styles.chartCard}>
-        <p className="dq-eyebrow">Today</p>
-        <strong className="dq-num" style={{ fontSize: 42 }}>
-          {(totalMl / 1000).toFixed(1)} L
-        </strong>
-        <p className={styles.subtitle}>{totalMl} / {targetMl} ml</p>
-        <TimeRangeTabs view={view} onChange={setView} />
-        <div
-          className={styles.bars}
-          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
-        >
-          {bars.map((bar, index) => {
-            const isToday = bar.date === todayDate
-            const height = Math.max((bar.ml / maxMl) * 100, bar.ml > 0 ? 8 : 3)
-            const zone = targetZoneColor(bar.ml, targetMl)
-            return (
-              <div
-                className={styles.barColumn}
-                key={`${bar.label}-${index}`}
-                style={{
-                  height: '100%',
-                  minWidth: view === 'year' ? 26 : undefined,
-                  flex: view === 'year' ? '0 0 auto' : undefined,
-                }}
-              >
-                <span style={{ color: bar.ml > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
-                  {bar.ml}
-                </span>
-                <div
-                  className={styles.bar}
-                  style={{
-                    background: bar.ml > 0 ? zone.stroke : 'var(--bg-soft)',
-                    height: `${height}%`,
-                    outline: isToday ? '2px solid var(--a1)' : 'none',
-                    outlineOffset: isToday ? 1 : 0,
-                  }}
-                />
-                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-      <Card padding={14}>
-        <p className="dq-eyebrow">Goal</p>
-        <strong className="dq-num" style={{ fontSize: 24 }}>{Math.round((totalMl / targetMl) * 100)}%</strong>
-        <p className={styles.subtitle}>Daily drink target is 3.0 L.</p>
-      </Card>
-    </>
+    <MetricChart valueByDate={valueByDate} target={target} zone={targetZoneColor}
+      formatValue={(v) => `${Math.round(v)}`} formatHeader={(v) => `${(v / 1000).toFixed(1)} L`} unit="ml"
+      todayValue={totalMl} subtitle={`target ${(target / 1000).toFixed(1)} L`} mode="simple"
+      renderDay={(date) => (
+        <Card padding={14}>
+          <p className="dq-eyebrow">{prettyDate(date)}</p>
+          <strong className="dq-num" style={{ fontSize: 24 }}>{Math.round(valueByDate.get(date) ?? 0)} ml</strong>
+          <p className={styles.subtitle}>{Math.round(((valueByDate.get(date) ?? 0) / target) * 100)}% of goal</p>
+        </Card>
+      )} />
   )
 }
 
 function SleepTab() {
-  const [view, setView] = useState<CalorieView>('week')
   const { data: sleeps, error: sleepsError } = useSleeps(365)
-  const todayDate = todayKey()
-  const sleepByDate = new Map(sleeps.map((sleep) => [sleep.date, sleep]))
-  const todaySleep = sleepByDate.get(todayDate)
-  const targetHours = 8
-  const bars = buildSleepBars(sleeps, view)
-  const maxHours = Math.max(...bars.map((bar) => bar.hours), targetHours, 1)
-
-  useEffect(() => {
-    if (sleepsError) toast.error("Couldn't load sleep progress. Try again.")
-  }, [sleepsError])
-
+  const target = 8
+  const sleepByDate = useMemo(() => new Map(sleeps.map((s) => [s.date, s])), [sleeps])
+  const valueByDate = useMemo(() => new Map(sleeps.map((s) => [s.date, s.duration_min / 60])), [sleeps])
+  const todayVal = valueByDate.get(todayKey()) ?? 0
+  useEffect(() => { if (sleepsError) toast.error("Couldn't load sleep progress. Try again.") }, [sleepsError])
   return (
-    <>
-      <div className={styles.chartCard}>
-        <p className="dq-eyebrow">Today</p>
-        <strong className="dq-num" style={{ fontSize: 42 }}>
-          {formatSleepHours(todaySleep?.duration_min ?? 0)}
-        </strong>
-        <p className={styles.subtitle}>{todaySleep ? `${todaySleep.bedtime} - ${todaySleep.wake_time}` : 'No sleep logged today'}</p>
-        <TimeRangeTabs view={view} onChange={setView} />
-        <div
-          className={styles.bars}
-          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
-        >
-          {bars.map((bar, index) => {
-            const isToday = bar.date === todayDate
-            const height = Math.max((bar.hours / maxHours) * 100, bar.hours > 0 ? 8 : 3)
-            const zone = targetZoneColor(bar.hours, targetHours)
-            return (
-              <div
-                className={styles.barColumn}
-                key={`${bar.label}-${index}`}
-                style={{
-                  height: '100%',
-                  minWidth: view === 'year' ? 26 : undefined,
-                  flex: view === 'year' ? '0 0 auto' : undefined,
-                }}
-              >
-                <span style={{ color: bar.hours > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
-                  {formatCompactNumber(bar.hours)}
-                </span>
-                <div
-                  className={styles.bar}
-                  style={{
-                    background: bar.hours > 0 ? zone.stroke : 'var(--bg-soft)',
-                    height: `${height}%`,
-                    outline: isToday ? '2px solid var(--a1)' : 'none',
-                    outlineOffset: isToday ? 1 : 0,
-                  }}
-                />
-                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-      <Card padding={14}>
-        <p className="dq-eyebrow">Goal</p>
-        <strong className="dq-num" style={{ fontSize: 24 }}>{targetHours} h</strong>
-        <p className={styles.subtitle}>Sleep target is tracked from saved sleep logs.</p>
-      </Card>
-    </>
+    <MetricChart valueByDate={valueByDate} target={target} zone={targetZoneColor}
+      formatValue={(v) => fmt1(v)} formatHeader={(v) => `${fmt1(v)} h`} unit="h"
+      todayValue={todayVal} subtitle={`target ${target} h`} mode="simple"
+      renderDay={(date) => {
+        const s = sleepByDate.get(date)
+        return (
+          <Card padding={14}>
+            <p className="dq-eyebrow">{prettyDate(date)}</p>
+            <strong className="dq-num" style={{ fontSize: 24 }}>{s ? fmt1(s.duration_min / 60) : '0'} h</strong>
+            <p className={styles.subtitle}>{s ? `${s.bedtime} - ${s.wake_time}` : 'No sleep logged'}</p>
+          </Card>
+        )
+      }} />
   )
-}
-
-function TimeRangeTabs({ view, onChange }: { view: CalorieView; onChange: (view: CalorieView) => void }) {
-  return (
-    <div className="dq-seg" style={{ width: '100%', margin: '14px 0 6px' }}>
-      {(['week', 'month', 'year'] as CalorieView[]).map((item) => (
-        <button
-          className="dq-seg-item"
-          data-active={view === item}
-          key={item}
-          onClick={() => onChange(item)}
-          type="button"
-          style={{ flex: 1, justifyContent: 'center', border: 0, background: 'transparent', outline: 'none', textTransform: 'capitalize' }}
-        >
-          {item}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function buildCalorieBars(totals: ReturnType<typeof useDayTotals>['data'], view: CalorieView) {
-  if (view === 'week') {
-    // Always render 7 days (rolling) — fill missing days with 0 so the
-    // chart shows immediately even before useDayTotals returns data.
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.kcal]))
-    const out: { date: string; label: string; kcal: number }[] = []
-    const today = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      out.push({ date: key, label: DAY_SHORT[d.getDay()], kcal: totalsMap.get(key) ?? 0 })
-    }
-    return out
-  }
-
-  if (view === 'month') {
-    // 4 weekly buckets, each showing AVERAGE kcal/day over logged days.
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.kcal]))
-    const today = new Date()
-    return Array.from({ length: 4 }, (_, index) => {
-      const weekStart = (3 - index) * 7 + 6 // days ago at start of bucket
-      let sum = 0
-      let count = 0
-      let lastDate = ''
-      for (let d = 0; d < 7; d++) {
-        const offset = weekStart - d
-        const dt = new Date(today)
-        dt.setDate(today.getDate() - offset)
-        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-        lastDate = key
-        const v = totalsMap.get(key) ?? 0
-        if (v > 0) {
-          sum += v
-          count += 1
-        }
-      }
-      return {
-        date: lastDate,
-        label: `W${index + 1}`,
-        kcal: count > 0 ? Math.round(sum / count) : 0,
-      }
-    })
-  }
-
-  // Year: always show 12 rolling months, AVERAGE kcal/day per month.
-  const today = new Date()
-  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
-  }
-  totals.forEach((t) => {
-    const date = new Date(`${t.date}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    const bucket = monthBuckets.get(key)
-    if (!bucket) return
-    if (t.totals.kcal > 0) {
-      bucket.sum += t.totals.kcal
-      bucket.count += 1
-    }
-  })
-  return Array.from(monthBuckets.values()).map((b) => ({
-    date: b.date,
-    label: b.label,
-    kcal: b.count > 0 ? Math.round(b.sum / b.count) : 0,
-  }))
-}
-
-function formatKcalLabel(kcal: number): string {
-  if (kcal <= 0) return '0'
-  return Math.round(kcal).toLocaleString()
-}
-
-// Same zone rules as the calorie ring: < 70% green, 70–99% yellow, ≥ 100% red.
-const BAR_STROKE = { green: '#86EFAC', yellow: '#FCD34D', red: '#FCA5A5' }
-const BAR_NUMBER = { green: '#16A34A', yellow: '#D97706', red: '#DC2626' }
-function barZoneColor(kcal: number, target: number): { stroke: string; number: string } {
-  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
-  const pct = kcal / target
-  if (pct >= 1) return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
-  if (pct >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
-  return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
-}
-
-function buildProteinBars(totals: ReturnType<typeof useDayTotals>['data'], view: CalorieView) {
-  if (view === 'week') {
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.protein_g]))
-    const out: { date: string; label: string; protein: number }[] = []
-    const today = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      out.push({ date: key, label: DAY_SHORT[d.getDay()], protein: totalsMap.get(key) ?? 0 })
-    }
-    return out
-  }
-
-  if (view === 'month') {
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.protein_g]))
-    const today = new Date()
-    return Array.from({ length: 4 }, (_, index) => {
-      const weekStart = (3 - index) * 7 + 6
-      let sum = 0
-      let count = 0
-      let lastDate = ''
-      for (let d = 0; d < 7; d++) {
-        const offset = weekStart - d
-        const dt = new Date(today)
-        dt.setDate(today.getDate() - offset)
-        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-        lastDate = key
-        const v = totalsMap.get(key) ?? 0
-        if (v > 0) {
-          sum += v
-          count += 1
-        }
-      }
-      return {
-        date: lastDate,
-        label: `W${index + 1}`,
-        protein: count > 0 ? Math.round((sum / count) * 10) / 10 : 0,
-      }
-    })
-  }
-
-  const today = new Date()
-  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
-  }
-  totals.forEach((t) => {
-    const date = new Date(`${t.date}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    const bucket = monthBuckets.get(key)
-    if (!bucket) return
-    if (t.totals.protein_g > 0) {
-      bucket.sum += t.totals.protein_g
-      bucket.count += 1
-    }
-  })
-  return Array.from(monthBuckets.values()).map((b) => ({
-    date: b.date,
-    label: b.label,
-    protein: b.count > 0 ? Math.round((b.sum / b.count) * 10) / 10 : 0,
-  }))
-}
-
-function buildWaterBars(totals: DayTotals[], view: CalorieView) {
-  if (view === 'week') {
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.water_ml]))
-    const out: { date: string; label: string; ml: number }[] = []
-    const today = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      out.push({ date: key, label: DAY_SHORT[d.getDay()], ml: totalsMap.get(key) ?? 0 })
-    }
-    return out
-  }
-
-  if (view === 'month') {
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.water_ml]))
-    const today = new Date()
-    return Array.from({ length: 4 }, (_, index) => {
-      const weekStart = (3 - index) * 7 + 6
-      let sum = 0
-      let count = 0
-      let lastDate = ''
-      for (let d = 0; d < 7; d++) {
-        const offset = weekStart - d
-        const dt = new Date(today)
-        dt.setDate(today.getDate() - offset)
-        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-        lastDate = key
-        const v = totalsMap.get(key) ?? 0
-        if (v > 0) {
-          sum += v
-          count += 1
-        }
-      }
-      return {
-        date: lastDate,
-        label: `W${index + 1}`,
-        ml: count > 0 ? Math.round(sum / count) : 0,
-      }
-    })
-  }
-
-  const today = new Date()
-  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
-  }
-  totals.forEach((t) => {
-    const date = new Date(`${t.date}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    const bucket = monthBuckets.get(key)
-    if (!bucket) return
-    if (t.totals.water_ml > 0) {
-      bucket.sum += t.totals.water_ml
-      bucket.count += 1
-    }
-  })
-  return Array.from(monthBuckets.values()).map((b) => ({
-    date: b.date,
-    label: b.label,
-    ml: b.count > 0 ? Math.round(b.sum / b.count) : 0,
-  }))
-}
-
-function buildSugarBars(totals: DayTotals[], view: CalorieView) {
-  if (view === 'week') {
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.sugar_g]))
-    const out: { date: string; label: string; sugar: number }[] = []
-    const today = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      out.push({ date: key, label: DAY_SHORT[d.getDay()], sugar: totalsMap.get(key) ?? 0 })
-    }
-    return out
-  }
-
-  if (view === 'month') {
-    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.sugar_g]))
-    const today = new Date()
-    return Array.from({ length: 4 }, (_, index) => {
-      const weekStart = (3 - index) * 7 + 6
-      let sum = 0
-      let count = 0
-      let lastDate = ''
-      for (let d = 0; d < 7; d++) {
-        const offset = weekStart - d
-        const dt = new Date(today)
-        dt.setDate(today.getDate() - offset)
-        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-        lastDate = key
-        const v = totalsMap.get(key) ?? 0
-        if (v > 0) {
-          sum += v
-          count += 1
-        }
-      }
-      return {
-        date: lastDate,
-        label: `W${index + 1}`,
-        sugar: count > 0 ? Math.round((sum / count) * 10) / 10 : 0,
-      }
-    })
-  }
-
-  const today = new Date()
-  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
-  }
-  totals.forEach((t) => {
-    const date = new Date(`${t.date}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    const bucket = monthBuckets.get(key)
-    if (!bucket) return
-    if (t.totals.sugar_g > 0) {
-      bucket.sum += t.totals.sugar_g
-      bucket.count += 1
-    }
-  })
-  return Array.from(monthBuckets.values()).map((b) => ({
-    date: b.date,
-    label: b.label,
-    sugar: b.count > 0 ? Math.round((b.sum / b.count) * 10) / 10 : 0,
-  }))
-}
-
-function buildSleepBars(sleeps: SleepLog[], view: CalorieView) {
-  const sleepMap = new Map(sleeps.map((sleep) => [sleep.date, sleep.duration_min / 60]))
-  if (view === 'week') {
-    const out: { date: string; label: string; hours: number }[] = []
-    const today = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(today.getDate() - i)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      out.push({ date: key, label: DAY_SHORT[d.getDay()], hours: sleepMap.get(key) ?? 0 })
-    }
-    return out
-  }
-
-  if (view === 'month') {
-    const today = new Date()
-    return Array.from({ length: 4 }, (_, index) => {
-      const weekStart = (3 - index) * 7 + 6
-      let sum = 0
-      let count = 0
-      let lastDate = ''
-      for (let d = 0; d < 7; d++) {
-        const offset = weekStart - d
-        const dt = new Date(today)
-        dt.setDate(today.getDate() - offset)
-        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-        lastDate = key
-        const v = sleepMap.get(key) ?? 0
-        if (v > 0) {
-          sum += v
-          count += 1
-        }
-      }
-      return {
-        date: lastDate,
-        label: `W${index + 1}`,
-        hours: count > 0 ? Math.round((sum / count) * 10) / 10 : 0,
-      }
-    })
-  }
-
-  const today = new Date()
-  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
-  }
-  sleeps.forEach((sleep) => {
-    const date = new Date(`${sleep.date}T00:00:00`)
-    const key = `${date.getFullYear()}-${date.getMonth()}`
-    const bucket = monthBuckets.get(key)
-    if (!bucket || sleep.duration_min <= 0) return
-    bucket.sum += sleep.duration_min / 60
-    bucket.count += 1
-  })
-  return Array.from(monthBuckets.values()).map((b) => ({
-    date: b.date,
-    label: b.label,
-    hours: b.count > 0 ? Math.round((b.sum / b.count) * 10) / 10 : 0,
-  }))
-}
-
-function formatProteinLabel(protein: number): string {
-  if (protein <= 0) return '0g'
-  return `${Math.round(protein * 10) / 10}g`
-}
-
-function formatProteinNumberLabel(protein: number): string {
-  if (protein <= 0) return '0'
-  return formatCompactNumber(protein)
-}
-
-function formatCompactNumber(value: number): string {
-  if (value <= 0) return '0'
-  const rounded = Math.round(value * 10) / 10
-  return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1)
-}
-
-function formatSleepHours(minutes: number): string {
-  if (minutes <= 0) return '0 h'
-  return `${formatCompactNumber(minutes / 60)} h`
-}
-
-function proteinZoneColor(protein: number, target: number): { stroke: string; number: string } {
-  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
-  const pct = protein / target
-  if (pct >= 1) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
-  if (pct >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
-  return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
-}
-
-function targetZoneColor(value: number, target: number): { stroke: string; number: string } {
-  if (target <= 0) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
-  const pct = value / target
-  if (pct >= 1) return { stroke: BAR_STROKE.green, number: BAR_NUMBER.green }
-  if (pct >= 0.7) return { stroke: BAR_STROKE.yellow, number: BAR_NUMBER.yellow }
-  return { stroke: BAR_STROKE.red, number: BAR_NUMBER.red }
 }
 
 function ActivityTab() {
