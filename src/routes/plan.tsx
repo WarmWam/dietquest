@@ -257,8 +257,9 @@ function FoodEditSheet({
   const [portionUnit, setPortionUnit] = useState(food?.portion_unit ?? 'serving')
   const [kcal, setKcal] = useState(food?.kcal_per_portion ?? 100)
   const [protein, setProtein] = useState(food?.protein_g_per_portion ?? 10)
+  const [sugar, setSugar] = useState(food?.sugar_g_per_portion ?? 0)
 
-  const canSave = name.trim().length > 0 && kcal >= 0 && protein >= 0
+  const canSave = name.trim().length > 0 && kcal >= 0 && protein >= 0 && sugar >= 0
 
   function submit() {
     if (!canSave) {
@@ -271,6 +272,7 @@ function FoodEditSheet({
       portion_unit: portionUnit.trim() || 'serving',
       kcal_per_portion: kcal,
       protein_g_per_portion: protein,
+      sugar_g_per_portion: sugar,
     })
   }
 
@@ -330,9 +332,12 @@ function FoodEditSheet({
             }}
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <Stepper label="kcal / portion" suffix="kcal" value={kcal} onChange={setKcal} min={0} max={2000} step={5} />
             <Stepper label="Protein / portion" suffix="g" value={protein} onChange={setProtein} min={0} max={200} step={0.5} />
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <Stepper label="Sugar / portion" suffix="g" value={sugar} onChange={setSugar} min={0} max={200} step={0.5} />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

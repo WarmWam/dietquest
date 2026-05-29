@@ -17,12 +17,13 @@ export const MOCK_USER: User = {
     accent: 'aurora',
     daily_kcal_target: 1950,
     daily_protein_target: 140,
+    daily_sugar_target: 36,
   },
 }
 
 export const MOCK_TODAY: DayTotals = {
   date: '2026-05-23',
-  totals: { kcal: 1240, protein_g: 78, carb_g: 120, fat_g: 45, water_ml: 1500 },
+  totals: { kcal: 1240, protein_g: 78, carb_g: 120, fat_g: 45, sugar_g: 30, water_ml: 1500 },
   habits: { water_done: false, walk_done: true, sleep_on_time: false },
 }
 

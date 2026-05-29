@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   accent: 'aurora',
   daily_kcal_target: 1950,
   daily_protein_target: 140,
+  daily_sugar_target: 36,
 }
 
 export const DEFAULT_BREAKFAST: MealPreset = {

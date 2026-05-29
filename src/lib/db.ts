@@ -95,6 +95,7 @@ function deserializeUser(id: string, data: DocumentData): User {
       accent: data.settings?.accent ?? 'aurora',
       daily_kcal_target: Number(data.settings?.daily_kcal_target ?? 0),
       daily_protein_target: Number(data.settings?.daily_protein_target ?? 0),
+      daily_sugar_target: Number(data.settings?.daily_sugar_target ?? 36),
       notifications: data.settings?.notifications,
     },
   }
@@ -111,6 +112,7 @@ function deserializeMeal(snapshot: QueryDocumentSnapshot<DocumentData>): MealLog
     total_protein_g: Number(data.total_protein_g ?? 0),
     total_carb_g: Number(data.total_carb_g ?? 0),
     total_fat_g: Number(data.total_fat_g ?? 0),
+    total_sugar_g: Number(data.total_sugar_g ?? 0),
     logged_at: fromTimestamp(data.logged_at),
   }
 }
@@ -214,6 +216,7 @@ function deserializeDayTotals(id: string, data: DocumentData): DayTotals {
       protein_g: Number(data.totals?.protein_g ?? 0),
       carb_g: Number(data.totals?.carb_g ?? 0),
       fat_g: Number(data.totals?.fat_g ?? 0),
+      sugar_g: Number(data.totals?.sugar_g ?? 0),
       water_ml: Number(data.totals?.water_ml ?? 0),
     },
     habits: {
@@ -258,7 +261,7 @@ export async function getDayTotalsRange(uid: string, dates: string[]): Promise<D
     if (snap.exists()) return deserializeDayTotals(snap.id, snap.data())
     return {
       date,
-      totals: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, water_ml: 0 },
+      totals: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, sugar_g: 0, water_ml: 0 },
       habits: { water_done: false, walk_done: false, sleep_on_time: false },
     }
   })
@@ -291,6 +294,7 @@ export async function addMeal(uid: string, meal: Omit<MealLog, 'id' | 'logged_at
           protein_g: increment(meal.total_protein_g),
           carb_g: increment(meal.total_carb_g),
           fat_g: increment(meal.total_fat_g),
+          sugar_g: increment(meal.total_sugar_g ?? 0),
         },
         updated_at: serverTimestamp(),
       },
@@ -334,6 +338,7 @@ export async function deleteMeal(uid: string, mealId: string): Promise<void> {
             protein_g: increment(-(meal.total_protein_g ?? 0)),
             carb_g: increment(-(meal.total_carb_g ?? 0)),
             fat_g: increment(-(meal.total_fat_g ?? 0)),
+            sugar_g: increment(-(meal.total_sugar_g ?? 0)),
           },
           updated_at: serverTimestamp(),
         },
@@ -498,6 +503,7 @@ function deserializeFood(snap: { id: string; data: () => DocumentData }): Food {
     portion_unit: String(data.portion_unit ?? 'serving'),
     kcal_per_portion: Number(data.kcal_per_portion ?? 0),
     protein_g_per_portion: Number(data.protein_g_per_portion ?? 0),
+    sugar_g_per_portion: Number(data.sugar_g_per_portion ?? 0),
     created_at: data.created_at?.toDate?.() ?? undefined,
     updated_at: data.updated_at?.toDate?.() ?? undefined,
   }
@@ -565,6 +571,7 @@ export async function getLegacyUserFoods(uid: string): Promise<Omit<Food, 'id' |
       portion_unit: food.portion_unit,
       kcal_per_portion: food.kcal_per_portion,
       protein_g_per_portion: food.protein_g_per_portion,
+      sugar_g_per_portion: food.sugar_g_per_portion ?? 0,
     }
   })
 }
@@ -581,6 +588,7 @@ function sanitizeMealItems(items: any): MealPlanItem[] {
     portion: Number(it.portion ?? 1),
     kcal: Number(it.kcal ?? 0),
     protein_g: Number(it.protein_g ?? 0),
+    sugar_g: Number(it.sugar_g ?? 0),
   }))
 }
 

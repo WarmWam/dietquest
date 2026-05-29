@@ -173,7 +173,7 @@ function HomeFullContent({
   const { data: workoutPlan, error: workoutPlanError } = useWorkoutPlan(selectedDate)
   const { data: waterLogs, add: addWater, remove: removeWater, totalMl, error: waterError } = useWater(selectedDate)
   const { data: sleep, upsert: upsertSleep, error: sleepError } = useSleep(selectedDate)
-  const { data: weights, error: weightsError } = useWeights(30)
+  const { data: weights, add: addWeight, error: weightsError } = useWeights(30)
   const { data: workouts, add: addWorkout, remove: removeWorkout, error: workoutsError } = useWorkouts(1)
   const [savingTask, setSavingTask] = useState<string | null>(null)
   const [waterAmount, setWaterAmount] = useState(0)
@@ -183,6 +183,8 @@ function HomeFullContent({
   const [customizing, setCustomizing] = useState<MealType | null>(null)
   const { data: foodsCatalog } = useFoods()
   const latestWeight = weights[weights.length - 1]
+  const todayWeightEntry = weights.find((w) => w.date === selectedDate)
+  const [weightInput, setWeightInput] = useState('')
   const todayWorkouts = workouts.filter((w) => w.date === todayKey)
   const totalWorkoutKcal = todayWorkouts.reduce((sum, w) => sum + w.kcal_burned, 0)
   const workoutTarget = workoutPlan?.kcal_target ?? 0
@@ -192,6 +194,8 @@ function HomeFullContent({
   // today.totals can drift if a meal was deleted without decrementing.
   const liveKcal = meals.reduce((sum, m) => sum + (m.total_kcal ?? 0), 0)
   const liveProtein = meals.reduce((sum, m) => sum + (m.total_protein_g ?? 0), 0)
+  const liveSugar = meals.reduce((sum, m) => sum + (m.total_sugar_g ?? 0), 0)
+  const sugarTarget = settings.daily_sugar_target || 36
 
   // Per-meal breakdown in fixed order (snack always last) so the donut can
   // draw segment dividers showing how each meal contributed.
@@ -199,8 +203,8 @@ function HomeFullContent({
   const calBySlot = SLOT_ORDER.map((t) =>
     meals.filter((m) => m.meal_type === t).reduce((s, m) => s + (m.total_kcal ?? 0), 0),
   )
-  const proteinBySlot = SLOT_ORDER.map((t) =>
-    meals.filter((m) => m.meal_type === t).reduce((s, m) => s + (m.total_protein_g ?? 0), 0),
+  const sugarBySlot = SLOT_ORDER.map((t) =>
+    meals.filter((m) => m.meal_type === t).reduce((s, m) => s + (m.total_sugar_g ?? 0), 0),
   )
   // Planned kcal per slot (parallel to calBySlot) so the ring can colour
   // each segment using the same rule as the meal card: green if at/under
@@ -220,8 +224,36 @@ function HomeFullContent({
   }, [sleep])
 
   useEffect(() => {
+    // Prefill the weigh-in field with this day's logged weight, falling back
+    // to the most recent known weight so re-saving keeps the last value.
+    if (todayWeightEntry) setWeightInput(String(todayWeightEntry.weight_kg))
+    else if (latestWeight) setWeightInput(String(latestWeight.weight_kg))
+    else setWeightInput('')
+  }, [todayWeightEntry, latestWeight, selectedDate])
+
+  useEffect(() => {
     if (weightsError || workoutsError || planError || workoutPlanError || waterError || sleepError) toast.error("Couldn't load home plan. Try again.")
   }, [weightsError, workoutsError, planError, workoutPlanError, waterError, sleepError])
+
+  async function saveWeight() {
+    if (savingTask) return
+    const kg = Number(weightInput)
+    if (!Number.isFinite(kg) || kg < 20 || kg > 400) {
+      toast.error('Enter a weight between 20 and 400 kg.')
+      return
+    }
+    setSavingTask('weight')
+    try {
+      await addWeight({ date: selectedDate, weight_kg: Math.round(kg * 10) / 10 })
+      toast.success('Weight saved')
+      haptic(10)
+    } catch (err) {
+      console.error(err)
+      toast.error("Couldn't save weight.")
+    } finally {
+      setSavingTask(null)
+    }
+  }
 
   async function confirmMeal(mealType: MealType, items: MealPlanItem[], loggedMeals: MealLog[]) {
     if (savingTask) return
@@ -253,11 +285,13 @@ function HomeFullContent({
           protein_g: item.protein_g,
           carb_g: 0,
           fat_g: 0,
+          sugar_g: item.sugar_g ?? 0,
         })),
         total_kcal: items.reduce((sum, item) => sum + item.kcal, 0),
         total_protein_g: Math.round(items.reduce((sum, item) => sum + item.protein_g, 0) * 10) / 10,
         total_carb_g: 0,
         total_fat_g: 0,
+        total_sugar_g: Math.round(items.reduce((sum, item) => sum + (item.sugar_g ?? 0), 0) * 10) / 10,
       })
       toast.success(`${mealType} confirmed`)
       haptic(10)
@@ -270,7 +304,7 @@ function HomeFullContent({
     }
   }
 
-  async function saveCustomized(mealType: MealType, items: { name: string; portion: number; unit: string; kcal: number; protein_g: number }[]) {
+  async function saveCustomized(mealType: MealType, items: { name: string; portion: number; unit: string; kcal: number; protein_g: number; sugar_g: number }[]) {
     if (savingTask || items.length === 0) return
     setSavingTask(mealType)
     try {
@@ -285,6 +319,7 @@ function HomeFullContent({
         total_protein_g: Math.round(items.reduce((s, it) => s + it.protein_g, 0) * 10) / 10,
         total_carb_g: 0,
         total_fat_g: 0,
+        total_sugar_g: Math.round(items.reduce((s, it) => s + (it.sugar_g ?? 0), 0) * 10) / 10,
       })
       toast.success(`${mealType} logged · ${items.length} item${items.length === 1 ? '' : 's'}`)
       haptic(10)
@@ -422,7 +457,7 @@ function HomeFullContent({
             </span>
           )}
         </div>
-        <Ring eaten={liveKcal} protein={liveProtein} proteinTarget={settings.daily_protein_target} size={210} target={settings.daily_kcal_target} calBySlot={calBySlot} calPlanBySlot={calPlanBySlot} proteinBySlot={proteinBySlot} />
+        <Ring eaten={liveKcal} sugar={liveSugar} sugarTarget={sugarTarget} size={210} target={settings.daily_kcal_target} calBySlot={calBySlot} calPlanBySlot={calPlanBySlot} sugarBySlot={sugarBySlot} />
       </Card>
       {!isToday ? (
         <Button onClick={() => setSelectedDate(getTodayKey())} variant="ghost">
@@ -430,7 +465,8 @@ function HomeFullContent({
         </Button>
       ) : null}
 
-      <div className={styles.topStats}>
+      <div className={styles.topStats} style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        <MiniStat color="#F59E0B" icon="egg" label="Protein" pct={Math.min(liveProtein / Math.max(settings.daily_protein_target || 1, 1), 1)} target={`${settings.daily_protein_target}g`} value={String(Math.round(liveProtein))} />
         <MiniStat color="#0EA5E9" icon="drop" label="Water" pct={Math.min(totalMl / 3000, 1)} target="3.0 L" value={(totalMl / 1000).toFixed(1)} />
         <MiniStat color="#10B981" icon="walk" label="Incline" pct={workoutPct} target={`${workoutTarget || 0} kcal`} value={String(totalWorkoutKcal)} />
       </div>
@@ -463,6 +499,7 @@ function HomeFullContent({
                 unit: it.unit ?? 'serving',
                 kcal: it.kcal,
                 protein_g: it.protein_g,
+                sugar_g: it.sugar_g ?? 0,
               })),
             )}
           foods={foodsCatalog}
@@ -507,29 +544,15 @@ function HomeFullContent({
           saving={savingTask === 'sleep'}
           start={sleepStart}
         />
+        <div className="dq-divider" />
+        <WeightTask
+          done={!!todayWeightEntry}
+          onChange={setWeightInput}
+          onSave={() => void saveWeight()}
+          saving={savingTask === 'weight'}
+          value={weightInput}
+        />
       </div>
-
-      {latestWeight ? (
-        <>
-          <div style={{ height: 14 }} />
-          <Card padding={14}>
-            <div className={styles.habitRow}>
-              <div className={styles.statIcon}>
-                <Icon color="var(--success)" name="trend" />
-              </div>
-              <div className={styles.rowText}>
-                <p className="dq-eyebrow">Weight</p>
-                <strong className="dq-num" style={{ fontSize: 20 }}>
-                  {latestWeight.weight_kg.toFixed(1)} kg
-                </strong>
-              </div>
-              <Button onClick={() => navigate('/log/weight')} variant="secondary">
-                Log
-              </Button>
-            </div>
-          </Card>
-        </>
-      ) : null}
     </>
   )
 }
@@ -793,6 +816,46 @@ function SleepTask({
   )
 }
 
+function WeightTask({
+  done,
+  onChange,
+  onSave,
+  saving,
+  value,
+}: {
+  done: boolean
+  onChange: (value: string) => void
+  onSave: () => void
+  saving: boolean
+  value: string
+}) {
+  return (
+    <div style={{ background: done ? 'color-mix(in oklab, #BBF7D0 42%, transparent)' : undefined, borderRadius: 'var(--r-md)', padding: '10px 0' }}>
+      <Habit done={done} label="Weight" sub={done ? 'Logged for this day' : 'Enter today\'s weight'} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 38px', gap: 6, padding: '0 0 10px 34px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', padding: '0 12px' }}>
+          <input
+            aria-label="Weight"
+            inputMode="decimal"
+            type="text"
+            value={value}
+            onChange={(e) => {
+              const raw = e.target.value
+              if (/^\d*\.?\d*$/.test(raw)) onChange(raw)
+            }}
+            placeholder="0.0"
+            style={{ flex: 1, minWidth: 0, background: 'transparent', border: 0, outline: 'none', font: 'inherit', fontSize: 14, fontWeight: 800, color: 'var(--t-1)' }}
+          />
+          <span className={styles.subtitle} style={{ fontSize: 12 }}>kg</span>
+        </div>
+        <button aria-label="Save weight" disabled={saving} onClick={onSave} type="button" style={sendButtonStyle}>
+          <Icon name="arrowUp" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const miniActionStyle = {
   background: 'var(--bg-soft)',
   border: 0,
@@ -995,8 +1058,11 @@ type CustomItem = {
   unit: string
   kcalPer: number   // kcal at portion=1
   proteinPer: number
+  sugarPer: number  // sugar grams at portion=1
   source: 'plan' | 'extra'
 }
+
+type CustomSavedItem = { name: string; portion: number; unit: string; kcal: number; protein_g: number; sugar_g: number }
 
 function CustomizeMealSheet({
   mealType,
@@ -1009,24 +1075,32 @@ function CustomizeMealSheet({
 }: {
   mealType: MealType
   plannedItems: MealPlanItem[]
-  existingItems: { name: string; portion: number; unit: string; kcal: number; protein_g: number }[]
+  existingItems: { name: string; portion: number; unit: string; kcal: number; protein_g: number; sugar_g: number }[]
   foods: Food[]
   saving: boolean
-  onSave: (items: { name: string; portion: number; unit: string; kcal: number; protein_g: number }[]) => void
+  onSave: (items: CustomSavedItem[]) => void
   onCancel: () => void
 }) {
   useScrollLock()
+  // In edit mode, prefer the logged portions for plan rows (so re-opening
+  // shows what was actually eaten), falling back to the planned portion.
+  const existingByName = new Map(existingItems.map((it) => [it.name, it]))
   // Initial state: always start with plan items as 'plan' rows. In edit mode,
   // additionally pull in any extras (logged items not matching any plan name).
   const [items, setItems] = useState<CustomItem[]>(() => {
-    const planRows: CustomItem[] = plannedItems.map((it) => ({
-      name: it.food_name,
-      portion: it.portion,
-      unit: 'serving',
-      kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
-      proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
-      source: 'plan',
-    }))
+    const planRows: CustomItem[] = plannedItems.map((it) => {
+      const logged = existingByName.get(it.food_name)
+      const portion = logged && existingItems.length > 0 ? logged.portion : it.portion
+      return {
+        name: it.food_name,
+        portion,
+        unit: 'serving',
+        kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
+        proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
+        sugarPer: it.portion > 0 ? (it.sugar_g ?? 0) / it.portion : (it.sugar_g ?? 0),
+        source: 'plan',
+      }
+    })
     if (existingItems.length === 0) return planRows
     const planNames = new Set(plannedItems.map((p) => p.food_name))
     const extraRows: CustomItem[] = existingItems
@@ -1037,6 +1111,7 @@ function CustomizeMealSheet({
         unit: it.unit,
         kcalPer: it.portion > 0 ? it.kcal / it.portion : it.kcal,
         proteinPer: it.portion > 0 ? it.protein_g / it.portion : it.protein_g,
+        sugarPer: it.portion > 0 ? (it.sugar_g ?? 0) / it.portion : (it.sugar_g ?? 0),
         source: 'extra',
       }))
     return [...planRows, ...extraRows]
@@ -1061,6 +1136,7 @@ function CustomizeMealSheet({
   // Build the actual list of items considering plan inclusions + extras
   const activeItems: CustomItem[] = items.filter((it) => it.source !== 'plan' || includedPlanIds.has(it.name))
   const totalKcal = activeItems.reduce((s, it) => s + Math.round(it.kcalPer * it.portion), 0)
+  const totalSugar = Math.round(activeItems.reduce((s, it) => s + it.sugarPer * it.portion, 0))
 
   function togglePlan(name: string) {
     setIncludedPlanIds((cur) => {
@@ -1083,6 +1159,7 @@ function CustomizeMealSheet({
           unit: food.portion_unit,
           kcalPer: food.kcal_per_portion,
           proteinPer: food.protein_g_per_portion,
+          sugarPer: food.sugar_g_per_portion ?? 0,
           source: 'extra',
         },
       ]
@@ -1090,10 +1167,12 @@ function CustomizeMealSheet({
     haptic(5)
   }
 
-  function changePortion(name: string, delta: number) {
+  function changePortion(name: string, source: 'plan' | 'extra', delta: number) {
     setItems((cur) =>
       cur.map((it) =>
-        it.name === name ? { ...it, portion: Math.max(0.25, Number((it.portion + delta).toFixed(2))) } : it,
+        it.name === name && it.source === source
+          ? { ...it, portion: Math.max(0.25, Number((it.portion + delta).toFixed(2))) }
+          : it,
       ),
     )
   }
@@ -1107,12 +1186,13 @@ function CustomizeMealSheet({
       toast.error('Pick at least one item.')
       return
     }
-    const finalItems = activeItems.map((it) => ({
+    const finalItems: CustomSavedItem[] = activeItems.map((it) => ({
       name: it.name,
       portion: it.portion,
       unit: it.unit,
       kcal: Math.round(it.kcalPer * it.portion),
       protein_g: Math.round(it.proteinPer * it.portion * 10) / 10,
+      sugar_g: Math.round(it.sugarPer * it.portion * 10) / 10,
     }))
     onSave(finalItems)
   }
@@ -1147,35 +1227,45 @@ function CustomizeMealSheet({
       </header>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 20px 24px' }}>
-        {/* From plan */}
-        {plannedItems.length > 0 && (
+        {/* From plan — toggle include via the checkbox, adjust eaten amount
+            via +/- (e.g. planned 1 scoop whey but you had 2). */}
+        {items.some((it) => it.source === 'plan') && (
           <>
             <p className={styles.fieldLabel}>From plan</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
-              {plannedItems.map((it) => {
-                const included = includedPlanIds.has(it.food_name)
+              {items.filter((it) => it.source === 'plan').map((it) => {
+                const included = includedPlanIds.has(it.name)
                 return (
-                  <button
-                    key={it.food_name}
-                    onClick={() => togglePlan(it.food_name)}
-                    type="button"
+                  <div
+                    key={it.name}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 12px',
                       background: included ? 'color-mix(in oklab, #BBF7D0 38%, var(--surface))' : 'var(--surface)',
                       border: included ? '1px solid rgba(34,197,94,0.5)' : '1px solid var(--line)',
                       borderRadius: 'var(--r-md)',
-                      width: '100%', textAlign: 'left', cursor: 'pointer', outline: 'none',
                     }}
                   >
-                    <span className="dq-check" data-on={included}>
-                      {included ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
+                    <button
+                      aria-label={included ? 'Exclude' : 'Include'}
+                      type="button"
+                      onClick={() => togglePlan(it.name)}
+                      style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', outline: 'none', display: 'flex' }}
+                    >
+                      <span className="dq-check" data-on={included}>
+                        {included ? <Icon color="#fff" name="check" size={14} stroke={3} /> : null}
+                      </span>
+                    </button>
+                    <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                      <strong style={{ fontSize: 14 }}>{it.name}</strong>
+                      <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>{Math.round(it.kcalPer * it.portion)} kcal</span>
                     </span>
-                    <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <strong style={{ fontSize: 14 }}>{it.food_name}</strong>
-                      <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>{it.portion}× · {it.kcal} kcal</span>
-                    </span>
-                  </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-soft)', borderRadius: 999, padding: '2px 6px', opacity: included ? 1 : 0.4 }}>
+                      <button type="button" disabled={!included} onClick={() => changePortion(it.name, 'plan', -0.25)} style={{ border: 0, background: 'transparent', cursor: included ? 'pointer' : 'default', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>−</button>
+                      <span style={{ fontSize: 12, fontWeight: 700, minWidth: 32, textAlign: 'center' }}>{it.portion % 1 === 0 ? it.portion : it.portion.toFixed(2)}</span>
+                      <button type="button" disabled={!included} onClick={() => changePortion(it.name, 'plan', 0.25)} style={{ border: 0, background: 'transparent', cursor: included ? 'pointer' : 'default', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>+</button>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -1203,9 +1293,9 @@ function CustomizeMealSheet({
                     <span style={{ fontSize: 12, color: 'var(--t-2)', fontWeight: 600 }}>{Math.round(it.kcalPer * it.portion)} kcal</span>
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-soft)', borderRadius: 999, padding: '2px 6px' }}>
-                    <button type="button" onClick={() => changePortion(it.name, -0.25)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>−</button>
+                    <button type="button" onClick={() => changePortion(it.name, 'extra', -0.25)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>−</button>
                     <span style={{ fontSize: 12, fontWeight: 700, minWidth: 32, textAlign: 'center' }}>{it.portion % 1 === 0 ? it.portion : it.portion.toFixed(2)}</span>
-                    <button type="button" onClick={() => changePortion(it.name, 0.25)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>+</button>
+                    <button type="button" onClick={() => changePortion(it.name, 'extra', 0.25)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 2, fontSize: 13, color: 'var(--t-2)', outline: 'none' }}>+</button>
                   </div>
                   <button aria-label="Remove" onClick={() => removeExtra(it.name)} type="button" style={{ border: 0, background: 'transparent', color: 'var(--t-3)', cursor: 'pointer', padding: 4, outline: 'none' }}>
                     <Icon name="x" size={14} />
@@ -1296,7 +1386,7 @@ function CustomizeMealSheet({
                   <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                     <strong style={{ fontSize: 13 }}>{food.name}</strong>
                     <span style={{ fontSize: 11, color: 'var(--t-3)', fontWeight: 600 }}>
-                      {food.kcal_per_portion} kcal · {food.protein_g_per_portion}g · per {food.portion_unit}
+                      {food.kcal_per_portion} kcal · P {food.protein_g_per_portion}g · S {food.sugar_g_per_portion ?? 0}g · per {food.portion_unit}
                     </span>
                   </span>
                   <Icon color={isAdded ? 'var(--success)' : 'var(--a1)'} name={isAdded ? 'check' : 'plus'} size={16} />
@@ -1318,7 +1408,7 @@ function CustomizeMealSheet({
         }}
       >
         <Button disabled={saving || activeItems.length === 0} onClick={handleSave}>
-          {saving ? 'Saving...' : activeItems.length > 0 ? `Save ${activeItems.length} item${activeItems.length === 1 ? '' : 's'} · ${totalKcal} kcal` : 'Select items to save'}
+          {saving ? 'Saving...' : activeItems.length > 0 ? `Save ${activeItems.length} item${activeItems.length === 1 ? '' : 's'} · ${totalKcal} kcal · ${totalSugar}g sugar` : 'Select items to save'}
         </Button>
       </div>
     </div>,

@@ -6,7 +6,7 @@ import type { DayTotals } from '@/types/domain'
 
 const emptyTotals: DayTotals = {
   date: todayKey(),
-  totals: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, water_ml: 0 },
+  totals: { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, sugar_g: 0, water_ml: 0 },
   habits: { water_done: false, walk_done: false, sleep_on_time: false },
 }
 

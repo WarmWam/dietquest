@@ -49,6 +49,7 @@ function makeMealItem(food: Food, portion: number): MealPlanItem {
     portion,
     kcal: Math.round(food.kcal_per_portion * portion),
     protein_g: Math.round(food.protein_g_per_portion * portion * 10) / 10,
+    sugar_g: Math.round((food.sugar_g_per_portion ?? 0) * portion * 10) / 10,
   }
 }
 

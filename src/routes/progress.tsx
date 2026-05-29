@@ -13,6 +13,7 @@ import { useWeights } from '@/hooks/useWeights'
 import { useMonthWorkoutPlans } from '@/hooks/useWorkoutPlan'
 import { useWorkouts } from '@/hooks/useWorkouts'
 import { toast } from '@/stores/toastStore'
+import { buildActualWeightSeries, buildCalculatedWeightSeries, type DayEnergy } from '@/lib/weight'
 import type { DayTotals, MealType, SleepLog, WorkoutLog, WorkoutPlan, WorkoutPlanType } from '@/types/domain'
 
 type MealSlotIcon = 'sunrise' | 'sun' | 'moon' | 'snack'
@@ -25,7 +26,7 @@ const MEAL_META: Record<MealType, { icon: MealSlotIcon; color: string }> = {
 
 type ProgressTab = 'weight' | 'health' | 'activity'
 type CalorieView = 'week' | 'month' | 'year'
-type HealthMetric = 'kcal' | 'protein' | 'drink' | 'sleep'
+type HealthMetric = 'kcal' | 'protein' | 'sugar' | 'drink' | 'sleep'
 
 const tabs: Array<{ id: ProgressTab; label: string }> = [
   { id: 'weight', label: 'Weight' },
@@ -36,6 +37,7 @@ const tabs: Array<{ id: ProgressTab; label: string }> = [
 const healthTabs: Array<{ id: HealthMetric; label: string }> = [
   { id: 'kcal', label: 'Calories' },
   { id: 'protein', label: 'Protein' },
+  { id: 'sugar', label: 'Sugar' },
   { id: 'drink', label: 'Drink' },
   { id: 'sleep', label: 'Sleep' },
 ]
@@ -47,8 +49,8 @@ export function ProgressRoute() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const requestedTab = params.get('tab')
-  const tab: ProgressTab = requestedTab === 'health' || requestedTab === 'kcal' || requestedTab === 'protein' ? 'health' : requestedTab === 'activity' ? 'activity' : 'weight'
-  const initialMetric: HealthMetric = requestedTab === 'protein' ? 'protein' : 'kcal'
+  const tab: ProgressTab = requestedTab === 'health' || requestedTab === 'kcal' || requestedTab === 'protein' || requestedTab === 'sugar' ? 'health' : requestedTab === 'activity' ? 'activity' : 'weight'
+  const initialMetric: HealthMetric = requestedTab === 'protein' ? 'protein' : requestedTab === 'sugar' ? 'sugar' : 'kcal'
 
   return (
     <AppScreen activeNav="progress">
@@ -68,31 +70,86 @@ export function ProgressRoute() {
   )
 }
 
+const WEIGHT_WINDOW_DAYS = 30
+
 function WeightTab() {
   const { profile, error: userError } = useUser()
-  const { data: weights, loading, error: weightsError } = useWeights(60)
+  const { data: weights, loading, error: weightsError } = useWeights(90)
+  const { data: dayTotals, error: totalsError } = useDayTotals(90)
+  const { data: workouts, error: workoutsError } = useWorkouts(90)
   const userProfile = profile?.profile ?? DEFAULT_PROFILE
-  const points = weights.slice(-20)
-  const latest = points[points.length - 1]
+
+  // Rolling window of the last N days (ascending).
+  const dates: string[] = []
+  {
+    const today = new Date()
+    for (let i = WEIGHT_WINDOW_DAYS - 1; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+    }
+  }
+
+  // Energy in/out per day: intake from day totals, exercise from workouts.
+  const kcalByDate = new Map(dayTotals.map((t) => [t.date, t.totals.kcal]))
+  const exerciseByDate = new Map<string, number>()
+  workouts.forEach((w) => exerciseByDate.set(w.date, (exerciseByDate.get(w.date) ?? 0) + w.kcal_burned))
+  const energyByDate = new Map<string, DayEnergy>()
+  dates.forEach((date) => energyByDate.set(date, {
+    intakeKcal: kcalByDate.get(date) ?? 0,
+    exerciseKcal: exerciseByDate.get(date) ?? 0,
+  }))
+
+  const actualSeries = buildActualWeightSeries(weights, dates)
+  // Baseline for the projection: the first actual weight that lands inside
+  // the window, else the profile's recorded start weight.
+  const firstActual = actualSeries.find((v) => v != null) ?? null
+  const baseline = firstActual ?? userProfile.weight_start_kg
+  const calcSeries = buildCalculatedWeightSeries({
+    dates,
+    startWeightKg: baseline,
+    sex: userProfile.sex,
+    heightCm: userProfile.height_cm,
+    age: userProfile.age,
+    energyByDate,
+  })
+
   const startWeight = userProfile.weight_start_kg
-  const currentWeight = latest?.weight_kg ?? startWeight
-  const min = Math.min(userProfile.weight_target_kg, ...points.map((point) => point.weight_kg), startWeight) - 0.5
-  const max = Math.max(...points.map((point) => point.weight_kg), startWeight) + 0.5
-  const path = points.length > 1
-    ? points
-        .map((point, index) => {
-          const x = (index / (points.length - 1)) * 350
-          const y = 180 - ((point.weight_kg - min) / (max - min)) * 150 - 12
-          return `${index === 0 ? 'M' : 'L'}${x},${y}`
-        })
-        .join(' ')
-    : ''
+  const lastActualIdx = (() => {
+    for (let i = actualSeries.length - 1; i >= 0; i--) if (actualSeries[i] != null) return i
+    return -1
+  })()
+  const currentWeight = lastActualIdx >= 0 ? (actualSeries[lastActualIdx] as number) : startWeight
+  const projectedWeight = calcSeries[calcSeries.length - 1] ?? baseline
   const lost = Number((currentWeight - startWeight).toFixed(1))
   const toTarget = Number((currentWeight - userProfile.weight_target_kg).toFixed(1))
 
+  // Shared y-scale across both lines + target.
+  const allVals = [
+    ...actualSeries.filter((v): v is number => v != null),
+    ...calcSeries,
+    userProfile.weight_target_kg,
+    startWeight,
+  ]
+  const min = Math.min(...allVals) - 0.5
+  const max = Math.max(...allVals) + 0.5
+  const span = Math.max(max - min, 0.1)
+  const xAt = (i: number) => (dates.length > 1 ? (i / (dates.length - 1)) * 350 : 0)
+  const yAt = (val: number) => 180 - ((val - min) / span) * 150 - 12
+
+  const calcPath = calcSeries.map((v, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(' ')
+  const firstIdx = actualSeries.findIndex((v) => v != null)
+  const actualPath = firstIdx < 0
+    ? ''
+    : actualSeries
+        .map((v, i) => (v == null ? null : { i, v }))
+        .filter((p): p is { i: number; v: number } => p != null)
+        .map((p, j) => `${j === 0 ? 'M' : 'L'}${xAt(p.i).toFixed(1)},${yAt(p.v).toFixed(1)}`)
+        .join(' ')
+
   useEffect(() => {
-    if (userError || weightsError) toast.error("Couldn't load weight progress. Try again.")
-  }, [userError, weightsError])
+    if (userError || weightsError || totalsError || workoutsError) toast.error("Couldn't load weight progress. Try again.")
+  }, [userError, weightsError, totalsError, workoutsError])
 
   if (loading) {
     return (
@@ -129,26 +186,50 @@ function WeightTab() {
               {currentWeight.toFixed(1)} kg
             </strong>
           </div>
-          <span className="dq-pill" style={{ color: 'var(--success)' }}>
-            <Icon name="arrowDown" size={12} /> {Math.abs(lost).toFixed(1)} kg
+          <span className="dq-pill" style={{ color: lost <= 0 ? 'var(--success)' : 'var(--danger)' }}>
+            <Icon name={lost <= 0 ? 'arrowDown' : 'arrowUp'} size={12} /> {Math.abs(lost).toFixed(1)} kg
           </span>
         </div>
-        {path ? (
-          <svg height="190" viewBox="0 0 350 190" width="100%">
-            <path d={`${path} L350,190 L0,190 Z`} fill="var(--a-soft)" />
-            <path d={path} fill="none" stroke="var(--a1)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
-          </svg>
-        ) : (
-          <p className={styles.subtitle}>Log weight to draw your trend line.</p>
-        )}
+        <svg height="190" viewBox="0 0 350 190" width="100%">
+          {/* Target line */}
+          <line x1="0" x2="350" y1={yAt(userProfile.weight_target_kg)} y2={yAt(userProfile.weight_target_kg)} stroke="var(--line-strong)" strokeDasharray="2 4" strokeWidth="1" />
+          {/* Calculated (energy-balance projection) — dashed */}
+          {calcPath ? (
+            <path d={calcPath} fill="none" stroke="var(--t-3)" strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          ) : null}
+          {/* Actual (logged) — solid accent with area */}
+          {actualPath ? (
+            <>
+              <path d={`${actualPath} L350,190 L${xAt(firstIdx).toFixed(1)},190 Z`} fill="var(--a-soft)" opacity={0.5} />
+              <path d={actualPath} fill="none" stroke="var(--a1)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+            </>
+          ) : null}
+        </svg>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 4 }}>
+          <Legend color="var(--a1)" label="Actual" />
+          <Legend color="var(--t-3)" dashed label="Calculated" />
+          <Legend color="var(--line-strong)" dashed label="Target" />
+        </div>
+        {firstIdx < 0 ? (
+          <p className={styles.subtitle} style={{ marginTop: 8 }}>Log your weight on Home to draw the actual line.</p>
+        ) : null}
       </div>
       <div className={styles.metricGrid}>
         <Metric label="Start" value={`${startWeight.toFixed(1)} kg`} />
         <Metric label="Now" value={`${currentWeight.toFixed(1)} kg`} />
-        <Metric label="Lost" value={`${lost.toFixed(1)} kg`} />
+        <Metric label="Projected" value={`${projectedWeight.toFixed(1)} kg`} />
         <Metric label="To target" value={`${toTarget.toFixed(1)} kg`} />
       </div>
     </>
+  )
+}
+
+function Legend({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 16, height: 0, borderTop: `3px ${dashed ? 'dashed' : 'solid'} ${color}` }} />
+      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--t-2)' }}>{label}</span>
+    </span>
   )
 }
 
@@ -171,7 +252,7 @@ function HealthTab({ initialMetric }: { initialMetric: HealthMetric }) {
           </button>
         ))}
       </div>
-      {metric === 'protein' ? <ProteinTab /> : metric === 'drink' ? <DrinkTab /> : metric === 'sleep' ? <SleepTab /> : <CaloriesTab />}
+      {metric === 'protein' ? <ProteinTab /> : metric === 'sugar' ? <SugarTab /> : metric === 'drink' ? <DrinkTab /> : metric === 'sleep' ? <SleepTab /> : <CaloriesTab />}
     </>
   )
 }
@@ -388,6 +469,102 @@ function ProteinTab() {
                   <div key={`${type}-${idx}-${it.name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</span>
                     <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {formatProteinLabel(it.protein_g)}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )
+        })
+      )}
+    </>
+  )
+}
+
+function SugarTab() {
+  const [view, setView] = useState<CalorieView>('week')
+  const { data: meals, error: mealsError } = useMeals()
+  const { data: yearTotals, error: totalsError } = useDayTotals(365)
+  const { profile } = useUser()
+  const dailyTarget = profile?.settings?.daily_sugar_target ?? 36
+
+  const liveSugar = meals.reduce((sum, m) => sum + (m.total_sugar_g ?? 0), 0)
+  const todayDate = todayKey()
+  const totals = yearTotals.map((t) => t.date === todayDate ? { ...t, totals: { ...t.totals, sugar_g: liveSugar } } : t)
+  const bars = buildSugarBars(totals, view)
+  const maxSugar = Math.max(...bars.map((bar) => bar.sugar), dailyTarget, 1)
+
+  useEffect(() => {
+    if (mealsError || totalsError) toast.error("Couldn't load sugar progress. Try again.")
+  }, [mealsError, totalsError])
+
+  return (
+    <>
+      <div className={styles.chartCard}>
+        <p className="dq-eyebrow">Today</p>
+        <strong className="dq-num" style={{ fontSize: 42, color: barZoneColor(liveSugar, dailyTarget).number }}>
+          {Math.round(liveSugar)}g
+        </strong>
+        <p className={styles.subtitle}>limit {dailyTarget}g · less is better</p>
+        <TimeRangeTabs view={view} onChange={setView} />
+        <div
+          className={styles.bars}
+          style={view === 'year' ? { overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', justifyContent: 'flex-start', gap: 10, paddingBottom: 4 } : undefined}
+        >
+          {bars.map((bar, index) => {
+            const isToday = bar.date === todayDate
+            const height = Math.max((bar.sugar / maxSugar) * 100, bar.sugar > 0 ? 8 : 3)
+            const zone = barZoneColor(bar.sugar, dailyTarget)
+            return (
+              <div
+                className={styles.barColumn}
+                key={`${bar.label}-${index}`}
+                style={{
+                  height: '100%',
+                  minWidth: view === 'year' ? 26 : undefined,
+                  flex: view === 'year' ? '0 0 auto' : undefined,
+                }}
+              >
+                <span style={{ color: bar.sugar > 0 ? zone.number : 'var(--t-3)', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>
+                  {Math.round(bar.sugar)}
+                </span>
+                <div
+                  className={styles.bar}
+                  style={{
+                    background: bar.sugar > 0 ? zone.stroke : 'var(--bg-soft)',
+                    height: `${height}%`,
+                    outline: isToday ? '2px solid var(--a1)' : 'none',
+                    outlineOffset: isToday ? 1 : 0,
+                  }}
+                />
+                <span className="dq-eyebrow" style={{ fontSize: view === 'year' ? 9 : undefined }}>{bar.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <p className="dq-eyebrow" style={{ margin: '4px 4px 10px' }}>Meals today</p>
+      {meals.length === 0 ? (
+        <Card padding={16}>
+          <p className={styles.subtitle}>No meals logged yet.</p>
+        </Card>
+      ) : (
+        (['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => {
+          const slotMeals = meals.filter((m) => m.meal_type === type)
+          if (slotMeals.length === 0) return null
+          const slotItems = slotMeals.flatMap((m) => m.items)
+          const slotSugar = slotMeals.reduce((s, m) => s + (m.total_sugar_g ?? 0), 0)
+          const meta = MEAL_META[type]
+          return (
+            <Card key={type} padding={14} style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Icon color={meta.color} name={meta.icon as IconName} size={22} />
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{Math.round(slotSugar)}g sugar</span>
+              </div>
+              <div style={{ display: 'grid', gap: 6, margin: '10px 0 0 34px' }}>
+                {slotItems.map((it, idx) => (
+                  <div key={`${type}-${idx}-${it.name}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--t-3)', fontWeight: 600 }}>{it.portion}× · {Math.round(it.sugar_g ?? 0)}g</span>
                   </div>
                 ))}
               </div>
@@ -769,6 +946,72 @@ function buildWaterBars(totals: DayTotals[], view: CalorieView) {
     date: b.date,
     label: b.label,
     ml: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+  }))
+}
+
+function buildSugarBars(totals: DayTotals[], view: CalorieView) {
+  if (view === 'week') {
+    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.sugar_g]))
+    const out: { date: string; label: string; sugar: number }[] = []
+    const today = new Date()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(today.getDate() - i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      out.push({ date: key, label: DAY_SHORT[d.getDay()], sugar: totalsMap.get(key) ?? 0 })
+    }
+    return out
+  }
+
+  if (view === 'month') {
+    const totalsMap = new Map(totals.map((t) => [t.date, t.totals.sugar_g]))
+    const today = new Date()
+    return Array.from({ length: 4 }, (_, index) => {
+      const weekStart = (3 - index) * 7 + 6
+      let sum = 0
+      let count = 0
+      let lastDate = ''
+      for (let d = 0; d < 7; d++) {
+        const offset = weekStart - d
+        const dt = new Date(today)
+        dt.setDate(today.getDate() - offset)
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+        lastDate = key
+        const v = totalsMap.get(key) ?? 0
+        if (v > 0) {
+          sum += v
+          count += 1
+        }
+      }
+      return {
+        date: lastDate,
+        label: `W${index + 1}`,
+        sugar: count > 0 ? Math.round((sum / count) * 10) / 10 : 0,
+      }
+    })
+  }
+
+  const today = new Date()
+  const monthBuckets = new Map<string, { sum: number; count: number; label: string; date: string }>()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    monthBuckets.set(key, { sum: 0, count: 0, label: MONTH_SHORT[d.getMonth()], date: key })
+  }
+  totals.forEach((t) => {
+    const date = new Date(`${t.date}T00:00:00`)
+    const key = `${date.getFullYear()}-${date.getMonth()}`
+    const bucket = monthBuckets.get(key)
+    if (!bucket) return
+    if (t.totals.sugar_g > 0) {
+      bucket.sum += t.totals.sugar_g
+      bucket.count += 1
+    }
+  })
+  return Array.from(monthBuckets.values()).map((b) => ({
+    date: b.date,
+    label: b.label,
+    sugar: b.count > 0 ? Math.round((b.sum / b.count) * 10) / 10 : 0,
   }))
 }
 

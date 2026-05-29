@@ -49,14 +49,15 @@ export function LogMealRoute() {
   const draftSelectedIds = useMemo(() => new Set(draft.map((d) => d.food_id)), [draft])
 
   const totals = useMemo(() => {
-    let kcal = 0, protein = 0
+    let kcal = 0, protein = 0, sugar = 0
     for (const it of draft) {
       const food = foodMap.get(it.food_id)
       if (!food) continue
       kcal += Math.round(food.kcal_per_portion * it.portion)
       protein += Math.round(food.protein_g_per_portion * it.portion * 10) / 10
+      sugar += (food.sugar_g_per_portion ?? 0) * it.portion
     }
-    return { kcal, protein: Math.round(protein * 10) / 10 }
+    return { kcal, protein: Math.round(protein * 10) / 10, sugar: Math.round(sugar * 10) / 10 }
   }, [draft, foodMap])
 
   function toggleFood(food: Food) {
@@ -97,6 +98,7 @@ export function LogMealRoute() {
             protein_g: Math.round(food.protein_g_per_portion * d.portion * 10) / 10,
             carb_g: 0,
             fat_g: 0,
+            sugar_g: Math.round((food.sugar_g_per_portion ?? 0) * d.portion * 10) / 10,
           }
         })
         .filter((it): it is NonNullable<typeof it> => it !== null)
@@ -108,6 +110,7 @@ export function LogMealRoute() {
         total_protein_g: totals.protein,
         total_carb_g: 0,
         total_fat_g: 0,
+        total_sugar_g: totals.sugar,
       })
       toast.success(`${mealType.charAt(0).toUpperCase() + mealType.slice(1)} logged · ${totals.kcal} kcal`)
       haptic(10)

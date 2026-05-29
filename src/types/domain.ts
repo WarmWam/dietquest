@@ -8,6 +8,7 @@ export type MacroTotals = {
   protein_g: number
   carb_g: number
   fat_g: number
+  sugar_g: number
   water_ml: number
 }
 
@@ -25,6 +26,7 @@ export type UserSettings = {
   accent: AccentName
   daily_kcal_target: number
   daily_protein_target: number
+  daily_sugar_target: number
   notifications?: {
     breakfast: boolean
     lunch: boolean
@@ -84,6 +86,7 @@ export type MealItem = {
   protein_g: number
   carb_g: number
   fat_g: number
+  sugar_g?: number
 }
 
 export type MealLog = {
@@ -95,6 +98,7 @@ export type MealLog = {
   total_protein_g: number
   total_carb_g: number
   total_fat_g: number
+  total_sugar_g?: number
   logged_at: Date
 }
 
@@ -157,6 +161,7 @@ export type Food = {
   portion_unit: string
   kcal_per_portion: number
   protein_g_per_portion: number
+  sugar_g_per_portion?: number
   created_at?: Date
   updated_at?: Date
 }
@@ -193,6 +198,7 @@ export type MealPlanItem = {
   portion: number    // multiplier on food's per-portion values
   kcal: number       // = food.kcal_per_portion * portion (cached)
   protein_g: number  // = food.protein_g_per_portion * portion (cached)
+  sugar_g?: number   // = food.sugar_g_per_portion * portion (cached)
 }
 
 export type MealPlan = {

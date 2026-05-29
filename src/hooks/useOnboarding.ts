@@ -1,6 +1,6 @@
 import { useAuth } from '@/hooks/useAuth'
 import { DEFAULT_PROFILE, DEFAULT_SETTINGS } from '@/data/defaults'
-import { calculateBmr } from '@/lib/nutrition'
+import { calculateBmr, defaultSugarTarget } from '@/lib/nutrition'
 import { upsertUser } from '@/lib/db'
 import type { UserProfile } from '@/types/domain'
 
@@ -38,6 +38,7 @@ export function useOnboarding() {
         ...DEFAULT_SETTINGS,
         daily_kcal_target: dailyKcal,
         daily_protein_target: dailyProtein,
+        daily_sugar_target: defaultSugarTarget(profile.sex),
       },
     })
   }

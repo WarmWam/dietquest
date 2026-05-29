@@ -2,18 +2,24 @@ type RingProps = {
   size?: number
   eaten?: number
   target?: number
-  protein?: number
-  proteinTarget?: number
   label?: string
   sub?: string
   // Per-meal breakdown in slot order [breakfast, lunch, dinner, snack].
-  // When supplied, both rings render as gap-separated segments instead of
+  // When supplied, the ring renders as gap-separated segments instead of
   // a single continuous arc.
   calBySlot?: number[]
   // Planned kcal per slot (parallel to calBySlot). When supplied, each
   // calorie segment colours itself by actual-vs-plan ratio rather than by
   // cumulative-vs-daily-target — so the ring agrees with the meal card.
   calPlanBySlot?: number[]
+  // Inner ring = sugar (a "don't exceed" metric, same zone logic as kcal).
+  sugar?: number
+  sugarTarget?: number
+  sugarBySlot?: number[]
+  // Legacy: inner ring = protein. Used only when sugarTarget is not given
+  // (e.g. the design-system preview). Kept for backwards compatibility.
+  protein?: number
+  proteinTarget?: number
   proteinBySlot?: number[]
 }
 
@@ -29,6 +35,7 @@ const NUMBER = {
   red: '#DC2626',
 }
 
+// "Don't exceed" zone (kcal, sugar): under 70% green, 70-99% yellow, over red.
 function calorieZone(pct: number) {
   if (pct >= 1) return { stroke: STROKE.red, number: NUMBER.red }
   if (pct >= 0.7) return { stroke: STROKE.yellow, number: NUMBER.yellow }
@@ -42,6 +49,7 @@ function mealCalZone(actual: number, plan: number) {
   return actual > plan ? { stroke: STROKE.red } : { stroke: STROKE.green }
 }
 
+// "Hit target" zone (protein): under 70% red, 70-99% yellow, at/over green.
 function proteinZone(pct: number) {
   if (pct >= 1) return { stroke: STROKE.green, number: NUMBER.green }
   if (pct >= 0.7) return { stroke: STROKE.yellow, number: NUMBER.yellow }
@@ -71,18 +79,9 @@ function buildSegments(slots: number[] | undefined, target: number, fallbackValu
     const rawLenPct = val / target
     cumRaw += rawLenPct
     const lenPct = Math.min(rawLenPct, Math.max(0, 1 - cumVisible))
-    if (lenPct <= 0) {
-      // Still record so over-target slots after the cap can be styled red
-      // — but they have no visible arc to draw. Skip.
-      continue
-    }
+    if (lenPct <= 0) continue
     out.push({ startPct: cumVisible, lenPct, slotIdx: i, rawCumEnd: cumRaw })
     cumVisible += lenPct
-    if (cumVisible >= 1) {
-      // Continue accumulating cumRaw above for completeness, but stop
-      // pushing visible segments since the ring is full.
-      // (no-op here — loop will exit when slots run out)
-    }
   }
   return out
 }
@@ -91,33 +90,41 @@ export function Ring({
   size = 220,
   eaten = 1240,
   target = 1950,
-  protein = 78,
-  proteinTarget = 140,
   label = 'eaten',
   sub = 'kcal',
   calBySlot,
   calPlanBySlot,
+  sugar,
+  sugarTarget,
+  sugarBySlot,
+  protein = 78,
+  proteinTarget = 140,
   proteinBySlot,
 }: RingProps) {
-  // Slightly slimmer rings + tighter gap → more breathing room for the
-  // centered text so PROTEIN row doesn't kiss the inner stroke.
   const stroke = 14
   const innerStroke = 6
   const r1 = (size - stroke) / 2
   const r2 = r1 - stroke - 3
   const c1 = 2 * Math.PI * r1
   const c2 = 2 * Math.PI * r2
-  const rawCalPct = target > 0 ? eaten / target : 0
-  const rawProteinPct = proteinTarget > 0 ? protein / proteinTarget : 0
-  const cal = calorieZone(rawCalPct)
-  const prot = proteinZone(rawProteinPct)
 
-  // Gap (in stroke-length units) carved out of each segment's end.
-  // Small enough to look like a hairline, large enough to read on mobile.
+  // Inner ring: sugar when a sugar target is provided, else legacy protein.
+  const sugarMode = typeof sugarTarget === 'number' && sugarTarget > 0
+  const innerValue = sugarMode ? (sugar ?? 0) : protein
+  const innerTarget = sugarMode ? (sugarTarget as number) : proteinTarget
+  const innerBySlot = sugarMode ? sugarBySlot : proteinBySlot
+  const innerLabel = sugarMode ? 'SUGAR' : 'PROTEIN'
+
+  const rawCalPct = target > 0 ? eaten / target : 0
+  const cal = calorieZone(rawCalPct)
+  // Sugar = don't-exceed (calorieZone); protein = hit-target (proteinZone).
+  const rawInnerPct = innerTarget > 0 ? innerValue / innerTarget : 0
+  const inner = sugarMode ? calorieZone(rawInnerPct) : proteinZone(rawInnerPct)
+
   const GAP_PX = 4
 
   const calSegments = buildSegments(calBySlot, target, eaten)
-  const proteinSegments = buildSegments(proteinBySlot, proteinTarget, protein)
+  const innerSegments = buildSegments(innerBySlot, innerTarget, innerValue)
 
   const cx = size / 2
   const cy = size / 2
@@ -127,9 +134,8 @@ export function Ring({
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
         {/* Outer track */}
         <circle cx={cx} cy={cy} r={r1} fill="none" stroke="var(--bg-soft)" strokeWidth={stroke} />
-        {/* Outer segments — one per meal slot, each colored by per-meal
-            actual-vs-plan ratio. Matches the meal card's color so the
-            ring and card always agree about whether a slot is on plan. */}
+        {/* Outer segments — one per meal slot, colored by per-meal
+            actual-vs-plan ratio. Matches the meal card. */}
         {calSegments.map((seg, i) => {
           const segLenAbs = c1 * seg.lenPct
           const visibleLen = Math.max(segLenAbs - GAP_PX, 0.5)
@@ -154,18 +160,21 @@ export function Ring({
 
         {/* Inner track */}
         <circle cx={cx} cy={cy} r={r2} fill="none" stroke="var(--bg-soft)" strokeWidth={innerStroke} />
-        {/* Inner segments (one per meal slot, all sharing the zone color) */}
-        {proteinSegments.map((seg, i) => {
+        {/* Inner segments — sugar (don't-exceed) coloured by cumulative-end
+            zone so later meals push the arc toward yellow/red; or legacy
+            protein in a single zone color. */}
+        {innerSegments.map((seg, i) => {
           const segLenAbs = c2 * seg.lenPct
           const visibleLen = Math.max(segLenAbs - GAP_PX, 0.5)
+          const segColor = sugarMode ? calorieZone(seg.rawCumEnd).stroke : inner.stroke
           return (
             <circle
-              key={`prot-seg-${i}`}
+              key={`inner-seg-${i}`}
               cx={cx}
               cy={cy}
               r={r2}
               fill="none"
-              stroke={prot.stroke}
+              stroke={segColor}
               strokeWidth={innerStroke}
               strokeLinecap="butt"
               strokeDasharray={`${visibleLen} ${c2}`}
@@ -195,7 +204,7 @@ export function Ring({
         </div>
         <div style={{ color: 'var(--t-2)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, marginTop: 6 }}>
           <span style={{ width: 5, height: 5, borderRadius: 999, background: 'var(--t-2)' }} />
-          PROTEIN&nbsp;<span style={{ color: prot.number, fontWeight: 800 }}>{Math.round(protein)}</span>/{Math.round(proteinTarget)}g
+          {innerLabel}&nbsp;<span style={{ color: inner.number, fontWeight: 800 }}>{Math.round(innerValue)}</span>/{Math.round(innerTarget)}g
         </div>
       </div>
     </div>

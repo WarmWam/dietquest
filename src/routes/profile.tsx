@@ -72,6 +72,7 @@ export function ProfileRoute() {
   const [weightStart, setWeightStart] = useState(80.0)
   const [weightTarget, setWeightTarget] = useState(65.0)
   const [months, setMonths] = useState(6)
+  const [sugarTarget, setSugarTarget] = useState(36)
 
   useEffect(() => {
     if (userError || weightsError || analysesError || analysisUsageError) toast.error("Couldn't load profile data. Try again.")
@@ -89,6 +90,9 @@ export function ProfileRoute() {
       const end = new Date(profile.profile.target_date)
       const diff = Math.max(3, (end.getFullYear() - now.getFullYear()) * 12 + end.getMonth() - now.getMonth())
       setMonths(diff)
+    }
+    if (profile?.settings?.daily_sugar_target) {
+      setSugarTarget(profile.settings.daily_sugar_target)
     }
     if (profile?.settings?.notifications) {
       setNotifications(profile.settings.notifications)
@@ -162,6 +166,7 @@ export function ProfileRoute() {
           ...profile?.settings,
           daily_kcal_target: dailyKcal,
           daily_protein_target: dailyProtein,
+          daily_sugar_target: sugarTarget,
         }
       })
       toast.success("Profile targets synced!")
@@ -560,7 +565,10 @@ export function ProfileRoute() {
               <Stepper label="Current weight" suffix="kg" value={weightStart} onChange={setWeightStart} min={30} max={300} step={0.1} />
               <div style={{ height: 12 }} />
               <Stepper label="Target weight" suffix="kg" value={weightTarget} onChange={setWeightTarget} min={40} max={weightStart - 1} step={0.5} />
-              
+
+              <div style={{ height: 12 }} />
+              <Stepper label="Daily sugar limit" suffix="g" value={sugarTarget} onChange={setSugarTarget} min={0} max={150} step={1} />
+
               <div style={{ height: 18 }} />
               <p className={styles.fieldLabel}>Timeline</p>
               <Card padding={16} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
