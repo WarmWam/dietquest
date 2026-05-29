@@ -647,6 +647,13 @@ function SleepTab() {
   )
 }
 
+const ACTIVITY_LABEL: Record<WorkoutLog['type'], string> = {
+  incline_walk: 'Incline',
+  bodyweight: 'Bodyweight',
+  other: 'Other',
+}
+const ACTIVITY_ORDER: WorkoutLog['type'][] = ['incline_walk', 'bodyweight', 'other']
+
 function ActivityTab() {
   const { data: workouts, error: workoutsError } = useWorkouts(90)
   const monthKeys = getRecentMonthKeys(4)
@@ -656,12 +663,15 @@ function ActivityTab() {
   const month3 = useMonthWorkoutPlans(monthKeys[3])
   const activityWorkouts = workouts.filter((workout) => workout.kcal_burned >= 20)
   const currentDateKey = todayKey()
+  const [selectedDate, setSelectedDate] = useState(currentDateKey)
   const workoutPlans = [month0.data, month1.data, month2.data, month3.data]
     .flat()
     .filter((plan) => plan.date >= daysAgoKey(90) && plan.date <= currentDateKey && plan.type !== 'rest')
   const planByDate = new Map(workoutPlans.map((plan) => [plan.date, plan]))
   const actualKcalByDate = groupWorkoutKcalByDate(activityWorkouts)
   const workoutsByDate = groupWorkoutsByDate(activityWorkouts)
+  // All workouts (incl. light ones) keyed by date — used for the day detail.
+  const allByDate = groupWorkoutsByDate(workouts)
   const activityDateKeys = new Set([...workoutPlans.map((plan) => plan.date), ...activityWorkouts.map((workout) => workout.date)])
   const typeStats = buildActivityTypeStats(activityDateKeys, planByDate, workoutsByDate)
   const bestKcal = Math.max(...Array.from(actualKcalByDate.values()), 0)
@@ -669,6 +679,12 @@ function ActivityTab() {
   // Build heatmap: 13 weeks × 7 days = 91 cells representing last 91 days
   const today = new Date()
   const planError = month0.error || month1.error || month2.error || month3.error
+
+  // Day detail: kcal burned per activity type for the selected day.
+  const selWorkouts = allByDate.get(selectedDate) ?? []
+  const kcalByType = new Map<WorkoutLog['type'], number>()
+  selWorkouts.forEach((w) => kcalByType.set(w.type, (kcalByType.get(w.type) ?? 0) + w.kcal_burned))
+  const selPlan = planByDate.get(selectedDate)
 
   useEffect(() => {
     if (workoutsError || planError) toast.error("Couldn't load activity progress. Try again.")
@@ -695,12 +711,48 @@ function ActivityTab() {
                 cellDate.setDate(cellDate.getDate() - dayOffset)
                 const cellKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`
                 const cellStyle = getActivityCellStyle(planByDate.get(cellKey), actualKcalByDate.get(cellKey) ?? 0)
-                return <span className={styles.heatCell} key={day} style={cellStyle} />
+                const selected = cellKey === selectedDate
+                return (
+                  <button
+                    aria-label={prettyDate(cellKey)}
+                    className={styles.heatCell}
+                    key={day}
+                    onClick={() => setSelectedDate(cellKey)}
+                    type="button"
+                    style={{
+                      ...cellStyle,
+                      border: 0,
+                      cursor: 'pointer',
+                      padding: 0,
+                      outline: selected ? '2px solid var(--a1)' : 'none',
+                      outlineOffset: selected ? 1 : 0,
+                    }}
+                  />
+                )
               })}
             </div>
           ))}
         </div>
       </div>
+
+      <Card padding={14} style={{ marginBottom: 14 }}>
+        <p className="dq-eyebrow">{selectedDate === currentDateKey ? 'Today' : prettyDate(selectedDate)}</p>
+        {kcalByType.size === 0 ? (
+          <p className={styles.subtitle} style={{ marginTop: 6 }}>
+            {selPlan ? `Planned ${ACTIVITY_LABEL[selPlan.type as WorkoutLog['type']] ?? 'workout'} · not logged` : 'No activity logged'}
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+            {ACTIVITY_ORDER.filter((t) => kcalByType.has(t)).map((t) => (
+              <div key={t} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{ACTIVITY_LABEL[t]}</span>
+                <span className="dq-num" style={{ fontSize: 18, fontWeight: 800, color: '#F97316' }}>{Math.round(kcalByType.get(t) ?? 0)} kcal</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <div className={styles.metricGrid}>
         <Metric label="Incline days" value={formatActivityDays(typeStats.incline_walk, typeStats.total)} />
         <Metric label="Bodyweight" value={formatActivityDays(typeStats.bodyweight, typeStats.total)} />
